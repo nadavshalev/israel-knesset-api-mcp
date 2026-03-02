@@ -2,7 +2,7 @@
 
 Local SQLite mirror of Israeli Knesset OData tables with structured query views and a JSON CLI.
 
-Fetches data from the [Knesset OData V4 API](https://knesset.gov.il/OdataV4/ParliamentInfo/) using a CSV-first strategy by download csv files from [Open Knesset](https://oknesset.org/, then incremental OData updates. Query views layer structured search and detail endpoints on top of the raw tables.
+Fetches data from the [Knesset OData V4 API](https://knesset.gov.il/OdataV4/ParliamentInfo/) using a CSV-first strategy by download csv files from [Open Knesset](https://oknesset.org/), then incremental OData updates. Query views layer structured search and detail endpoints on top of the raw tables.
 
 ## Setup
 
