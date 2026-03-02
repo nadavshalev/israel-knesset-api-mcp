@@ -2,7 +2,7 @@
 
 Local SQLite mirror of Israeli Knesset OData tables with structured query views and a JSON CLI.
 
-Fetches data from the [Knesset OData V4 API](https://knesset.gov.il/OdataV4/ParliamentInfo/) using a CSV-first strategy (bulk download from oknesset.org, then incremental OData updates). Query views layer structured search and detail endpoints on top of the raw tables.
+Fetches data from the [Knesset OData V4 API](https://knesset.gov.il/OdataV4/ParliamentInfo/) using a CSV-first strategy by download csv files from [Open Knesset](https://oknesset.org/, then incremental OData updates. Query views layer structured search and detail endpoints on top of the raw tables.
 
 ## Setup
 
@@ -31,14 +31,6 @@ python core/db_cli.py fetch-votes
 
 # Incremental update (only rows updated after the given datetime)
 python core/db_cli.py fetch-all --since 2025-01-01T00:00:00
-```
-
-Vote results (~1.86M rows) have a dedicated parallel fetcher:
-
-```bash
-python fetch_vote_results.py              # fetch or resume
-python fetch_vote_results.py --workers 5  # set parallelism
-python fetch_vote_results.py --reset      # drop and refetch from scratch
 ```
 
 ### Available fetch commands
