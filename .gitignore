@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+
+# Data
+*.sqlite
+
+# IDE
+.vscode/
+.idea/
+
+# Testing
+.pytest_cache/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# OpenCode
+.opencode/

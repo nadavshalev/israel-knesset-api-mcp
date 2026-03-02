@@ -1,0 +1,924 @@
+<?xml version="1.0" encoding="utf-8"?>
+<edmx:Edmx Version="4.0"
+    xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx">
+    <edmx:DataServices>
+        <Schema Namespace="ODataService.Entities.Models"
+            xmlns="http://docs.oasis-open.org/odata/ns/edm">
+            <EntityType Name="KNS_Agenda">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="Number" Type="Edm.Int32" />
+                <Property Name="ClassificationID" Type="Edm.Int32" />
+                <Property Name="ClassificationDesc" Type="Edm.String" />
+                <Property Name="LeadingAgendaID" Type="Edm.Int32" />
+                <Property Name="KnessetNum" Type="Edm.Int32" />
+                <Property Name="Name" Type="Edm.String" />
+                <Property Name="SubTypeID" Type="Edm.Int32" />
+                <Property Name="SubTypeDesc" Type="Edm.String" />
+                <Property Name="StatusID" Type="Edm.Int32" />
+                <Property Name="InitiatorPersonID" Type="Edm.Int32" />
+                <Property Name="GovRecommendationID" Type="Edm.Int32" />
+                <Property Name="GovRecommendationDesc" Type="Edm.String" />
+                <Property Name="PresidentDecisionDate" Type="Edm.DateTimeOffset" />
+                <Property Name="PostopenmentReasonID" Type="Edm.Int32" />
+                <Property Name="PostopenmentReasonDesc" Type="Edm.String" />
+                <Property Name="CommitteeID" Type="Edm.Int32" />
+                <Property Name="RecommendCommitteeID" Type="Edm.Int32" />
+                <Property Name="MinisterPersonID" Type="Edm.Int32" />
+                <Property Name="LastUpdatedDate" Type="Edm.DateTimeOffset" />
+                <NavigationProperty Name="KNS_DocumentAgenda" Type="Collection(ODataService.Entities.Models.KNS_DocumentAgenda)" />
+                <NavigationProperty Name="KNS_Committee" Type="ODataService.Entities.Models.KNS_Committee" />
+                <NavigationProperty Name="KNS_PersonToPosition" Type="ODataService.Entities.Models.KNS_PersonToPosition" />
+                <NavigationProperty Name="KNS_Status" Type="ODataService.Entities.Models.KNS_Status" />
+                <NavigationProperty Name="KNS_RecommendCommittee" Type="ODataService.Entities.Models.KNS_Committee" />
+                <NavigationProperty Name="KNS_PersonToPositionMinister" Type="ODataService.Entities.Models.KNS_PersonToPosition" />
+            </EntityType>
+            <EntityType Name="KNS_Bill">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="KnessetNum" Type="Edm.Int32" />
+                <Property Name="Name" Type="Edm.String" />
+                <Property Name="TypeID" Type="Edm.Int32" />
+                <Property Name="TypeDesc" Type="Edm.String" />
+                <Property Name="SubTypeID" Type="Edm.Int32" />
+                <Property Name="SubTypeDesc" Type="Edm.String" />
+                <Property Name="PrivateNumber" Type="Edm.Int32" />
+                <Property Name="CommitteeID" Type="Edm.Int32" />
+                <Property Name="StatusID" Type="Edm.Int32" />
+                <Property Name="Number" Type="Edm.Int32" />
+                <Property Name="PostponementReasonID" Type="Edm.Int32" />
+                <Property Name="PostponementReasonDesc" Type="Edm.String" />
+                <Property Name="PublicationDate" Type="Edm.DateTimeOffset" />
+                <Property Name="PublicationSeriesID" Type="Edm.Int32" />
+                <Property Name="PublicationSeriesDesc" Type="Edm.String" />
+                <Property Name="PublicationSeriesFirstCallID" Type="Edm.Int32" />
+                <Property Name="PublicationSeriesFirstCallDesc" Type="Edm.String" />
+                <Property Name="MagazineNumber" Type="Edm.String" />
+                <Property Name="PageNumber" Type="Edm.String" />
+                <Property Name="IsContinuationBill" Type="Edm.Boolean" />
+                <Property Name="SummaryLaw" Type="Edm.String" />
+                <Property Name="LastUpdatedDate" Type="Edm.DateTimeOffset" />
+                <NavigationProperty Name="KNS_BillHistoryInitiator" Type="Collection(ODataService.Entities.Models.KNS_BillHistoryInitiator)" />
+                <NavigationProperty Name="KNS_BillInitiator" Type="Collection(ODataService.Entities.Models.KNS_BillInitiator)" />
+                <NavigationProperty Name="KNS_BillName" Type="Collection(ODataService.Entities.Models.KNS_BillName)" />
+                <NavigationProperty Name="KNS_BillSplit" Type="Collection(ODataService.Entities.Models.KNS_BillSplit)" />
+                <NavigationProperty Name="KNS_BillSplit_Main" Type="Collection(ODataService.Entities.Models.KNS_BillSplit)" />
+                <NavigationProperty Name="KNS_BillUnion" Type="Collection(ODataService.Entities.Models.KNS_BillUnion)" />
+                <NavigationProperty Name="KNS_BillUnion_Main" Type="Collection(ODataService.Entities.Models.KNS_BillUnion)" />
+                <NavigationProperty Name="KNS_Committee" Type="ODataService.Entities.Models.KNS_Committee" />
+                <NavigationProperty Name="KNS_DocumentBill" Type="Collection(ODataService.Entities.Models.KNS_DocumentBill)" />
+                <NavigationProperty Name="KNS_Status" Type="ODataService.Entities.Models.KNS_Status" />
+                <NavigationProperty Name="KNS_ItemType" Type="ODataService.Entities.Models.KNS_ItemType" />
+            </EntityType>
+            <EntityType Name="KNS_BillHistoryInitiator">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="BillID" Type="Edm.Int32" />
+                <Property Name="PersonID" Type="Edm.Int32" />
+                <Property Name="IsInitiator" Type="Edm.Boolean" />
+                <Property Name="StartDate" Type="Edm.DateTimeOffset" />
+                <Property Name="EndDate" Type="Edm.DateTimeOffset" />
+                <Property Name="ReasonID" Type="Edm.Int32" />
+                <Property Name="ReasonDesc" Type="Edm.String" />
+                <Property Name="LastUpdatedDate" Type="Edm.DateTimeOffset" />
+                <NavigationProperty Name="KNS_Bill" Type="ODataService.Entities.Models.KNS_Bill" />
+                <NavigationProperty Name="KNS_PersonToPosition" Type="ODataService.Entities.Models.KNS_PersonToPosition" />
+            </EntityType>
+            <EntityType Name="KNS_BillInitiator">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="BillID" Type="Edm.Int32" />
+                <Property Name="PersonID" Type="Edm.Int32" />
+                <Property Name="IsInitiator" Type="Edm.Boolean" />
+                <Property Name="Ordinal" Type="Edm.Int32" />
+                <Property Name="LastUpdatedDate" Type="Edm.DateTimeOffset" />
+                <NavigationProperty Name="KNS_Bill" Type="ODataService.Entities.Models.KNS_Bill" />
+                <NavigationProperty Name="KNS_PersonToPosition" Type="Collection(ODataService.Entities.Models.KNS_PersonToPosition)" />
+            </EntityType>
+            <EntityType Name="KNS_BillName">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="BillID" Type="Edm.Int32" />
+                <Property Name="Name" Type="Edm.String" />
+                <Property Name="NameHistoryTypeID" Type="Edm.Int32" />
+                <Property Name="NameHistoryTypeDesc" Type="Edm.String" />
+                <Property Name="LastUpdatedDate" Type="Edm.DateTimeOffset" />
+                <NavigationProperty Name="KNS_Bill" Type="ODataService.Entities.Models.KNS_Bill" />
+            </EntityType>
+            <EntityType Name="KNS_BillSplit">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="MainBillID" Type="Edm.Int32" />
+                <Property Name="SplitBillID" Type="Edm.Int32" />
+                <Property Name="Name" Type="Edm.String" />
+                <Property Name="LastUpdatedDate" Type="Edm.DateTimeOffset" />
+                <NavigationProperty Name="KNS_Bill" Type="ODataService.Entities.Models.KNS_Bill" />
+                <NavigationProperty Name="KNS_Bill_Main" Type="ODataService.Entities.Models.KNS_Bill" />
+            </EntityType>
+            <EntityType Name="KNS_BillUnion">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="MainBillID" Type="Edm.Int32" />
+                <Property Name="UnionBillID" Type="Edm.Int32" />
+                <Property Name="LastUpdatedDate" Type="Edm.DateTimeOffset" />
+                <NavigationProperty Name="KNS_Bill" Type="ODataService.Entities.Models.KNS_Bill" />
+                <NavigationProperty Name="KNS_Bill_Main" Type="ODataService.Entities.Models.KNS_Bill" />
+            </EntityType>
+            <EntityType Name="KNS_CmtSessionItem">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="ItemID" Type="Edm.Int32" />
+                <Property Name="CommitteeSessionID" Type="Edm.Int32" />
+                <Property Name="Ordinal" Type="Edm.Int32" />
+                <Property Name="StatusID" Type="Edm.Int32" />
+                <Property Name="Name" Type="Edm.String" />
+                <Property Name="ItemTypeID" Type="Edm.Int32" />
+                <Property Name="LastUpdatedDate" Type="Edm.DateTimeOffset" />
+                <NavigationProperty Name="KNS_CommitteeSession" Type="ODataService.Entities.Models.KNS_CommitteeSession" />
+                <NavigationProperty Name="KNS_Status" Type="ODataService.Entities.Models.KNS_Status" />
+            </EntityType>
+            <EntityType Name="KNS_CmtSiteCode">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="KnsID" Type="Edm.Int32" />
+                <Property Name="SiteId" Type="Edm.Int32" />
+            </EntityType>
+            <EntityType Name="KNS_Committee">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="Name" Type="Edm.String" />
+                <Property Name="CategoryID" Type="Edm.Int16" />
+                <Property Name="CategoryDesc" Type="Edm.String" />
+                <Property Name="KnessetNum" Type="Edm.Int32" />
+                <Property Name="CommitteeTypeID" Type="Edm.Int32" />
+                <Property Name="CommitteeTypeDesc" Type="Edm.String" />
+                <Property Name="Email" Type="Edm.String" />
+                <Property Name="StartDate" Type="Edm.DateTimeOffset" />
+                <Property Name="FinishDate" Type="Edm.DateTimeOffset" />
+                <Property Name="AdditionalTypeID" Type="Edm.Int32" />
+                <Property Name="AdditionalTypeDesc" Type="Edm.String" />
+                <Property Name="ParentCommitteeID" Type="Edm.Int32" />
+                <Property Name="CommitteeParentName" Type="Edm.String" />
+                <Property Name="IsCurrent" Type="Edm.Boolean" />
+                <Property Name="LastUpdatedDate" Type="Edm.DateTimeOffset" />
+                <NavigationProperty Name="KNS_Bill" Type="Collection(ODataService.Entities.Models.KNS_Bill)" />
+                <NavigationProperty Name="KNS_Agenda" Type="Collection(ODataService.Entities.Models.KNS_Agenda)" />
+                <NavigationProperty Name="KNS_CommitteeSession" Type="Collection(ODataService.Entities.Models.KNS_CommitteeSession)" />
+                <NavigationProperty Name="KNS_JointCommittee" Type="Collection(ODataService.Entities.Models.KNS_JointCommittee)" />
+                <NavigationProperty Name="KNS_Agenda1" Type="Collection(ODataService.Entities.Models.KNS_Agenda)" />
+                <NavigationProperty Name="KNS_SecondaryLaw" Type="Collection(ODataService.Entities.Models.KNS_SecondaryLaw)" />
+                <NavigationProperty Name="KNS_JointCommittee1" Type="Collection(ODataService.Entities.Models.KNS_JointCommittee)" />
+            </EntityType>
+            <EntityType Name="KNS_CommitteeSession">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="Number" Type="Edm.Int32" />
+                <Property Name="KnessetNum" Type="Edm.Int32" />
+                <Property Name="TypeID" Type="Edm.Int32" />
+                <Property Name="TypeDesc" Type="Edm.String" />
+                <Property Name="CommitteeID" Type="Edm.Int32" />
+                <Property Name="StatusID" Type="Edm.Int32" />
+                <Property Name="StatusDesc" Type="Edm.String" />
+                <Property Name="Location" Type="Edm.String" />
+                <Property Name="SessionUrl" Type="Edm.String" />
+                <Property Name="BroadcastUrl" Type="Edm.String" />
+                <Property Name="StartDate" Type="Edm.DateTimeOffset" />
+                <Property Name="FinishDate" Type="Edm.DateTimeOffset" />
+                <Property Name="Note" Type="Edm.String" />
+                <Property Name="LastUpdatedDate" Type="Edm.DateTimeOffset" />
+                <NavigationProperty Name="KNS_Committee" Type="ODataService.Entities.Models.KNS_Committee" />
+                <NavigationProperty Name="KNS_DocumentCommitteeSession" Type="Collection(ODataService.Entities.Models.KNS_DocumentCommitteeSession)" />
+                <NavigationProperty Name="KNS_Status" Type="ODataService.Entities.Models.KNS_Status" />
+                <NavigationProperty Name="KNS_CmtSessionItem" Type="Collection(ODataService.Entities.Models.KNS_CmtSessionItem)" />
+            </EntityType>
+            <EntityType Name="KNS_BroadcastCommitteSession">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="BroadcastId" Type="Edm.Int32" />
+                <Property Name="BroadcastUrl" Type="Edm.String" />
+            </EntityType>
+            <EntityType Name="KNS_DocumentAgenda">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="AgendaID" Type="Edm.Int32" />
+                <Property Name="GroupTypeID" Type="Edm.Byte" />
+                <Property Name="GroupTypeDesc" Type="Edm.String" />
+                <Property Name="ApplicationID" Type="Edm.Byte" />
+                <Property Name="ApplicationDesc" Type="Edm.String" />
+                <Property Name="FilePath" Type="Edm.String" />
+                <Property Name="LastUpdatedDate" Type="Edm.DateTimeOffset" />
+                <NavigationProperty Name="KNS_Agenda" Type="ODataService.Entities.Models.KNS_Agenda" />
+            </EntityType>
+            <EntityType Name="KNS_DocumentBill">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="BillID" Type="Edm.Int32" />
+                <Property Name="GroupTypeID" Type="Edm.Byte" />
+                <Property Name="GroupTypeDesc" Type="Edm.String" />
+                <Property Name="ApplicationID" Type="Edm.Byte" />
+                <Property Name="ApplicationDesc" Type="Edm.String" />
+                <Property Name="FilePath" Type="Edm.String" />
+                <Property Name="LastUpdatedDate" Type="Edm.DateTimeOffset" />
+                <NavigationProperty Name="KNS_Bill" Type="ODataService.Entities.Models.KNS_Bill" />
+            </EntityType>
+            <EntityType Name="KNS_DocumentCommitteeSession">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="CommitteeSessionID" Type="Edm.Int32" />
+                <Property Name="GroupTypeID" Type="Edm.Byte" />
+                <Property Name="GroupTypeDesc" Type="Edm.String" />
+                <Property Name="ApplicationID" Type="Edm.Byte" />
+                <Property Name="ApplicationDesc" Type="Edm.String" />
+                <Property Name="FilePath" Type="Edm.String" />
+                <Property Name="LastUpdatedDate" Type="Edm.DateTimeOffset" />
+                <NavigationProperty Name="KNS_CommitteeSession" Type="ODataService.Entities.Models.KNS_CommitteeSession" />
+            </EntityType>
+            <EntityType Name="KNS_DocumentIsraelLaw">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="IsraelLawID" Type="Edm.Int32" />
+                <Property Name="GroupTypeID" Type="Edm.Byte" />
+                <Property Name="GroupTypeDesc" Type="Edm.String" />
+                <Property Name="ApplicationID" Type="Edm.Byte" />
+                <Property Name="ApplicationDesc" Type="Edm.String" />
+                <Property Name="FilePath" Type="Edm.String" />
+                <Property Name="LastUpdatedDate" Type="Edm.DateTimeOffset" />
+                <NavigationProperty Name="KNS_IsraelLaw" Type="ODataService.Entities.Models.KNS_IsraelLaw" />
+            </EntityType>
+            <EntityType Name="KNS_DocumentPlenumSession">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="PlenumSessionID" Type="Edm.Int32" />
+                <Property Name="GroupTypeID" Type="Edm.Byte" />
+                <Property Name="GroupTypeDesc" Type="Edm.String" />
+                <Property Name="ApplicationID" Type="Edm.Byte" />
+                <Property Name="ApplicationDesc" Type="Edm.String" />
+                <Property Name="FilePath" Type="Edm.String" />
+                <Property Name="LastUpdatedDate" Type="Edm.DateTimeOffset" />
+                <NavigationProperty Name="KNS_PlenumSession" Type="ODataService.Entities.Models.KNS_PlenumSession" />
+            </EntityType>
+            <EntityType Name="KNS_DocumentQuery">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="QueryID" Type="Edm.Int32" />
+                <Property Name="GroupTypeID" Type="Edm.Byte" />
+                <Property Name="GroupTypeDesc" Type="Edm.String" />
+                <Property Name="ApplicationID" Type="Edm.Byte" />
+                <Property Name="ApplicationDesc" Type="Edm.String" />
+                <Property Name="FilePath" Type="Edm.String" />
+                <Property Name="LastUpdatedDate" Type="Edm.DateTimeOffset" />
+                <NavigationProperty Name="KNS_Query" Type="ODataService.Entities.Models.KNS_Query" />
+            </EntityType>
+            <EntityType Name="KNS_DocumentSecondaryLaw">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="SecondaryLawId" Type="Edm.Int32" />
+                <Property Name="GroupTypeID" Type="Edm.Byte" />
+                <Property Name="GroupTypeDesc" Type="Edm.String" />
+                <Property Name="ApplicationID" Type="Edm.Byte" />
+                <Property Name="ApplicationDesc" Type="Edm.String" />
+                <Property Name="FilePath" Type="Edm.String" />
+                <Property Name="LastUpdatedDate" Type="Edm.DateTimeOffset" />
+                <NavigationProperty Name="KNS_SecondaryLaw" Type="ODataService.Entities.Models.KNS_SecondaryLaw" />
+            </EntityType>
+            <EntityType Name="KNS_Faction">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="Name" Type="Edm.String" />
+                <Property Name="KnessetNum" Type="Edm.Int32" />
+                <Property Name="StartDate" Type="Edm.DateTimeOffset" />
+                <Property Name="FinishDate" Type="Edm.DateTimeOffset" />
+                <Property Name="IsCurrent" Type="Edm.Boolean" />
+                <Property Name="LastUpdatedDate" Type="Edm.DateTimeOffset" />
+                <NavigationProperty Name="KNS_PersonToPosition" Type="Collection(ODataService.Entities.Models.KNS_PersonToPosition)" />
+            </EntityType>
+            <EntityType Name="KNS_GovMinistry">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="Name" Type="Edm.String" />
+                <Property Name="IsActive" Type="Edm.Boolean" />
+                <Property Name="LastUpdatedDate" Type="Edm.DateTimeOffset" />
+                <NavigationProperty Name="KNS_Query" Type="Collection(ODataService.Entities.Models.KNS_Query)" />
+                <NavigationProperty Name="KNS_PersonToPosition" Type="Collection(ODataService.Entities.Models.KNS_PersonToPosition)" />
+                <NavigationProperty Name="KNS_IsraelLawMinistry" Type="Collection(ODataService.Entities.Models.KNS_IsraelLawMinistry)" />
+            </EntityType>
+            <EntityType Name="KNS_IsraelLaw">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="KnessetNum" Type="Edm.Int32" />
+                <Property Name="Name" Type="Edm.String" />
+                <Property Name="IsBasicLaw" Type="Edm.Boolean" />
+                <Property Name="IsFavoriteLaw" Type="Edm.Boolean" />
+                <Property Name="PublicationDate" Type="Edm.DateTimeOffset" />
+                <Property Name="LatestPublicationDate" Type="Edm.DateTimeOffset" />
+                <Property Name="IsBudgetLaw" Type="Edm.Boolean" />
+                <Property Name="LawValidityID" Type="Edm.Int32" />
+                <Property Name="LawValidityDesc" Type="Edm.String" />
+                <Property Name="ValidityStartDate" Type="Edm.DateTimeOffset" />
+                <Property Name="ValidityStartDateNotes" Type="Edm.String" />
+                <Property Name="ValidityFinishDate" Type="Edm.DateTimeOffset" />
+                <Property Name="ValidityFinishDateNotes" Type="Edm.String" />
+                <Property Name="LastUpdatedDate" Type="Edm.DateTimeOffset" />
+                <NavigationProperty Name="KNS_DocumentIsraelLaw" Type="Collection(ODataService.Entities.Models.KNS_DocumentIsraelLaw)" />
+                <NavigationProperty Name="KNS_IsraelLawBinding" Type="Collection(ODataService.Entities.Models.KNS_IsraelLawBinding)" />
+                <NavigationProperty Name="KNS_IsraelLawClassificiation" Type="Collection(ODataService.Entities.Models.KNS_IsraelLawClassificiation)" />
+                <NavigationProperty Name="KNS_IsraelLawMinistry" Type="Collection(ODataService.Entities.Models.KNS_IsraelLawMinistry)" />
+                <NavigationProperty Name="KNS_IsraelLawName" Type="Collection(ODataService.Entities.Models.KNS_IsraelLawName)" />
+            </EntityType>
+            <EntityType Name="KNS_IsraelLawBinding">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="IsraelLawID" Type="Edm.Int32" />
+                <Property Name="IsraelLawReplacedID" Type="Edm.Int32" />
+                <Property Name="LawID" Type="Edm.Int32" />
+                <Property Name="LawTypeID" Type="Edm.Int32" />
+                <Property Name="LastUpdatedDate" Type="Edm.DateTimeOffset" />
+                <NavigationProperty Name="KNS_IsraelLaw" Type="ODataService.Entities.Models.KNS_IsraelLaw" />
+            </EntityType>
+            <EntityType Name="KNS_IsraelLawClassificiation">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="IsraelLawID" Type="Edm.Int32" />
+                <Property Name="ClassificiationID" Type="Edm.Int32" />
+                <Property Name="ClassificiationDesc" Type="Edm.String" />
+                <Property Name="LastUpdatedDate" Type="Edm.DateTimeOffset" />
+                <NavigationProperty Name="KNS_IsraelLaw" Type="ODataService.Entities.Models.KNS_IsraelLaw" />
+            </EntityType>
+            <EntityType Name="KNS_IsraelLawMinistry">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="IsraelLawID" Type="Edm.Int32" />
+                <Property Name="GovMinistryID" Type="Edm.Int32" />
+                <Property Name="LastUpdatedDate" Type="Edm.DateTimeOffset" />
+                <NavigationProperty Name="KNS_IsraelLaw" Type="ODataService.Entities.Models.KNS_IsraelLaw" />
+                <NavigationProperty Name="KNS_GovMinistry" Type="ODataService.Entities.Models.KNS_GovMinistry" />
+            </EntityType>
+            <EntityType Name="KNS_IsraelLawName">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="IsraelLawID" Type="Edm.Int32" />
+                <Property Name="LawID" Type="Edm.Int32" />
+                <Property Name="LawTypeID" Type="Edm.Int32" />
+                <Property Name="Name" Type="Edm.String" />
+                <Property Name="LastUpdatedDate" Type="Edm.DateTimeOffset" />
+                <NavigationProperty Name="KNS_IsraelLaw" Type="ODataService.Entities.Models.KNS_IsraelLaw" />
+            </EntityType>
+            <EntityType Name="KNS_ItemType">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="Desc" Type="Edm.String" />
+                <Property Name="TableName" Type="Edm.String" />
+                <NavigationProperty Name="KNS_Bill" Type="Collection(ODataService.Entities.Models.KNS_Bill)" />
+            </EntityType>
+            <EntityType Name="KNS_JointCommittee">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="CommitteeID" Type="Edm.Int32" />
+                <Property Name="ParticipantCommitteeID" Type="Edm.Int32" />
+                <Property Name="LastUpdatedDate" Type="Edm.DateTimeOffset" />
+                <NavigationProperty Name="KNS_Committee" Type="ODataService.Entities.Models.KNS_Committee" />
+                <NavigationProperty Name="KNS_CommitteeParticipant" Type="ODataService.Entities.Models.KNS_Committee" />
+            </EntityType>
+            <EntityType Name="KNS_KnessetDates">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="KnessetNum" Type="Edm.Int32" />
+                <Property Name="Name" Type="Edm.String" />
+                <Property Name="Assembly" Type="Edm.Int32" />
+                <Property Name="Plenum" Type="Edm.Int32" />
+                <Property Name="PlenumStart" Type="Edm.DateTimeOffset" />
+                <Property Name="PlenumFinish" Type="Edm.DateTimeOffset" />
+                <Property Name="IsCurrent" Type="Edm.Boolean" />
+                <Property Name="LastUpdatedDate" Type="Edm.DateTimeOffset" />
+            </EntityType>
+            <EntityType Name="KNS_LawBinding">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="LawID" Type="Edm.Int32" />
+                <Property Name="IsraelLawID" Type="Edm.Int32" />
+                <Property Name="ParentLawID" Type="Edm.Int32" />
+                <Property Name="LawTypeID" Type="Edm.Int32" />
+                <Property Name="LawParentTypeID" Type="Edm.Int32" />
+                <Property Name="BindingType" Type="Edm.Int32" />
+                <Property Name="BindingTypeDesc" Type="Edm.String" />
+                <Property Name="PageNumber" Type="Edm.String" />
+                <Property Name="AmendmentType" Type="Edm.Int32" />
+                <Property Name="AmendmentTypeDesc" Type="Edm.String" />
+                <Property Name="LastUpdatedDate" Type="Edm.DateTimeOffset" />
+            </EntityType>
+            <EntityType Name="KNS_MkSiteCode">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="KnsID" Type="Edm.Int32" />
+                <Property Name="SiteId" Type="Edm.Int32" />
+            </EntityType>
+            <EntityType Name="KNS_Person">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="LastName" Type="Edm.String" />
+                <Property Name="FirstName" Type="Edm.String" />
+                <Property Name="GenderID" Type="Edm.Int32" />
+                <Property Name="GenderDesc" Type="Edm.String" />
+                <Property Name="Email" Type="Edm.String" />
+                <Property Name="IsCurrent" Type="Edm.Boolean" />
+                <Property Name="LastUpdatedDate" Type="Edm.DateTimeOffset" />
+                <NavigationProperty Name="KNS_PersonToPosition" Type="Collection(ODataService.Entities.Models.KNS_PersonToPosition)" />
+                <NavigationProperty Name="KNS_PlenumVoteResult" Type="Collection(ODataService.Entities.Models.KNS_PlenumVoteResult)" />
+            </EntityType>
+            <EntityType Name="KNS_PersonToPosition">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="PersonID" Type="Edm.Int32" />
+                <Property Name="PositionID" Type="Edm.Int32" />
+                <Property Name="KnessetNum" Type="Edm.Int32" />
+                <Property Name="StartDate" Type="Edm.DateTimeOffset" />
+                <Property Name="FinishDate" Type="Edm.DateTimeOffset" />
+                <Property Name="GovMinistryID" Type="Edm.Int32" />
+                <Property Name="GovMinistryName" Type="Edm.String" />
+                <Property Name="DutyDesc" Type="Edm.String" />
+                <Property Name="FactionID" Type="Edm.Int32" />
+                <Property Name="FactionName" Type="Edm.String" />
+                <Property Name="GovernmentNum" Type="Edm.Int32" />
+                <Property Name="CommitteeID" Type="Edm.Int32" />
+                <Property Name="CommitteeName" Type="Edm.String" />
+                <Property Name="IsCurrent" Type="Edm.Boolean" />
+                <Property Name="LastUpdatedDate" Type="Edm.DateTimeOffset" />
+                <NavigationProperty Name="KNS_Faction" Type="ODataService.Entities.Models.KNS_Faction" />
+                <NavigationProperty Name="KNS_Person" Type="ODataService.Entities.Models.KNS_Person" />
+                <NavigationProperty Name="KNS_Agenda" Type="Collection(ODataService.Entities.Models.KNS_Agenda)" />
+                <NavigationProperty Name="KNS_BillHistoryInitiator" Type="Collection(ODataService.Entities.Models.KNS_BillHistoryInitiator)" />
+                <NavigationProperty Name="KNS_BillInitiator" Type="ODataService.Entities.Models.KNS_BillInitiator" />
+                <NavigationProperty Name="KNS_Agenda1" Type="Collection(ODataService.Entities.Models.KNS_Agenda)" />
+                <NavigationProperty Name="KNS_Position" Type="ODataService.Entities.Models.KNS_Position" />
+                <NavigationProperty Name="KNS_GovMinistry" Type="ODataService.Entities.Models.KNS_GovMinistry" />
+            </EntityType>
+            <EntityType Name="KNS_PlenumSession">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="Number" Type="Edm.Int32" />
+                <Property Name="KnessetNum" Type="Edm.Int32" />
+                <Property Name="Name" Type="Edm.String" />
+                <Property Name="StartDate" Type="Edm.DateTimeOffset" />
+                <Property Name="FinishDate" Type="Edm.DateTimeOffset" />
+                <Property Name="IsSpecialMeeting" Type="Edm.Boolean" />
+                <Property Name="LastUpdatedDate" Type="Edm.DateTimeOffset" />
+                <NavigationProperty Name="KNS_DocumentPlenumSession" Type="Collection(ODataService.Entities.Models.KNS_DocumentPlenumSession)" />
+                <NavigationProperty Name="KNS_PlmSessionItem" Type="Collection(ODataService.Entities.Models.KNS_PlmSessionItem)" />
+                <NavigationProperty Name="KNS_PlenumVote" Type="Collection(ODataService.Entities.Models.KNS_PlenumVote)" />
+            </EntityType>
+            <EntityType Name="KNS_PlmSessionItem">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="ItemID" Type="Edm.Int32" />
+                <Property Name="PlenumSessionID" Type="Edm.Int32" />
+                <Property Name="ItemTypeID" Type="Edm.Int32" />
+                <Property Name="ItemTypeDesc" Type="Edm.String" />
+                <Property Name="Ordinal" Type="Edm.Int64" />
+                <Property Name="Name" Type="Edm.String" />
+                <Property Name="StatusID" Type="Edm.Int32" />
+                <Property Name="IsDiscussion" Type="Edm.Int32" />
+                <Property Name="LastUpdatedDate" Type="Edm.DateTimeOffset" />
+                <NavigationProperty Name="KNS_PlenumSession" Type="ODataService.Entities.Models.KNS_PlenumSession" />
+                <NavigationProperty Name="KNS_Status" Type="ODataService.Entities.Models.KNS_Status" />
+            </EntityType>
+            <EntityType Name="KNS_Position">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="Description" Type="Edm.String" />
+                <Property Name="GenderID" Type="Edm.Int32" />
+                <Property Name="GenderDesc" Type="Edm.String" />
+                <Property Name="LastUpdatedDate" Type="Edm.DateTimeOffset" />
+                <NavigationProperty Name="KNS_PersonToPosition" Type="Collection(ODataService.Entities.Models.KNS_PersonToPosition)" />
+            </EntityType>
+            <EntityType Name="KNS_Query">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="Number" Type="Edm.Int32" />
+                <Property Name="KnessetNum" Type="Edm.Int32" />
+                <Property Name="Name" Type="Edm.String" />
+                <Property Name="TypeID" Type="Edm.Int32" />
+                <Property Name="TypeDesc" Type="Edm.String" />
+                <Property Name="StatusID" Type="Edm.Int32" />
+                <Property Name="PersonID" Type="Edm.Int32" />
+                <Property Name="GovMinistryID" Type="Edm.Int32" />
+                <Property Name="SubmitDate" Type="Edm.DateTimeOffset" />
+                <Property Name="ReplyMinisterDate" Type="Edm.DateTimeOffset" />
+                <Property Name="ReplyDatePlanned" Type="Edm.DateTimeOffset" />
+                <Property Name="LastUpdatedDate" Type="Edm.DateTimeOffset" />
+                <NavigationProperty Name="KNS_DocumentQuery" Type="Collection(ODataService.Entities.Models.KNS_DocumentQuery)" />
+                <NavigationProperty Name="KNS_GovMinistry" Type="ODataService.Entities.Models.KNS_GovMinistry" />
+                <NavigationProperty Name="KNS_Status" Type="ODataService.Entities.Models.KNS_Status" />
+            </EntityType>
+            <EntityType Name="KNS_SecLawAuthorizingLaw">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="AuthorizingLawID" Type="Edm.Int32" />
+                <Property Name="SecondaryLawID" Type="Edm.Int32" />
+                <Property Name="LastUpdatedDate" Type="Edm.DateTimeOffset" />
+                <NavigationProperty Name="KNS_SecondaryLaw" Type="ODataService.Entities.Models.KNS_SecondaryLaw" />
+            </EntityType>
+            <EntityType Name="KNS_SecLawRegulator">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="SecondaryLawID" Type="Edm.Int32" />
+                <Property Name="RegulatorTypeID" Type="Edm.Int32" />
+                <Property Name="RegulatorTypeDesc" Type="Edm.String" />
+                <Property Name="RegulatorID" Type="Edm.Int32" />
+                <Property Name="RegulatorDesc" Type="Edm.String" />
+                <Property Name="LastUpdatedDate" Type="Edm.DateTimeOffset" />
+                <NavigationProperty Name="KNS_SecondaryLaw" Type="ODataService.Entities.Models.KNS_SecondaryLaw" />
+            </EntityType>
+            <EntityType Name="KNS_SecondaryLaw">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="KnessetNum" Type="Edm.Int32" />
+                <Property Name="Name" Type="Edm.String" />
+                <Property Name="CompletionCauseID" Type="Edm.Int32" />
+                <Property Name="CompletionCauseDesc" Type="Edm.String" />
+                <Property Name="PostponementReasonID" Type="Edm.Int32" />
+                <Property Name="PostponementReasonDesc" Type="Edm.String" />
+                <Property Name="KnessetInvolvementID" Type="Edm.Int32" />
+                <Property Name="KnessetInvolvementDesc" Type="Edm.String" />
+                <Property Name="CommitteeID" Type="Edm.Int32" />
+                <Property Name="PublicationSeriesID" Type="Edm.Int32" />
+                <Property Name="PublicationSeriesDesc" Type="Edm.String" />
+                <Property Name="MagazineNumber" Type="Edm.String" />
+                <Property Name="PageNumber" Type="Edm.String" />
+                <Property Name="PublicationDate" Type="Edm.DateTimeOffset" />
+                <Property Name="MajorAuthorizingLawID" Type="Edm.Int32" />
+                <Property Name="CommitteeReceivedDate" Type="Edm.DateTimeOffset" />
+                <Property Name="CommitteeApprovalDate" Type="Edm.DateTimeOffset" />
+                <Property Name="ApprovalDateWithoutDiscussion" Type="Edm.DateTimeOffset" />
+                <Property Name="IsAmmendingLawOriginal" Type="Edm.Boolean" />
+                <Property Name="ClassificationID" Type="Edm.Int32" />
+                <Property Name="ClassificationDesc" Type="Edm.String" />
+                <Property Name="IsEmergency" Type="Edm.Boolean" />
+                <Property Name="SecretaryReceivedDate" Type="Edm.DateTimeOffset" />
+                <Property Name="PlenumApprovalDate" Type="Edm.DateTimeOffset" />
+                <Property Name="TypeID" Type="Edm.Int32" />
+                <Property Name="TypeDesc" Type="Edm.String" />
+                <Property Name="StatusID" Type="Edm.Int32" />
+                <Property Name="StatusName" Type="Edm.String" />
+                <Property Name="IsCurrent" Type="Edm.Boolean" />
+                <Property Name="LastUpdatedDate" Type="Edm.DateTimeOffset" />
+                <NavigationProperty Name="KNS_SecToSecBinding" Type="Collection(ODataService.Entities.Models.KNS_SecToSecBinding)" />
+                <NavigationProperty Name="KNS_SecToSecBinding_Parent" Type="Collection(ODataService.Entities.Models.KNS_SecToSecBinding)" />
+                <NavigationProperty Name="KNS_Committee" Type="ODataService.Entities.Models.KNS_Committee" />
+                <NavigationProperty Name="KNS_Status" Type="ODataService.Entities.Models.KNS_Status" />
+                <NavigationProperty Name="KNS_SecLawAuthorizingLaw" Type="Collection(ODataService.Entities.Models.KNS_SecLawAuthorizingLaw)" />
+                <NavigationProperty Name="KNS_SecLawRegulator" Type="Collection(ODataService.Entities.Models.KNS_SecLawRegulator)" />
+                <NavigationProperty Name="KNS_DocumentSecondaryLaw" Type="Collection(ODataService.Entities.Models.KNS_DocumentSecondaryLaw)" />
+            </EntityType>
+            <EntityType Name="KNS_SecToSecBinding">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="SecChildID" Type="Edm.Int32" />
+                <Property Name="SecChildTypeID" Type="Edm.Int32" />
+                <Property Name="SecParentID" Type="Edm.Int32" />
+                <Property Name="SecParentTypeID" Type="Edm.Int32" />
+                <Property Name="SecMainID" Type="Edm.Int32" />
+                <Property Name="SecMainTypeID" Type="Edm.Int32" />
+                <Property Name="BindingTypeID" Type="Edm.Int32" />
+                <Property Name="BindingTypeDesc" Type="Edm.String" />
+                <Property Name="IsTempLegislation" Type="Edm.Boolean" />
+                <Property Name="IsSecondaryAmendment" Type="Edm.Boolean" />
+                <Property Name="CorrectionNumber" Type="Edm.Int32" />
+                <Property Name="AmendmentTypeID" Type="Edm.Int32" />
+                <Property Name="AmendmentTypeDesc" Type="Edm.String" />
+                <Property Name="ParagraphNumber" Type="Edm.String" />
+                <Property Name="LastUpdatedDate" Type="Edm.DateTimeOffset" />
+                <NavigationProperty Name="KNS_SecondaryLaw" Type="ODataService.Entities.Models.KNS_SecondaryLaw" />
+                <NavigationProperty Name="KNS_SecondaryLaw_Parent" Type="ODataService.Entities.Models.KNS_SecondaryLaw" />
+            </EntityType>
+            <EntityType Name="KNS_Status">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="Desc" Type="Edm.String" />
+                <Property Name="TypeID" Type="Edm.Int32" />
+                <Property Name="TypeDesc" Type="Edm.String" />
+                <Property Name="OrderTransition" Type="Edm.Int32" />
+                <Property Name="IsActive" Type="Edm.Boolean" />
+                <Property Name="LastUpdatedDate" Type="Edm.DateTimeOffset" />
+                <NavigationProperty Name="KNS_Bill" Type="Collection(ODataService.Entities.Models.KNS_Bill)" />
+                <NavigationProperty Name="KNS_Agenda" Type="Collection(ODataService.Entities.Models.KNS_Agenda)" />
+                <NavigationProperty Name="KNS_CommitteeSession" Type="Collection(ODataService.Entities.Models.KNS_CommitteeSession)" />
+                <NavigationProperty Name="KNS_SecondaryLaw" Type="Collection(ODataService.Entities.Models.KNS_SecondaryLaw)" />
+                <NavigationProperty Name="KNS_CmtSessionItem" Type="Collection(ODataService.Entities.Models.KNS_CmtSessionItem)" />
+                <NavigationProperty Name="KNS_PlmSessionItem" Type="Collection(ODataService.Entities.Models.KNS_PlmSessionItem)" />
+                <NavigationProperty Name="KNS_Query" Type="Collection(ODataService.Entities.Models.KNS_Query)" />
+            </EntityType>
+            <EntityType Name="KNS_PlenumVote">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="VoteDateTime" Type="Edm.DateTimeOffset" />
+                <Property Name="SessionID" Type="Edm.Int32" />
+                <Property Name="ItemID" Type="Edm.Int32" />
+                <Property Name="Ordinal" Type="Edm.Int32" />
+                <Property Name="VoteMethodID" Type="Edm.Int32" />
+                <Property Name="VoteMethodDesc" Type="Edm.String" />
+                <Property Name="VoteStatusCode" Type="Edm.Int32" />
+                <Property Name="VoteStatusDesc" Type="Edm.String" />
+                <Property Name="VoteTitle" Type="Edm.String" />
+                <Property Name="VoteSubject" Type="Edm.String" />
+                <Property Name="IsNoConfidenceInGov" Type="Edm.Boolean" Nullable="false" />
+                <Property Name="LastUpdatedDate" Type="Edm.DateTimeOffset" Nullable="false" />
+                <Property Name="ForOptionID" Type="Edm.Int32" />
+                <Property Name="ForOptionDesc" Type="Edm.String" />
+                <Property Name="AgainstOptionID" Type="Edm.Int32" />
+                <Property Name="AgainstOptionDesc" Type="Edm.String" />
+                <NavigationProperty Name="KNS_PlenumSession" Type="ODataService.Entities.Models.KNS_PlenumSession" />
+            </EntityType>
+            <EntityType Name="KNS_PlenumVoteResult">
+                <Key>
+                    <PropertyRef Name="Id" />
+                </Key>
+                <Property Name="Id" Type="Edm.Int32" Nullable="false" />
+                <Property Name="MkId" Type="Edm.Int32" />
+                <Property Name="VoteID" Type="Edm.Int32" Nullable="false" />
+                <Property Name="VoteDate" Type="Edm.DateTimeOffset" />
+                <Property Name="ResultCode" Type="Edm.Int32" Nullable="false" />
+                <Property Name="ResultDesc" Type="Edm.String" />
+                <Property Name="LastUpdatedDate" Type="Edm.DateTimeOffset" Nullable="false" />
+                <Property Name="LastName" Type="Edm.String" />
+                <Property Name="FirstName" Type="Edm.String" />
+                <NavigationProperty Name="KNS_Person" Type="ODataService.Entities.Models.KNS_Person" />
+            </EntityType>
+        </Schema>
+        <Schema Namespace="Default"
+            xmlns="http://docs.oasis-open.org/odata/ns/edm">
+            <EntityContainer Name="Container">
+                <EntitySet Name="KNS_Agenda" EntityType="ODataService.Entities.Models.KNS_Agenda">
+                    <NavigationPropertyBinding Path="KNS_Committee" Target="KNS_Committee" />
+                    <NavigationPropertyBinding Path="KNS_DocumentAgenda" Target="KNS_DocumentAgenda" />
+                    <NavigationPropertyBinding Path="KNS_PersonToPosition" Target="KNS_PersonToPosition" />
+                    <NavigationPropertyBinding Path="KNS_PersonToPositionMinister" Target="KNS_PersonToPosition" />
+                    <NavigationPropertyBinding Path="KNS_RecommendCommittee" Target="KNS_Committee" />
+                    <NavigationPropertyBinding Path="KNS_Status" Target="KNS_Status" />
+                </EntitySet>
+                <EntitySet Name="KNS_Bill" EntityType="ODataService.Entities.Models.KNS_Bill">
+                    <NavigationPropertyBinding Path="KNS_BillHistoryInitiator" Target="KNS_BillHistoryInitiator" />
+                    <NavigationPropertyBinding Path="KNS_BillInitiator" Target="KNS_BillInitiator" />
+                    <NavigationPropertyBinding Path="KNS_BillName" Target="KNS_BillName" />
+                    <NavigationPropertyBinding Path="KNS_BillSplit" Target="KNS_BillSplit" />
+                    <NavigationPropertyBinding Path="KNS_BillSplit_Main" Target="KNS_BillSplit" />
+                    <NavigationPropertyBinding Path="KNS_BillUnion" Target="KNS_BillUnion" />
+                    <NavigationPropertyBinding Path="KNS_BillUnion_Main" Target="KNS_BillUnion" />
+                    <NavigationPropertyBinding Path="KNS_Committee" Target="KNS_Committee" />
+                    <NavigationPropertyBinding Path="KNS_DocumentBill" Target="KNS_DocumentBill" />
+                    <NavigationPropertyBinding Path="KNS_ItemType" Target="KNS_ItemType" />
+                    <NavigationPropertyBinding Path="KNS_Status" Target="KNS_Status" />
+                </EntitySet>
+                <EntitySet Name="KNS_BillHistoryInitiator" EntityType="ODataService.Entities.Models.KNS_BillHistoryInitiator">
+                    <NavigationPropertyBinding Path="KNS_Bill" Target="KNS_Bill" />
+                    <NavigationPropertyBinding Path="KNS_PersonToPosition" Target="KNS_PersonToPosition" />
+                </EntitySet>
+                <EntitySet Name="KNS_BillInitiator" EntityType="ODataService.Entities.Models.KNS_BillInitiator">
+                    <NavigationPropertyBinding Path="KNS_Bill" Target="KNS_Bill" />
+                    <NavigationPropertyBinding Path="KNS_PersonToPosition" Target="KNS_PersonToPosition" />
+                </EntitySet>
+                <EntitySet Name="KNS_BillName" EntityType="ODataService.Entities.Models.KNS_BillName">
+                    <NavigationPropertyBinding Path="KNS_Bill" Target="KNS_Bill" />
+                </EntitySet>
+                <EntitySet Name="KNS_BillSplit" EntityType="ODataService.Entities.Models.KNS_BillSplit">
+                    <NavigationPropertyBinding Path="KNS_Bill" Target="KNS_Bill" />
+                    <NavigationPropertyBinding Path="KNS_Bill_Main" Target="KNS_Bill" />
+                </EntitySet>
+                <EntitySet Name="KNS_BillUnion" EntityType="ODataService.Entities.Models.KNS_BillUnion">
+                    <NavigationPropertyBinding Path="KNS_Bill" Target="KNS_Bill" />
+                    <NavigationPropertyBinding Path="KNS_Bill_Main" Target="KNS_Bill" />
+                </EntitySet>
+                <EntitySet Name="KNS_CmtSessionItem" EntityType="ODataService.Entities.Models.KNS_CmtSessionItem">
+                    <NavigationPropertyBinding Path="KNS_CommitteeSession" Target="KNS_CommitteeSession" />
+                    <NavigationPropertyBinding Path="KNS_Status" Target="KNS_Status" />
+                </EntitySet>
+                <EntitySet Name="KNS_CmtSiteCode" EntityType="ODataService.Entities.Models.KNS_CmtSiteCode" />
+                <EntitySet Name="KNS_Committee" EntityType="ODataService.Entities.Models.KNS_Committee">
+                    <NavigationPropertyBinding Path="KNS_Agenda" Target="KNS_Agenda" />
+                    <NavigationPropertyBinding Path="KNS_Agenda1" Target="KNS_Agenda" />
+                    <NavigationPropertyBinding Path="KNS_Bill" Target="KNS_Bill" />
+                    <NavigationPropertyBinding Path="KNS_CommitteeSession" Target="KNS_CommitteeSession" />
+                    <NavigationPropertyBinding Path="KNS_JointCommittee" Target="KNS_JointCommittee" />
+                    <NavigationPropertyBinding Path="KNS_JointCommittee1" Target="KNS_JointCommittee" />
+                    <NavigationPropertyBinding Path="KNS_SecondaryLaw" Target="KNS_SecondaryLaw" />
+                </EntitySet>
+                <EntitySet Name="KNS_CommitteeSession" EntityType="ODataService.Entities.Models.KNS_CommitteeSession">
+                    <NavigationPropertyBinding Path="KNS_CmtSessionItem" Target="KNS_CmtSessionItem" />
+                    <NavigationPropertyBinding Path="KNS_Committee" Target="KNS_Committee" />
+                    <NavigationPropertyBinding Path="KNS_DocumentCommitteeSession" Target="KNS_DocumentCommitteeSession" />
+                    <NavigationPropertyBinding Path="KNS_Status" Target="KNS_Status" />
+                </EntitySet>
+                <EntitySet Name="KNS_BroadcastCommitteSession" EntityType="ODataService.Entities.Models.KNS_BroadcastCommitteSession" />
+                <EntitySet Name="KNS_DocumentAgenda" EntityType="ODataService.Entities.Models.KNS_DocumentAgenda">
+                    <NavigationPropertyBinding Path="KNS_Agenda" Target="KNS_Agenda" />
+                </EntitySet>
+                <EntitySet Name="KNS_DocumentBill" EntityType="ODataService.Entities.Models.KNS_DocumentBill">
+                    <NavigationPropertyBinding Path="KNS_Bill" Target="KNS_Bill" />
+                </EntitySet>
+                <EntitySet Name="KNS_DocumentCommitteeSession" EntityType="ODataService.Entities.Models.KNS_DocumentCommitteeSession">
+                    <NavigationPropertyBinding Path="KNS_CommitteeSession" Target="KNS_CommitteeSession" />
+                </EntitySet>
+                <EntitySet Name="KNS_DocumentIsraelLaw" EntityType="ODataService.Entities.Models.KNS_DocumentIsraelLaw">
+                    <NavigationPropertyBinding Path="KNS_IsraelLaw" Target="KNS_IsraelLaw" />
+                </EntitySet>
+                <EntitySet Name="KNS_DocumentPlenumSession" EntityType="ODataService.Entities.Models.KNS_DocumentPlenumSession">
+                    <NavigationPropertyBinding Path="KNS_PlenumSession" Target="KNS_PlenumSession" />
+                </EntitySet>
+                <EntitySet Name="KNS_DocumentQuery" EntityType="ODataService.Entities.Models.KNS_DocumentQuery">
+                    <NavigationPropertyBinding Path="KNS_Query" Target="KNS_Query" />
+                </EntitySet>
+                <EntitySet Name="KNS_DocumentSecondaryLaw" EntityType="ODataService.Entities.Models.KNS_DocumentSecondaryLaw">
+                    <NavigationPropertyBinding Path="KNS_SecondaryLaw" Target="KNS_SecondaryLaw" />
+                </EntitySet>
+                <EntitySet Name="KNS_Faction" EntityType="ODataService.Entities.Models.KNS_Faction">
+                    <NavigationPropertyBinding Path="KNS_PersonToPosition" Target="KNS_PersonToPosition" />
+                </EntitySet>
+                <EntitySet Name="KNS_GovMinistry" EntityType="ODataService.Entities.Models.KNS_GovMinistry">
+                    <NavigationPropertyBinding Path="KNS_IsraelLawMinistry" Target="KNS_IsraelLawMinistry" />
+                    <NavigationPropertyBinding Path="KNS_PersonToPosition" Target="KNS_PersonToPosition" />
+                    <NavigationPropertyBinding Path="KNS_Query" Target="KNS_Query" />
+                </EntitySet>
+                <EntitySet Name="KNS_IsraelLaw" EntityType="ODataService.Entities.Models.KNS_IsraelLaw">
+                    <NavigationPropertyBinding Path="KNS_DocumentIsraelLaw" Target="KNS_DocumentIsraelLaw" />
+                    <NavigationPropertyBinding Path="KNS_IsraelLawBinding" Target="KNS_IsraelLawBinding" />
+                    <NavigationPropertyBinding Path="KNS_IsraelLawClassificiation" Target="KNS_IsraelLawClassificiation" />
+                    <NavigationPropertyBinding Path="KNS_IsraelLawMinistry" Target="KNS_IsraelLawMinistry" />
+                    <NavigationPropertyBinding Path="KNS_IsraelLawName" Target="KNS_IsraelLawName" />
+                </EntitySet>
+                <EntitySet Name="KNS_IsraelLawBinding" EntityType="ODataService.Entities.Models.KNS_IsraelLawBinding">
+                    <NavigationPropertyBinding Path="KNS_IsraelLaw" Target="KNS_IsraelLaw" />
+                </EntitySet>
+                <EntitySet Name="KNS_IsraelLawClassificiation" EntityType="ODataService.Entities.Models.KNS_IsraelLawClassificiation">
+                    <NavigationPropertyBinding Path="KNS_IsraelLaw" Target="KNS_IsraelLaw" />
+                </EntitySet>
+                <EntitySet Name="KNS_IsraelLawMinistry" EntityType="ODataService.Entities.Models.KNS_IsraelLawMinistry">
+                    <NavigationPropertyBinding Path="KNS_GovMinistry" Target="KNS_GovMinistry" />
+                    <NavigationPropertyBinding Path="KNS_IsraelLaw" Target="KNS_IsraelLaw" />
+                </EntitySet>
+                <EntitySet Name="KNS_IsraelLawName" EntityType="ODataService.Entities.Models.KNS_IsraelLawName">
+                    <NavigationPropertyBinding Path="KNS_IsraelLaw" Target="KNS_IsraelLaw" />
+                </EntitySet>
+                <EntitySet Name="KNS_ItemType" EntityType="ODataService.Entities.Models.KNS_ItemType">
+                    <NavigationPropertyBinding Path="KNS_Bill" Target="KNS_Bill" />
+                </EntitySet>
+                <EntitySet Name="KNS_JointCommittee" EntityType="ODataService.Entities.Models.KNS_JointCommittee">
+                    <NavigationPropertyBinding Path="KNS_Committee" Target="KNS_Committee" />
+                    <NavigationPropertyBinding Path="KNS_CommitteeParticipant" Target="KNS_Committee" />
+                </EntitySet>
+                <EntitySet Name="KNS_KnessetDates" EntityType="ODataService.Entities.Models.KNS_KnessetDates" />
+                <EntitySet Name="KNS_LawBinding" EntityType="ODataService.Entities.Models.KNS_LawBinding" />
+                <EntitySet Name="KNS_MkSiteCode" EntityType="ODataService.Entities.Models.KNS_MkSiteCode" />
+                <EntitySet Name="KNS_Person" EntityType="ODataService.Entities.Models.KNS_Person">
+                    <NavigationPropertyBinding Path="KNS_PersonToPosition" Target="KNS_PersonToPosition" />
+                    <NavigationPropertyBinding Path="KNS_PlenumVoteResult" Target="KNS_PlenumVoteResult" />
+                </EntitySet>
+                <EntitySet Name="KNS_PersonToPosition" EntityType="ODataService.Entities.Models.KNS_PersonToPosition">
+                    <NavigationPropertyBinding Path="KNS_Agenda" Target="KNS_Agenda" />
+                    <NavigationPropertyBinding Path="KNS_Agenda1" Target="KNS_Agenda" />
+                    <NavigationPropertyBinding Path="KNS_BillHistoryInitiator" Target="KNS_BillHistoryInitiator" />
+                    <NavigationPropertyBinding Path="KNS_BillInitiator" Target="KNS_BillInitiator" />
+                    <NavigationPropertyBinding Path="KNS_Faction" Target="KNS_Faction" />
+                    <NavigationPropertyBinding Path="KNS_GovMinistry" Target="KNS_GovMinistry" />
+                    <NavigationPropertyBinding Path="KNS_Person" Target="KNS_Person" />
+                    <NavigationPropertyBinding Path="KNS_Position" Target="KNS_Position" />
+                </EntitySet>
+                <EntitySet Name="KNS_PlenumSession" EntityType="ODataService.Entities.Models.KNS_PlenumSession">
+                    <NavigationPropertyBinding Path="KNS_DocumentPlenumSession" Target="KNS_DocumentPlenumSession" />
+                    <NavigationPropertyBinding Path="KNS_PlenumVote" Target="KNS_PlenumVote" />
+                    <NavigationPropertyBinding Path="KNS_PlmSessionItem" Target="KNS_PlmSessionItem" />
+                </EntitySet>
+                <EntitySet Name="KNS_PlmSessionItem" EntityType="ODataService.Entities.Models.KNS_PlmSessionItem">
+                    <NavigationPropertyBinding Path="KNS_PlenumSession" Target="KNS_PlenumSession" />
+                    <NavigationPropertyBinding Path="KNS_Status" Target="KNS_Status" />
+                </EntitySet>
+                <EntitySet Name="KNS_Position" EntityType="ODataService.Entities.Models.KNS_Position">
+                    <NavigationPropertyBinding Path="KNS_PersonToPosition" Target="KNS_PersonToPosition" />
+                </EntitySet>
+                <EntitySet Name="KNS_Query" EntityType="ODataService.Entities.Models.KNS_Query">
+                    <NavigationPropertyBinding Path="KNS_DocumentQuery" Target="KNS_DocumentQuery" />
+                    <NavigationPropertyBinding Path="KNS_GovMinistry" Target="KNS_GovMinistry" />
+                    <NavigationPropertyBinding Path="KNS_Status" Target="KNS_Status" />
+                </EntitySet>
+                <EntitySet Name="KNS_SecLawAuthorizingLaw" EntityType="ODataService.Entities.Models.KNS_SecLawAuthorizingLaw">
+                    <NavigationPropertyBinding Path="KNS_SecondaryLaw" Target="KNS_SecondaryLaw" />
+                </EntitySet>
+                <EntitySet Name="KNS_SecLawRegulator" EntityType="ODataService.Entities.Models.KNS_SecLawRegulator">
+                    <NavigationPropertyBinding Path="KNS_SecondaryLaw" Target="KNS_SecondaryLaw" />
+                </EntitySet>
+                <EntitySet Name="KNS_SecondaryLaw" EntityType="ODataService.Entities.Models.KNS_SecondaryLaw">
+                    <NavigationPropertyBinding Path="KNS_Committee" Target="KNS_Committee" />
+                    <NavigationPropertyBinding Path="KNS_DocumentSecondaryLaw" Target="KNS_DocumentSecondaryLaw" />
+                    <NavigationPropertyBinding Path="KNS_SecLawAuthorizingLaw" Target="KNS_SecLawAuthorizingLaw" />
+                    <NavigationPropertyBinding Path="KNS_SecLawRegulator" Target="KNS_SecLawRegulator" />
+                    <NavigationPropertyBinding Path="KNS_SecToSecBinding" Target="KNS_SecToSecBinding" />
+                    <NavigationPropertyBinding Path="KNS_SecToSecBinding_Parent" Target="KNS_SecToSecBinding" />
+                    <NavigationPropertyBinding Path="KNS_Status" Target="KNS_Status" />
+                </EntitySet>
+                <EntitySet Name="KNS_SecToSecBinding" EntityType="ODataService.Entities.Models.KNS_SecToSecBinding">
+                    <NavigationPropertyBinding Path="KNS_SecondaryLaw" Target="KNS_SecondaryLaw" />
+                    <NavigationPropertyBinding Path="KNS_SecondaryLaw_Parent" Target="KNS_SecondaryLaw" />
+                </EntitySet>
+                <EntitySet Name="KNS_Status" EntityType="ODataService.Entities.Models.KNS_Status">
+                    <NavigationPropertyBinding Path="KNS_Agenda" Target="KNS_Agenda" />
+                    <NavigationPropertyBinding Path="KNS_Bill" Target="KNS_Bill" />
+                    <NavigationPropertyBinding Path="KNS_CmtSessionItem" Target="KNS_CmtSessionItem" />
+                    <NavigationPropertyBinding Path="KNS_CommitteeSession" Target="KNS_CommitteeSession" />
+                    <NavigationPropertyBinding Path="KNS_PlmSessionItem" Target="KNS_PlmSessionItem" />
+                    <NavigationPropertyBinding Path="KNS_Query" Target="KNS_Query" />
+                    <NavigationPropertyBinding Path="KNS_SecondaryLaw" Target="KNS_SecondaryLaw" />
+                </EntitySet>
+                <EntitySet Name="KNS_PlenumVote" EntityType="ODataService.Entities.Models.KNS_PlenumVote">
+                    <NavigationPropertyBinding Path="KNS_PlenumSession" Target="KNS_PlenumSession" />
+                </EntitySet>
+                <EntitySet Name="KNS_PlenumVoteResult" EntityType="ODataService.Entities.Models.KNS_PlenumVoteResult">
+                    <NavigationPropertyBinding Path="KNS_Person" Target="KNS_Person" />
+                </EntitySet>
+            </EntityContainer>
+        </Schema>
+    </edmx:DataServices>
+</edmx:Edmx>
