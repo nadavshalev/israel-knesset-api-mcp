@@ -126,6 +126,7 @@ def search_bills(
             "sub_type": row["SubTypeDesc"],
             "status": row["StatusDesc"],
             "committee": row["CommitteeName"],
+            "committee_id": row["CommitteeID"],
             "publication_date": _simple_date(row["PublicationDate"]),
             "publication_series": row["PublicationSeriesDesc"],
             "summary": row["SummaryLaw"],

@@ -9,7 +9,10 @@ if str(ROOT) not in sys.path:
 if str(ROOT.parent) not in sys.path:
     sys.path.insert(0, str(ROOT.parent))
 
-from views import person_to_position_view as p2p_view
+from views import members_view
+from views import member_view
+from views import committees_view
+from views import committee_view
 from views import plenum_sessions_view
 from views import plenum_session_view
 from views import bills_view
@@ -35,8 +38,8 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Query local Knesset SQLite database")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    # --- members ---
-    members_p = sub.add_parser("members", help="Search Knesset members")
+    # --- members (list) ---
+    members_p = sub.add_parser("members", help="Search Knesset members (summary, no detailed roles)")
     members_p.add_argument("--knesset", type=int, default=None, help="Knesset number")
     members_p.add_argument("--role", type=str, default=None, help="Role description contains text")
     members_p.add_argument("--role-type", dest="role_type", type=str, default=None,
@@ -45,7 +48,37 @@ def parse_args() -> argparse.Namespace:
     members_p.add_argument("--first-name", dest="first_name", type=str, default=None, help="First name contains")
     members_p.add_argument("--last-name", dest="last_name", type=str, default=None, help="Last name contains")
     members_p.add_argument("--person-id", dest="person_id", type=int, default=None, help="Person ID")
-    members_p.add_argument("--committees", dest="show_committees", action="store_true", help="Include committee data")
+
+    # --- member (single) ---
+    member_p = sub.add_parser("member", help="Get full detail for a single member (with committees/government)")
+    member_p.add_argument("--member-id", dest="member_id", type=int, required=True, help="Member/Person ID (required)")
+    member_p.add_argument("--knesset", type=int, default=None, help="Knesset number (omit for all terms)")
+
+    # --- committees (list) ---
+    committees_p = sub.add_parser("committees", help="Search committees (summary)")
+    committees_p.add_argument("--knesset", type=int, default=None, help="Knesset number")
+    committees_p.add_argument("--name", type=str, default=None, help="Committee name contains text")
+    committees_p.add_argument("--type", dest="committee_type", type=str, default=None,
+                              help="Committee type (ועדה ראשית, ועדת משנה, ועדה מיוחדת, ועדה משותפת)")
+    committees_p.add_argument("--category", type=str, default=None, help="Category description contains text")
+    committees_p.add_argument("--current", dest="is_current", default=None, action="store_true",
+                              help="Current committees only")
+    committees_p.add_argument("--inactive", dest="is_inactive", default=None, action="store_true",
+                              help="Inactive committees only")
+    committees_p.add_argument("--parent-id", dest="parent_committee_id", type=int, default=None,
+                              help="Parent committee ID (for sub-committees)")
+
+    # --- committee (single) ---
+    committee_p = sub.add_parser("committee", help="Get full detail for a single committee (metadata + opt-in lists)")
+    committee_p.add_argument("--committee-id", dest="committee_id", type=int, required=True, help="Committee ID (required)")
+    committee_p.add_argument("--knesset", type=int, default=None, help="Knesset number (informational context)")
+    committee_p.add_argument("--date", type=str, default=None, help="Single date (YYYY-MM-DD)")
+    committee_p.add_argument("--from-date", dest="from_date", type=str, default=None, help="From date (YYYY-MM-DD)")
+    committee_p.add_argument("--to-date", dest="to_date", type=str, default=None, help="To date (YYYY-MM-DD)")
+    committee_p.add_argument("--sessions", dest="include_sessions", action="store_true", help="Include committee sessions")
+    committee_p.add_argument("--members", dest="include_members", action="store_true", help="Include committee members")
+    committee_p.add_argument("--bills", dest="include_bills", action="store_true", help="Include bills discussed")
+    committee_p.add_argument("--documents", dest="include_documents", action="store_true", help="Include session documents")
 
     # --- plenums (list) ---
     plenum_p = sub.add_parser("plenums", help="Search plenum sessions (summary, no items/docs)")
@@ -96,7 +129,7 @@ def main() -> None:
     args = parse_args()
 
     if args.command == "members":
-        results = p2p_view.search_knesset_members(
+        results = members_view.search_members(
             knesset_num=args.knesset,
             first_name=args.first_name,
             last_name=args.last_name,
@@ -104,9 +137,46 @@ def main() -> None:
             role_type=args.role_type,
             faction_query=args.party,
             person_id=args.person_id,
-            show_committees=args.show_committees,
         )
         _output(results)
+        return
+
+    if args.command == "member":
+        result = member_view.get_member(args.member_id, knesset_num=args.knesset)
+        _output(result)
+        return
+
+    if args.command == "committees":
+        is_current = None
+        if getattr(args, "is_current", None):
+            is_current = True
+        elif getattr(args, "is_inactive", None):
+            is_current = False
+
+        results = committees_view.search_committees(
+            knesset_num=args.knesset,
+            name=args.name,
+            committee_type=args.committee_type,
+            category=args.category,
+            is_current=is_current,
+            parent_committee_id=args.parent_committee_id,
+        )
+        _output(results)
+        return
+
+    if args.command == "committee":
+        result = committee_view.get_committee(
+            args.committee_id,
+            knesset_num=args.knesset,
+            date=args.date,
+            from_date=args.from_date,
+            to_date=args.to_date,
+            include_sessions=args.include_sessions,
+            include_members=args.include_members,
+            include_bills=args.include_bills,
+            include_documents=args.include_documents,
+        )
+        _output(result)
         return
 
     if args.command == "plenums":

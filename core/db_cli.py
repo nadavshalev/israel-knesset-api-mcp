@@ -18,9 +18,13 @@ from tables import document_plenum_session
 from tables import status
 from tables import bill
 from tables import committee
+from tables import committee_session
+from tables import document_committee_session
+from tables import cmt_session_item
 from tables import plenum_vote
 from tables import plenum_vote_result
-from views import person_to_position_view as p2p_view
+from views import members_view
+from views import member_view
 
 
 def parse_args() -> argparse.Namespace:
@@ -59,6 +63,15 @@ def parse_args() -> argparse.Namespace:
     fetch_comm = sub.add_parser("fetch-committees", help="Fetch KNS_Committee rows into committee_raw")
     fetch_comm.add_argument("--since", type=str, default=None, help="ISO datetime for LastUpdatedDate filter (UTC)")
 
+    fetch_cs = sub.add_parser("fetch-committee-sessions", help="Fetch KNS_CommitteeSession rows into committee_session_raw")
+    fetch_cs.add_argument("--since", type=str, default=None, help="ISO datetime for LastUpdatedDate filter (UTC)")
+
+    fetch_dcs = sub.add_parser("fetch-document-committee-sessions", help="Fetch KNS_DocumentCommitteeSession rows")
+    fetch_dcs.add_argument("--since", type=str, default=None, help="ISO datetime for LastUpdatedDate filter (UTC)")
+
+    fetch_csi = sub.add_parser("fetch-cmt-session-items", help="Fetch KNS_CmtSessionItem rows")
+    fetch_csi.add_argument("--since", type=str, default=None, help="ISO datetime for LastUpdatedDate filter (UTC)")
+
     fetch_pv = sub.add_parser("fetch-votes", help="Fetch KNS_PlenumVote rows into plenum_vote_raw")
     fetch_pv.add_argument("--since", type=str, default=None, help="ISO datetime for LastUpdatedDate filter (UTC)")
 
@@ -78,6 +91,9 @@ def ensure_tables(conn) -> None:
     status.create_table(conn)
     bill.create_table(conn)
     committee.create_table(conn)
+    committee_session.create_table(conn)
+    document_committee_session.create_table(conn)
+    cmt_session_item.create_table(conn)
     plenum_vote.create_table(conn)
     plenum_vote_result.create_table(conn)
 
@@ -117,6 +133,9 @@ def main() -> None:
         status.fetch_rows(conn, since=args.since)
         bill.fetch_rows(conn, since=args.since)
         committee.fetch_rows(conn, since=args.since)
+        committee_session.fetch_rows(conn, since=args.since)
+        document_committee_session.fetch_rows(conn, since=args.since)
+        cmt_session_item.fetch_rows(conn, since=args.since)
         plenum_vote.fetch_rows(conn, since=args.since)
         plenum_vote_result.fetch_rows(conn, since=args.since)
         return
@@ -149,6 +168,21 @@ def main() -> None:
     if args.command == "fetch-committees":
         ensure_tables(conn)
         committee.fetch_rows(conn, since=args.since)
+        return
+
+    if args.command == "fetch-committee-sessions":
+        ensure_tables(conn)
+        committee_session.fetch_rows(conn, since=args.since)
+        return
+
+    if args.command == "fetch-document-committee-sessions":
+        ensure_tables(conn)
+        document_committee_session.fetch_rows(conn, since=args.since)
+        return
+
+    if args.command == "fetch-cmt-session-items":
+        ensure_tables(conn)
+        cmt_session_item.fetch_rows(conn, since=args.since)
         return
 
     if args.command == "fetch-votes":

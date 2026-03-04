@@ -20,6 +20,15 @@ def ensure_indexes(conn: sqlite3.Connection) -> None:
     cur.execute("CREATE INDEX IF NOT EXISTS idx_ps_knessetnum ON plenum_session_raw (KnessetNum)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_bill_knessetnum ON bill_raw (KnessetNum)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_pvr_vote_id ON plenum_vote_result_raw (VoteID)")
+    # Committee indexes
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_committee_knessetnum ON committee_raw (KnessetNum)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_cs_committee ON committee_session_raw (CommitteeID)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_cs_startdate ON committee_session_raw (StartDate)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_csi_session ON cmt_session_item_raw (CommitteeSessionID)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_csi_itemtype ON cmt_session_item_raw (ItemTypeID)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_dcs_session ON document_committee_session_raw (CommitteeSessionID)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_ptp_committeeid ON person_to_position_raw (CommitteeID)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_bill_committeeid ON bill_raw (CommitteeID)")
     conn.commit()
 
 

@@ -1,4 +1,7 @@
-from . import person_to_position_view
+from . import members_view
+from . import member_view
+from . import committees_view
+from . import committee_view
 from . import plenum_sessions_view
 from . import plenum_session_view
 from . import bills_view
@@ -7,7 +10,10 @@ from . import votes_view
 from . import vote_view
 
 __all__ = [
-    "person_to_position_view",
+    "members_view",
+    "member_view",
+    "committees_view",
+    "committee_view",
     "plenum_sessions_view",
     "plenum_session_view",
     "bills_view",

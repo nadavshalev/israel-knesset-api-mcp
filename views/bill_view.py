@@ -185,6 +185,7 @@ def get_bill(bill_id: int) -> dict | None:
         "sub_type": bill["SubTypeDesc"],
         "status": bill["StatusDesc"],
         "committee": bill["CommitteeName"],
+        "committee_id": bill["CommitteeID"],
         "publication_date": _simple_date(bill["PublicationDate"]),
         "publication_series": bill["PublicationSeriesDesc"],
         "summary": bill["SummaryLaw"],
