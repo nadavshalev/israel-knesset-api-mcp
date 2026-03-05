@@ -5,7 +5,6 @@ For full detail on a single member (committees, government roles, etc.),
 use ``member_view.get_member()``.
 """
 
-import sqlite3
 import sys
 from pathlib import Path
 
@@ -15,7 +14,7 @@ if str(ROOT) not in sys.path:
 if str(ROOT.parent) not in sys.path:
     sys.path.insert(0, str(ROOT.parent))
 
-from config import DEFAULT_DB
+from core.db import connect_readonly
 
 
 # ---------------------------------------------------------------------------
@@ -180,8 +179,7 @@ def search_members(
     Each dict contains general info and a ``role_types`` list.
     For full detail on a single member, use ``member_view.get_member()``.
     """
-    conn = sqlite3.connect(DEFAULT_DB)
-    conn.row_factory = sqlite3.Row
+    conn = connect_readonly()
     cursor = conn.cursor()
 
     # Resolve role_type -> position IDs

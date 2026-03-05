@@ -1,3 +1,6 @@
 flask
 requests
 plotly
+mcp>=1.26.0
+python-dotenv
+uvicorn

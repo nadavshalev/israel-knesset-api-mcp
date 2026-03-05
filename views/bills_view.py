@@ -4,7 +4,6 @@ Use this view when searching/filtering bills.  For full detail on a single
 bill (including plenum stages and votes), use ``bill_view.get_bill()``.
 """
 
-import sqlite3
 import sys
 from pathlib import Path
 
@@ -14,8 +13,7 @@ if str(ROOT) not in sys.path:
 if str(ROOT.parent) not in sys.path:
     sys.path.insert(0, str(ROOT.parent))
 
-from config import DEFAULT_DB
-from core.db import ensure_indexes
+from core.db import connect_readonly
 
 
 # ---------------------------------------------------------------------------
@@ -53,14 +51,12 @@ def search_bills(
 
     Returns a list of bill summary dicts sorted by (knesset_num, name).
     """
-    conn = sqlite3.connect(DEFAULT_DB)
-    conn.row_factory = sqlite3.Row
-    ensure_indexes(conn)
+    conn = connect_readonly()
     cursor = conn.cursor()
 
     sql = """
     SELECT b.Id, b.Name, b.KnessetNum, b.SubTypeDesc,
-           st.[Desc] AS StatusDesc, c.Name AS CommitteeName,
+           st.[Desc] AS StatusDesc, b.CommitteeID, c.Name AS CommitteeName,
            b.PublicationDate, b.PublicationSeriesDesc, b.SummaryLaw
     FROM bill_raw b
     LEFT JOIN status_raw st ON b.StatusID = st.Id

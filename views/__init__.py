@@ -8,6 +8,8 @@ from . import bills_view
 from . import bill_view
 from . import votes_view
 from . import vote_view
+from . import database_status_view
+from . import search_across_view
 
 __all__ = [
     "members_view",
@@ -20,4 +22,6 @@ __all__ = [
     "bill_view",
     "votes_view",
     "vote_view",
+    "database_status_view",
+    "search_across_view",
 ]

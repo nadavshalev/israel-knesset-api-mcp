@@ -4,7 +4,6 @@ For full detail on a single vote (members, related votes), use
 ``vote_view.get_vote()``.
 """
 
-import sqlite3
 import sys
 from pathlib import Path
 
@@ -14,8 +13,7 @@ if str(ROOT) not in sys.path:
 if str(ROOT.parent) not in sys.path:
     sys.path.insert(0, str(ROOT.parent))
 
-from config import DEFAULT_DB
-from core.db import ensure_indexes
+from core.db import connect_readonly
 
 
 # ---------------------------------------------------------------------------
@@ -71,9 +69,7 @@ def search_votes(
     totals are computed from per-MK results and ``is_accepted`` is inferred
     as ``total_for > total_against``.
     """
-    conn = sqlite3.connect(DEFAULT_DB)
-    conn.row_factory = sqlite3.Row
-    ensure_indexes(conn)
+    conn = connect_readonly()
     cursor = conn.cursor()
 
     # LEFT JOIN with computed totals from per-MK results for votes that

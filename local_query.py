@@ -9,6 +9,7 @@ if str(ROOT) not in sys.path:
 if str(ROOT.parent) not in sys.path:
     sys.path.insert(0, str(ROOT.parent))
 
+from core.db import connect_db, ensure_indexes
 from views import members_view
 from views import member_view
 from views import committees_view
@@ -19,6 +20,8 @@ from views import bills_view
 from views import bill_view
 from views import votes_view
 from views import vote_view
+from views import database_status_view
+from views import search_across_view
 
 
 # ---------------------------------------------------------------------------
@@ -122,11 +125,25 @@ def parse_args() -> argparse.Namespace:
     vote_p = sub.add_parser("vote", help="Get full detail for a single vote (with members/related)")
     vote_p.add_argument("--vote-id", dest="vote_id", type=int, required=True, help="Vote ID (required)")
 
+    # --- search-across ---
+    sa_p = sub.add_parser("search-across", help="Search across all entity types (triage tool)")
+    sa_p.add_argument("query", type=str, help="Free-text search term")
+    sa_p.add_argument("--top-n", dest="top_n", type=int, default=None,
+                       help="Max results per entity type (default from config)")
+
+    # --- status ---
+    sub.add_parser("status", help="Show database status: entity counts, tools, last sync")
+
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
+
+    # Ensure indexes exist (requires write access, done once at startup)
+    conn = connect_db()
+    ensure_indexes(conn)
+    conn.close()
 
     if args.command == "members":
         results = members_view.search_members(
@@ -235,6 +252,16 @@ def main() -> None:
 
     if args.command == "vote":
         result = vote_view.get_vote(args.vote_id)
+        _output(result)
+        return
+
+    if args.command == "search-across":
+        result = search_across_view.search_across(args.query, top_n=args.top_n)
+        _output(result)
+        return
+
+    if args.command == "status":
+        result = database_status_view.get_database_status()
         _output(result)
         return
 

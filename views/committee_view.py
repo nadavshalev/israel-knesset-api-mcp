@@ -13,7 +13,6 @@ For searching/filtering multiple committees, use
 ``committees_view.search_committees()``.
 """
 
-import sqlite3
 import sys
 from pathlib import Path
 
@@ -23,8 +22,7 @@ if str(ROOT) not in sys.path:
 if str(ROOT.parent) not in sys.path:
     sys.path.insert(0, str(ROOT.parent))
 
-from config import DEFAULT_DB
-from core.db import ensure_indexes
+from core.db import connect_readonly
 
 
 # ---------------------------------------------------------------------------
@@ -268,9 +266,7 @@ def get_committee(
         from_date = from_date or date
         to_date = to_date or date
 
-    conn = sqlite3.connect(DEFAULT_DB)
-    conn.row_factory = sqlite3.Row
-    ensure_indexes(conn)
+    conn = connect_readonly()
     cursor = conn.cursor()
 
     # Committee metadata

@@ -11,6 +11,18 @@ def connect_db(path: Path = DEFAULT_DB) -> sqlite3.Connection:
     return conn
 
 
+def connect_readonly(path: Path = DEFAULT_DB) -> sqlite3.Connection:
+    """Open a read-only SQLite connection.
+
+    Uses SQLite URI mode to enforce read-only access at the engine level.
+    No writes (INSERT, UPDATE, DELETE, CREATE INDEX, etc.) are possible.
+    """
+    resolved = Path(path).resolve()
+    conn = sqlite3.connect(f"file:{resolved}?mode=ro", uri=True)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
 def ensure_indexes(conn: sqlite3.Connection) -> None:
     """Create indexes needed by views.  Idempotent (IF NOT EXISTS)."""
     cur = conn.cursor()
@@ -29,6 +41,9 @@ def ensure_indexes(conn: sqlite3.Connection) -> None:
     cur.execute("CREATE INDEX IF NOT EXISTS idx_dcs_session ON document_committee_session_raw (CommitteeSessionID)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_ptp_committeeid ON person_to_position_raw (CommitteeID)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_bill_committeeid ON bill_raw (CommitteeID)")
+    # Name indexes for search_across
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_person_lastname ON person_raw (LastName)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_vote_title ON plenum_vote_raw (VoteTitle)")
     conn.commit()
 
 

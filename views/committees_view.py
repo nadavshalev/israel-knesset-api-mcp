@@ -5,7 +5,6 @@ For full detail on a single committee (sessions, members, bills, documents),
 use ``committee_view.get_committee()``.
 """
 
-import sqlite3
 import sys
 from pathlib import Path
 
@@ -15,8 +14,7 @@ if str(ROOT) not in sys.path:
 if str(ROOT.parent) not in sys.path:
     sys.path.insert(0, str(ROOT.parent))
 
-from config import DEFAULT_DB
-from core.db import ensure_indexes
+from core.db import connect_readonly
 
 
 # ---------------------------------------------------------------------------
@@ -59,9 +57,7 @@ def search_committees(
 
     Returns a list of committee summary dicts sorted by (knesset_num, name).
     """
-    conn = sqlite3.connect(DEFAULT_DB)
-    conn.row_factory = sqlite3.Row
-    ensure_indexes(conn)
+    conn = connect_readonly()
     cursor = conn.cursor()
 
     sql = """

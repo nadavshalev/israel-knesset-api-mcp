@@ -5,7 +5,6 @@ and parliamentary roles.  For searching/filtering multiple members, use
 ``members_view.search_members()``.
 """
 
-import sqlite3
 import sys
 from pathlib import Path
 
@@ -15,7 +14,7 @@ if str(ROOT) not in sys.path:
 if str(ROOT.parent) not in sys.path:
     sys.path.insert(0, str(ROOT.parent))
 
-from config import DEFAULT_DB
+from core.db import connect_readonly
 
 
 # ---------------------------------------------------------------------------
@@ -151,8 +150,7 @@ def get_member(member_id: int, knesset_num: int = None) -> dict | list | None:
     If omitted, returns a list of dicts — one per Knesset term the member
     served in.  Returns ``None`` if no data is found.
     """
-    conn = sqlite3.connect(DEFAULT_DB)
-    conn.row_factory = sqlite3.Row
+    conn = connect_readonly()
     cursor = conn.cursor()
 
     if knesset_num is not None:
