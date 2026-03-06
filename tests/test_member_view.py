@@ -1,6 +1,6 @@
 """Tests for views/member_view.py
 
-Integration tests use the real data.sqlite database with known historical
+Integration tests use the real PostgreSQL database with known historical
 data from older Knessets (19, 20) which are stable and won't change.
 """
 
@@ -96,7 +96,7 @@ class TestIsTransitionGov(unittest.TestCase):
 
 
 # ===================================================================
-# Integration tests — use real data.sqlite
+# Integration tests — use real PostgreSQL database
 # ===================================================================
 
 

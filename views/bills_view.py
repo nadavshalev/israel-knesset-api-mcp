@@ -22,17 +22,17 @@ register_search({
     "entity_key": "bills",
     "count_sql": """
         SELECT COUNT(*) FROM bill_raw
-        WHERE Name LIKE ?
+        WHERE Name LIKE %s
     """,
     "search_sql": """
         SELECT b.Id AS id, b.Name AS name, b.KnessetNum AS knesset_num,
                b.SubTypeDesc AS sub_type,
-               st.[Desc] AS status
+               st."Desc" AS status
         FROM bill_raw b
         LEFT JOIN status_raw st ON b.StatusID = st.Id
-        WHERE b.Name LIKE ?
+        WHERE b.Name LIKE %s
         ORDER BY b.Id DESC
-        LIMIT ?
+        LIMIT %s
     """,
     "param_count": 1,
 })
@@ -78,7 +78,7 @@ def search_bills(
 
     sql = """
     SELECT b.Id, b.Name, b.KnessetNum, b.SubTypeDesc,
-           st.[Desc] AS StatusDesc, b.CommitteeID, c.Name AS CommitteeName,
+           st."Desc" AS StatusDesc, b.CommitteeID, c.Name AS CommitteeName,
            b.PublicationDate, b.PublicationSeriesDesc, b.SummaryLaw
     FROM bill_raw b
     LEFT JOIN status_raw st ON b.StatusID = st.Id
@@ -88,19 +88,19 @@ def search_bills(
     params = []
 
     if knesset_num is not None:
-        sql += " AND b.KnessetNum = ?"
+        sql += " AND b.KnessetNum = %s"
         params.append(knesset_num)
 
     if name:
-        sql += " AND b.Name LIKE ?"
+        sql += " AND b.Name LIKE %s"
         params.append(f"%{name}%")
 
     if sub_type:
-        sql += " AND b.SubTypeDesc LIKE ?"
+        sql += " AND b.SubTypeDesc LIKE %s"
         params.append(f"%{sub_type}%")
 
     if status:
-        sql += " AND st.[Desc] LIKE ?"
+        sql += " AND st.\"Desc\" LIKE %s"
         params.append(f"%{status}%")
 
     # Plenum-stage date filters
@@ -108,15 +108,15 @@ def search_bills(
     stage_params = []
 
     if from_date:
-        stage_conditions.append("s.StartDate >= ?")
+        stage_conditions.append("s.StartDate >= %s")
         stage_params.append(from_date)
 
     if to_date:
-        stage_conditions.append("s.StartDate <= ?")
+        stage_conditions.append("s.StartDate <= %s")
         stage_params.append(to_date)
 
     if date:
-        stage_conditions.append("s.StartDate LIKE ?")
+        stage_conditions.append("s.StartDate LIKE %s")
         stage_params.append(f"{date}%")
 
     if stage_conditions:
@@ -130,7 +130,7 @@ def search_bills(
         )"""
         params.extend(stage_params)
 
-    sql += " ORDER BY b.KnessetNum, b.Name"
+    sql += ' ORDER BY b.KnessetNum, b.Name COLLATE "C", b.Id'
 
     cursor.execute(sql, params)
     rows = cursor.fetchall()
@@ -138,16 +138,16 @@ def search_bills(
     results = []
     for row in rows:
         results.append({
-            "bill_id": row["Id"],
-            "name": row["Name"],
-            "knesset_num": row["KnessetNum"],
-            "sub_type": row["SubTypeDesc"],
-            "status": row["StatusDesc"],
-            "committee": row["CommitteeName"],
-            "committee_id": row["CommitteeID"],
-            "publication_date": simple_date(row["PublicationDate"]),
-            "publication_series": row["PublicationSeriesDesc"],
-            "summary": row["SummaryLaw"],
+            "bill_id": row["id"],
+            "name": row["name"],
+            "knesset_num": row["knessetnum"],
+            "sub_type": row["subtypedesc"],
+            "status": row["statusdesc"],
+            "committee": row["committeename"],
+            "committee_id": row["committeeid"],
+            "publication_date": simple_date(row["publicationdate"]),
+            "publication_series": row["publicationseriesdesc"],
+            "summary": row["summarylaw"],
         })
 
     conn.close()

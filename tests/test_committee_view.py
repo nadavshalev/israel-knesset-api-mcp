@@ -1,6 +1,6 @@
 """Tests for views/committee_view.py
 
-Integration tests use the real data.sqlite database with known historical
+Integration tests use the real PostgreSQL database with known historical
 data from older Knessets (19, 20) which are stable and won't change.
 
 Known test data for committee 928 (ועדת העבודה, הרווחה והבריאות, Knesset 20):
@@ -63,7 +63,7 @@ class TestSimpleTime(unittest.TestCase):
 
 
 # ===================================================================
-# Integration tests — use real data.sqlite
+# Integration tests — use real PostgreSQL database
 # ===================================================================
 
 

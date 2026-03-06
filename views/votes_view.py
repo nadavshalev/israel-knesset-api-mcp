@@ -22,7 +22,7 @@ register_search({
     "entity_key": "votes",
     "count_sql": """
         SELECT COUNT(*) FROM plenum_vote_raw
-        WHERE VoteTitle LIKE ? OR VoteSubject LIKE ?
+        WHERE VoteTitle LIKE %s OR VoteSubject LIKE %s
     """,
     "search_sql": """
         SELECT v.Id AS id, v.VoteTitle AS name,
@@ -30,9 +30,9 @@ register_search({
                v.VoteDateTime AS date
         FROM plenum_vote_raw v
         LEFT JOIN plenum_session_raw s ON v.SessionID = s.Id
-        WHERE v.VoteTitle LIKE ? OR v.VoteSubject LIKE ?
+        WHERE v.VoteTitle LIKE %s OR v.VoteSubject LIKE %s
         ORDER BY v.Id DESC
-        LIMIT ?
+        LIMIT %s
     """,
     "param_count": 2,
 })
@@ -110,15 +110,15 @@ def search_votes(
     params = []
 
     if bill_id is not None:
-        sql += " AND v.ItemID = ?"
+        sql += " AND v.ItemID = %s"
         params.append(bill_id)
 
     if knesset_num is not None:
-        sql += " AND s.KnessetNum = ?"
+        sql += " AND s.KnessetNum = %s"
         params.append(knesset_num)
 
     if name:
-        sql += " AND (v.VoteTitle LIKE ? OR v.VoteSubject LIKE ?)"
+        sql += " AND (v.VoteTitle LIKE %s OR v.VoteSubject LIKE %s)"
         params.extend([f"%{name}%", f"%{name}%"])
 
     if accepted is not None:
@@ -140,15 +140,15 @@ def search_votes(
             """
 
     if from_date:
-        sql += " AND v.VoteDateTime >= ?"
+        sql += " AND v.VoteDateTime >= %s"
         params.append(from_date)
 
     if to_date:
-        sql += " AND v.VoteDateTime <= ?"
+        sql += " AND v.VoteDateTime <= %s"
         params.append(to_date + "T99")
 
     if date:
-        sql += " AND v.VoteDateTime LIKE ?"
+        sql += " AND v.VoteDateTime LIKE %s"
         params.append(f"{date}%")
 
     sql += " ORDER BY v.VoteDateTime ASC, v.Id ASC"
@@ -156,29 +156,29 @@ def search_votes(
 
     results = []
     for vote in cursor.fetchall():
-        total_for = vote["TotalFor"]
-        total_against = vote["TotalAgainst"]
+        total_for = vote["totalfor"]
+        total_against = vote["totalagainst"]
 
-        is_accepted = vote["IsAccepted"]
+        is_accepted = vote["isaccepted"]
         if is_accepted is None and total_for is not None and total_against is not None:
             is_accepted = 1 if total_for > total_against else 0
 
         results.append({
-            "vote_id": vote["Id"],
+            "vote_id": vote["id"],
             "bill_id": vote["_bill_id"],
-            "knesset_num": vote["KnessetNum"],
-            "session_id": vote["SessionID"],
-            "title": vote["VoteTitle"],
-            "subject": vote["VoteSubject"],
-            "date": simple_date(vote["VoteDateTime"]),
-            "time": simple_time(vote["VoteDateTime"]),
+            "knesset_num": vote["knessetnum"],
+            "session_id": vote["sessionid"],
+            "title": vote["votetitle"],
+            "subject": vote["votesubject"],
+            "date": simple_date(vote["votedatetime"]),
+            "time": simple_time(vote["votedatetime"]),
             "is_accepted": bool(is_accepted) if is_accepted is not None else None,
             "total_for": total_for,
-            "total_against": vote["TotalAgainst"],
-            "total_abstain": vote["TotalAbstain"],
-            "for_option": vote["ForOptionDesc"],
-            "against_option": vote["AgainstOptionDesc"],
-            "vote_method": vote["VoteMethodDesc"],
+            "total_against": vote["totalagainst"],
+            "total_abstain": vote["totalabstain"],
+            "for_option": vote["foroptiondesc"],
+            "against_option": vote["againstoptiondesc"],
+            "vote_method": vote["votemethoddesc"],
         })
 
     conn.close()

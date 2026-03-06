@@ -38,7 +38,7 @@ def _output(results) -> None:
 # ---------------------------------------------------------------------------
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Query local Knesset SQLite database")
+    parser = argparse.ArgumentParser(description="Query Knesset PostgreSQL database")
     sub = parser.add_subparsers(dest="command", required=True)
 
     # --- members (list) ---

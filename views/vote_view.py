@@ -55,7 +55,7 @@ def get_vote(vote_id: int) -> dict | None:
         FROM plenum_vote_raw v
         LEFT JOIN plenum_session_raw s ON v.SessionID = s.Id
         LEFT JOIN bill_raw b ON v.ItemID = b.Id
-        WHERE v.Id = ?
+        WHERE v.Id = %s
         """,
         (vote_id,),
     )
@@ -64,10 +64,10 @@ def get_vote(vote_id: int) -> dict | None:
         conn.close()
         return None
 
-    total_for = vote["TotalFor"]
-    total_against = vote["TotalAgainst"]
-    total_abstain = vote["TotalAbstain"]
-    is_accepted = vote["IsAccepted"]
+    total_for = vote["totalfor"]
+    total_against = vote["totalagainst"]
+    total_abstain = vote["totalabstain"]
+    is_accepted = vote["isaccepted"]
 
     # If stored totals are missing, try computing from per-MK results
     if total_for is None:
@@ -78,7 +78,7 @@ def get_vote(vote_id: int) -> dict | None:
                 SUM(CASE WHEN ResultCode = 8 THEN 1 ELSE 0 END) AS total_against,
                 SUM(CASE WHEN ResultCode = 9 THEN 1 ELSE 0 END) AS total_abstain
             FROM plenum_vote_result_raw
-            WHERE VoteID = ?
+            WHERE VoteID = %s
             """,
             (vote_id,),
         )
@@ -92,21 +92,21 @@ def get_vote(vote_id: int) -> dict | None:
         is_accepted = 1 if total_for > total_against else 0
 
     obj = {
-        "vote_id": vote["Id"],
+        "vote_id": vote["id"],
         "bill_id": vote["_bill_id"],
-        "knesset_num": vote["KnessetNum"],
-        "session_id": vote["SessionID"],
-        "title": vote["VoteTitle"],
-        "subject": vote["VoteSubject"],
-        "date": simple_date(vote["VoteDateTime"]),
-        "time": simple_time(vote["VoteDateTime"]),
+        "knesset_num": vote["knessetnum"],
+        "session_id": vote["sessionid"],
+        "title": vote["votetitle"],
+        "subject": vote["votesubject"],
+        "date": simple_date(vote["votedatetime"]),
+        "time": simple_time(vote["votedatetime"]),
         "is_accepted": bool(is_accepted) if is_accepted is not None else None,
         "total_for": total_for,
         "total_against": total_against,
         "total_abstain": total_abstain,
-        "for_option": vote["ForOptionDesc"],
-        "against_option": vote["AgainstOptionDesc"],
-        "vote_method": vote["VoteMethodDesc"],
+        "for_option": vote["foroptiondesc"],
+        "against_option": vote["againstoptiondesc"],
+        "vote_method": vote["votemethoddesc"],
     }
 
     # --- Members: per-MK breakdown ---
@@ -114,26 +114,26 @@ def get_vote(vote_id: int) -> dict | None:
         """
         SELECT MkId, ResultCode, ResultDesc, FirstName, LastName
         FROM plenum_vote_result_raw
-        WHERE VoteID = ?
+        WHERE VoteID = %s
         ORDER BY LastName, FirstName
         """,
         (vote_id,),
     )
     members = []
     for row in cursor.fetchall():
-        first = row["FirstName"] or ""
-        last = row["LastName"] or ""
-        name = f"{first} {last}".strip() or f"MK {row['MkId']}"
+        first = row["firstname"] or ""
+        last = row["lastname"] or ""
+        name = f"{first} {last}".strip() or f"MK {row['mkid']}"
         members.append({
-            "member_id": row["MkId"],
+            "member_id": row["mkid"],
             "name": name,
-            "result": row["ResultDesc"] or str(row["ResultCode"]),
+            "result": row["resultdesc"] or str(row["resultcode"]),
         })
     obj["members"] = members
 
     # --- Related votes: same VoteTitle + SessionID, different vote IDs ---
-    vote_title = vote["VoteTitle"]
-    session_id = vote["SessionID"]
+    vote_title = vote["votetitle"]
+    session_id = vote["sessionid"]
 
     if vote_title and session_id:
         cursor.execute(
@@ -142,17 +142,17 @@ def get_vote(vote_id: int) -> dict | None:
                    ForOptionDesc, AgainstOptionDesc,
                    IsAccepted, TotalFor, TotalAgainst, TotalAbstain
             FROM plenum_vote_raw
-            WHERE VoteTitle = ? AND SessionID = ? AND Id != ?
+            WHERE VoteTitle = %s AND SessionID = %s AND Id != %s
             ORDER BY Ordinal ASC
             """,
             (vote_title, session_id, vote_id),
         )
         related = []
         for r in cursor.fetchall():
-            r_accepted = r["IsAccepted"]
-            r_total_for = r["TotalFor"]
-            r_total_against = r["TotalAgainst"]
-            r_total_abstain = r["TotalAbstain"]
+            r_accepted = r["isaccepted"]
+            r_total_for = r["totalfor"]
+            r_total_against = r["totalagainst"]
+            r_total_abstain = r["totalabstain"]
 
             # Compute totals from results if missing
             if r_total_for is None:
@@ -163,9 +163,9 @@ def get_vote(vote_id: int) -> dict | None:
                         SUM(CASE WHEN ResultCode = 8 THEN 1 ELSE 0 END) AS total_against,
                         SUM(CASE WHEN ResultCode = 9 THEN 1 ELSE 0 END) AS total_abstain
                     FROM plenum_vote_result_raw
-                    WHERE VoteID = ?
+                    WHERE VoteID = %s
                     """,
-                    (r["Id"],),
+                    (r["id"],),
                 )
                 rc = cursor.fetchone()
                 if rc and rc["total_for"] is not None:
@@ -177,11 +177,11 @@ def get_vote(vote_id: int) -> dict | None:
                 r_accepted = 1 if r_total_for > r_total_against else 0
 
             related.append({
-                "vote_id": r["Id"],
-                "subject": r["VoteSubject"],
-                "for_option": r["ForOptionDesc"],
-                "date": simple_date(r["VoteDateTime"]),
-                "time": simple_time(r["VoteDateTime"]),
+                "vote_id": r["id"],
+                "subject": r["votesubject"],
+                "for_option": r["foroptiondesc"],
+                "date": simple_date(r["votedatetime"]),
+                "time": simple_time(r["votedatetime"]),
                 "is_accepted": bool(r_accepted) if r_accepted is not None else None,
                 "total_for": r_total_for,
                 "total_against": r_total_against,

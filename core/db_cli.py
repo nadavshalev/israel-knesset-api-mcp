@@ -7,7 +7,6 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from config import DEFAULT_DB
 from core.db import connect_db
 from tables import persons
 from tables import person_to_position as p2p_fetch
@@ -31,7 +30,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Local Knesset data tooling")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    init_p = sub.add_parser("init-db", help="Create SQLite schema if missing")
+    init_p = sub.add_parser("init-db", help="Create database schema if missing")
 
     fetch_persons = sub.add_parser("fetch-persons", help="Fetch KNS_Person rows into person_raw")
     fetch_persons.add_argument("--since", type=str, default=None, help="ISO datetime for LastUpdatedDate filter (UTC)")
@@ -100,11 +99,11 @@ def ensure_tables(conn) -> None:
 
 def main() -> None:
     args = parse_args()
-    conn = connect_db(DEFAULT_DB)
+    conn = connect_db()
 
     if args.command == "init-db":
         ensure_tables(conn)
-        print(f"Initialized schema at {DEFAULT_DB}")
+        print("Initialized schema in PostgreSQL database")
         return
 
     if args.command == "fetch-persons":

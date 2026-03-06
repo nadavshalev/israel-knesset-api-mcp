@@ -44,7 +44,7 @@ def get_session(session_id: int) -> dict | None:
     cursor = conn.cursor()
 
     cursor.execute(
-        "SELECT * FROM plenum_session_raw WHERE Id = ?",
+        "SELECT * FROM plenum_session_raw WHERE Id = %s",
         (session_id,),
     )
     session = cursor.fetchone()
@@ -54,10 +54,10 @@ def get_session(session_id: int) -> dict | None:
 
     # Fetch items sorted by Ordinal, with status description
     item_sql = """
-        SELECT i.*, st.[Desc] AS StatusDesc
+        SELECT i.*, st."Desc" AS StatusDesc
         FROM plm_session_item_raw i
         LEFT JOIN status_raw st ON i.StatusID = st.Id
-        WHERE i.PlenumSessionID = ?
+        WHERE i.PlenumSessionID = %s
         ORDER BY i.Ordinal ASC
     """
     item_params = [session_id]
@@ -69,7 +69,7 @@ def get_session(session_id: int) -> dict | None:
     cursor.execute(
         """
         SELECT * FROM document_plenum_session_raw
-        WHERE PlenumSessionID = ?
+        WHERE PlenumSessionID = %s
         ORDER BY GroupTypeDesc, ApplicationDesc
         """,
         (session_id,),
@@ -77,24 +77,24 @@ def get_session(session_id: int) -> dict | None:
     doc_rows = cursor.fetchall()
 
     obj = {
-        "session_id": session["Id"],
-        "knesset_num": session["KnessetNum"],
-        "name": session["Name"],
-        "date": simple_date(session["StartDate"]),
+        "session_id": session["id"],
+        "knesset_num": session["knessetnum"],
+        "name": session["name"],
+        "date": simple_date(session["startdate"]),
         "items": [
             {
-                "item_id": item["ItemID"],
-                "name": item["Name"],
-                "type": item["ItemTypeDesc"],
-                "status": item["StatusDesc"],
+                "item_id": item["itemid"],
+                "name": item["name"],
+                "type": item["itemtypedesc"],
+                "status": item["statusdesc"],
             }
             for item in item_rows
         ],
         "documents": [
             {
-                "group_type": doc["GroupTypeDesc"],
-                "application": doc["ApplicationDesc"],
-                "file_path": doc["FilePath"],
+                "group_type": doc["grouptypedesc"],
+                "application": doc["applicationdesc"],
+                "file_path": doc["filepath"],
             }
             for doc in doc_rows
         ],

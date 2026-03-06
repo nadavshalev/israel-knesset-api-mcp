@@ -1,5 +1,7 @@
 from typing import Any, Dict, Iterable, Optional, Tuple
 
+import psycopg2.extras
+
 from core.odata_client import _utc_now_iso, fetch_table_with_csv_first
 from core.db import update_metadata
 
@@ -42,13 +44,20 @@ def _insert_to_db(conn, rows: Iterable[Dict[str, Any]]) -> Tuple[int, Optional[s
     cur = conn.cursor()
     now = _utc_now_iso()
     sql = (
-        f"INSERT OR REPLACE INTO {TABLE_NAME} "
+        f"INSERT INTO {TABLE_NAME} "
         "(Id, Number, KnessetNum, TypeID, TypeDesc, CommitteeID, "
         "StatusID, StatusDesc, Location, SessionUrl, BroadcastUrl, "
         "StartDate, FinishDate, Note, LastUpdatedDate, fetched_at) "
-        "VALUES (:Id, :Number, :KnessetNum, :TypeID, :TypeDesc, :CommitteeID, "
-        ":StatusID, :StatusDesc, :Location, :SessionUrl, :BroadcastUrl, "
-        ":StartDate, :FinishDate, :Note, :LastUpdatedDate, :fetched_at)"
+        "VALUES (%(Id)s, %(Number)s, %(KnessetNum)s, %(TypeID)s, %(TypeDesc)s, %(CommitteeID)s, "
+        "%(StatusID)s, %(StatusDesc)s, %(Location)s, %(SessionUrl)s, %(BroadcastUrl)s, "
+        "%(StartDate)s, %(FinishDate)s, %(Note)s, %(LastUpdatedDate)s, %(fetched_at)s) "
+        "ON CONFLICT (Id) DO UPDATE SET "
+        "Number=EXCLUDED.Number, KnessetNum=EXCLUDED.KnessetNum, TypeID=EXCLUDED.TypeID, "
+        "TypeDesc=EXCLUDED.TypeDesc, CommitteeID=EXCLUDED.CommitteeID, "
+        "StatusID=EXCLUDED.StatusID, StatusDesc=EXCLUDED.StatusDesc, Location=EXCLUDED.Location, "
+        "SessionUrl=EXCLUDED.SessionUrl, BroadcastUrl=EXCLUDED.BroadcastUrl, "
+        "StartDate=EXCLUDED.StartDate, FinishDate=EXCLUDED.FinishDate, Note=EXCLUDED.Note, "
+        "LastUpdatedDate=EXCLUDED.LastUpdatedDate, fetched_at=EXCLUDED.fetched_at"
     )
     payload = []
     max_updated: Optional[str] = None
@@ -77,7 +86,7 @@ def _insert_to_db(conn, rows: Iterable[Dict[str, Any]]) -> Tuple[int, Optional[s
             }
         )
     if payload:
-        cur.executemany(sql, payload)
+        psycopg2.extras.execute_batch(cur, sql, payload)
     conn.commit()
     return len(payload), max_updated
 

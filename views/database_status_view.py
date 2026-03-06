@@ -101,7 +101,7 @@ def get_database_status() -> dict:
         try:
             cursor.execute(count_sql)
             row = cursor.fetchone()
-            entities[entity] = row[0] if row else 0
+            entities[entity] = list(row.values())[0] if row else 0
         except Exception:
             entities[entity] = None  # table might not exist yet
 
@@ -125,8 +125,8 @@ def get_database_status() -> dict:
             "SELECT MAX(last_sync_completed_at) FROM metadata"
         )
         row = cursor.fetchone()
-        if row and row[0]:
-            last_sync = row[0]
+        if row:
+            last_sync = list(row.values())[0]
     except Exception:
         pass  # metadata table may not exist
 

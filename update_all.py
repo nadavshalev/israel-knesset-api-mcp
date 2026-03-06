@@ -8,7 +8,7 @@ Usage:
     python3 update_all.py --dry-run  # show what would be fetched, don't fetch
     python3 update_all.py --status   # show current sync status for all tables
 
-Each table's last sync timestamp is stored in the ``metadata`` SQLite table.
+Each table's last sync timestamp is stored in the ``metadata`` table.
 On each run, only rows updated since that timestamp are fetched from OData.
 
 The ``plenum_vote_result`` table uses Id-based cursors internally, so it
@@ -24,7 +24,6 @@ ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from config import DEFAULT_DB
 from core.db import connect_db, ensure_indexes
 
 from tables import persons
@@ -78,12 +77,16 @@ TABLES = [
 def _get_cutoff(conn, table_name: str):
     """Read last_updated_cutoff from the metadata table, or None."""
     try:
-        row = conn.execute(
-            "SELECT last_updated_cutoff FROM metadata WHERE table_name = ?",
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT last_updated_cutoff FROM metadata WHERE table_name = %s",
             (table_name,),
-        ).fetchone()
+        )
+        row = cur.fetchone()
+        cur.close()
         return row[0] if row else None
     except Exception:
+        conn.rollback()
         # metadata table may not exist yet
         return None
 
@@ -91,20 +94,29 @@ def _get_cutoff(conn, table_name: str):
 def _get_row_count(conn, table_name: str) -> int:
     """Return number of rows in a table, or 0 if table doesn't exist."""
     try:
-        return conn.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()[0]
+        cur = conn.cursor()
+        cur.execute(f"SELECT COUNT(*) FROM {table_name}")
+        count = cur.fetchone()[0]
+        cur.close()
+        return count
     except Exception:
+        conn.rollback()
         return 0
 
 
 def _get_all_metadata(conn):
     """Return dict of {table_name: (last_sync, cutoff)} from metadata table."""
     try:
-        rows = conn.execute(
+        cur = conn.cursor()
+        cur.execute(
             "SELECT table_name, last_sync_completed_at, last_updated_cutoff "
             "FROM metadata ORDER BY table_name"
-        ).fetchall()
+        )
+        rows = cur.fetchall()
+        cur.close()
         return {r[0]: (r[1], r[2]) for r in rows}
     except Exception:
+        conn.rollback()
         return {}
 
 
@@ -164,11 +176,13 @@ def repair_metadata(conn):
         sync_at, cutoff = meta[name]
         print(f"  - {name}  (last_sync={sync_at}, cutoff={cutoff})")
 
-    conn.execute(
+    cur = conn.cursor()
+    cur.execute(
         f"DELETE FROM metadata WHERE table_name NOT IN "
-        f"({','.join('?' for _ in valid_names)})",
+        f"({','.join('%s' for _ in valid_names)})",
         list(valid_names),
     )
+    cur.close()
     conn.commit()
     print(f"Deleted {len(stale)} stale row(s) from metadata.")
 
@@ -285,7 +299,7 @@ def parse_args():
 
 def main():
     args = parse_args()
-    conn = connect_db(DEFAULT_DB)
+    conn = connect_db()
 
     if args.status:
         show_status(conn)

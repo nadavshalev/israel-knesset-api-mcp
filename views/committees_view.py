@@ -23,15 +23,15 @@ register_search({
     "entity_key": "committees",
     "count_sql": """
         SELECT COUNT(*) FROM committee_raw
-        WHERE Name LIKE ?
+        WHERE Name LIKE %s
     """,
     "search_sql": """
         SELECT Id AS id, Name AS name, KnessetNum AS knesset_num,
                CategoryDesc AS category
         FROM committee_raw
-        WHERE Name LIKE ?
+        WHERE Name LIKE %s
         ORDER BY Id DESC
-        LIMIT ?
+        LIMIT %s
     """,
     "param_count": 1,
 })
@@ -85,30 +85,30 @@ def search_committees(
     params = []
 
     if knesset_num is not None:
-        sql += " AND c.KnessetNum = ?"
+        sql += " AND c.KnessetNum = %s"
         params.append(knesset_num)
 
     if name:
-        sql += " AND c.Name LIKE ?"
+        sql += " AND c.Name LIKE %s"
         params.append(f"%{name}%")
 
     if committee_type:
-        sql += " AND c.CommitteeTypeDesc LIKE ?"
+        sql += " AND c.CommitteeTypeDesc LIKE %s"
         params.append(f"%{committee_type}%")
 
     if category:
-        sql += " AND c.CategoryDesc LIKE ?"
+        sql += " AND c.CategoryDesc LIKE %s"
         params.append(f"%{category}%")
 
     if is_current is not None:
-        sql += " AND c.IsCurrent = ?"
+        sql += " AND c.IsCurrent = %s"
         params.append(1 if is_current else 0)
 
     if parent_committee_id is not None:
-        sql += " AND c.ParentCommitteeID = ?"
+        sql += " AND c.ParentCommitteeID = %s"
         params.append(parent_committee_id)
 
-    sql += " ORDER BY c.KnessetNum, c.Name"
+    sql += ' ORDER BY c.KnessetNum, c.Name COLLATE "C"'
 
     cursor.execute(sql, params)
     rows = cursor.fetchall()
@@ -116,16 +116,16 @@ def search_committees(
     results = []
     for row in rows:
         results.append({
-            "committee_id": row["Id"],
-            "name": row["Name"],
-            "knesset_num": row["KnessetNum"],
-            "type": row["CommitteeTypeDesc"],
-            "category": row["CategoryDesc"],
-            "is_current": bool(row["IsCurrent"]),
-            "start_date": simple_date(row["StartDate"]),
-            "end_date": simple_date(row["FinishDate"]),
-            "parent_committee_id": row["ParentCommitteeID"],
-            "parent_committee_name": row["CommitteeParentName"],
+            "committee_id": row["id"],
+            "name": row["name"],
+            "knesset_num": row["knessetnum"],
+            "type": row["committeetypedesc"],
+            "category": row["categorydesc"],
+            "is_current": bool(row["iscurrent"]),
+            "start_date": simple_date(row["startdate"]),
+            "end_date": simple_date(row["finishdate"]),
+            "parent_committee_id": row["parentcommitteeid"],
+            "parent_committee_name": row["committeeparentname"],
         })
 
     conn.close()

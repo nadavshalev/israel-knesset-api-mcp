@@ -4,3 +4,4 @@ plotly
 mcp>=1.26.0
 python-dotenv
 uvicorn
+psycopg2-binary

@@ -1,6 +1,6 @@
 """Tests for views/plenum_sessions_view.py and views/plenum_session_view.py
 
-Integration tests use the real data.sqlite database with known historical
+Integration tests use the real PostgreSQL database with known historical
 data.  Plenum data from older Knessets (19, 20) is stable.
 """
 

@@ -31,12 +31,23 @@ def _row_category(row) -> str:
       government    – GovMinistryName is set
       committee     – CommitteeID is set
       parliamentary – none of the above (e.g. חבר הכנסת, יו"ר הכנסת)
+
+    Accepts both lowercase keys (from RealDictCursor) and PascalCase keys
+    (from manually constructed dicts in tests).
     """
-    if row["FactionName"]:
+    def _get(key):
+        """Look up key case-insensitively."""
+        lower = key.lower()
+        for k in row:
+            if k.lower() == lower:
+                return row[k]
+        return None
+
+    if _get("FactionName"):
         return "faction"
-    if row["GovMinistryName"]:
+    if _get("GovMinistryName"):
         return "government"
-    if row["CommitteeID"]:
+    if _get("CommitteeID"):
         return "committee"
     return "parliamentary"
 
@@ -66,7 +77,7 @@ def _build_member_detail(cursor, person_id, knesset_num):
     Includes government roles, committee memberships, and parliamentary roles.
     """
     cursor.execute(
-        "SELECT FirstName, LastName, GenderDesc FROM person_raw WHERE PersonID = ?",
+        "SELECT FirstName, LastName, GenderDesc FROM person_raw WHERE PersonID = %s",
         (person_id,),
     )
     p_info = cursor.fetchone()
@@ -78,7 +89,7 @@ def _build_member_detail(cursor, person_id, knesset_num):
         SELECT ptp.*, pos.Description AS OfficialPositionTitle
         FROM person_to_position_raw ptp
         LEFT JOIN position_raw pos ON ptp.PositionID = pos.Id
-        WHERE ptp.PersonID = ? AND ptp.KnessetNum = ?
+        WHERE ptp.PersonID = %s AND ptp.KnessetNum = %s
         ORDER BY ptp.StartDate ASC
         """,
         (person_id, knesset_num),
@@ -87,8 +98,8 @@ def _build_member_detail(cursor, person_id, knesset_num):
 
     member = {
         "member_id": person_id,
-        "name": format_person_name(p_info['FirstName'], p_info['LastName']),
-        "gender": p_info["GenderDesc"],
+        "name": format_person_name(p_info['firstname'], p_info['lastname']),
+        "gender": p_info["genderdesc"],
         "knesset_num": knesset_num,
         "faction": [],
         "roles": {
@@ -100,35 +111,35 @@ def _build_member_detail(cursor, person_id, knesset_num):
 
     for row in role_rows:
         cat = _row_category(row)
-        display_title = row["DutyDesc"] or row["OfficialPositionTitle"] or ""
+        display_title = row["dutydesc"] or row["officialpositiontitle"] or ""
 
         if cat == "faction":
-            member["faction"].append(row["FactionName"])
+            member["faction"].append(row["factionname"])
 
         elif cat == "government":
             member["roles"]["government"].append({
                 "title": display_title,
-                "ministry": row["GovMinistryName"],
-                "is_transition": _is_transition_gov(knesset_num, row["GovernmentNum"]),
-                "start": simple_date(row["StartDate"]),
-                "end": simple_date(row["FinishDate"]),
+                "ministry": row["govministryname"],
+                "is_transition": _is_transition_gov(knesset_num, row["governmentnum"]),
+                "start": simple_date(row["startdate"]),
+                "end": simple_date(row["finishdate"]),
             })
 
         elif cat == "committee":
             member["roles"]["committees"].append({
-                "id": row["CommitteeID"],
-                "name": row["CommitteeName"],
-                "role": row["OfficialPositionTitle"],
-                "start": simple_date(row["StartDate"]),
-                "end": simple_date(row["FinishDate"]),
+                "id": row["committeeid"],
+                "name": row["committeename"],
+                "role": row["officialpositiontitle"],
+                "start": simple_date(row["startdate"]),
+                "end": simple_date(row["finishdate"]),
             })
 
         else:  # parliamentary
             member["roles"]["parliamentary"].append({
                 "name": display_title,
-                "role": row["OfficialPositionTitle"],
-                "start": simple_date(row["StartDate"]),
-                "end": simple_date(row["FinishDate"]),
+                "role": row["officialpositiontitle"],
+                "start": simple_date(row["startdate"]),
+                "end": simple_date(row["finishdate"]),
             })
 
     return member
@@ -168,13 +179,13 @@ def get_member(member_id: int, knesset_num: int = None) -> dict | list | None:
         """
         SELECT DISTINCT KnessetNum
         FROM person_to_position_raw
-        WHERE PersonID = ?
+        WHERE PersonID = %s
         ORDER BY KnessetNum ASC
         """,
         (member_id,),
     )
-    knesset_nums = [row["KnessetNum"] for row in cursor.fetchall()
-                    if isinstance(row["KnessetNum"], int)]
+    knesset_nums = [row["knessetnum"] for row in cursor.fetchall()
+                    if isinstance(row["knessetnum"], int)]
 
     if not knesset_nums:
         conn.close()

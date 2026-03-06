@@ -88,8 +88,10 @@ def search_across(query: str, top_n: int | None = None) -> dict:
         # Count
         try:
             cursor.execute(eq["count_sql"], [pattern] * n_params)
-            count = cursor.fetchone()[0]
+            row = cursor.fetchone()
+            count = list(row.values())[0] if row else 0
         except Exception:
+            conn.rollback()
             count = 0
 
         # Top N results
@@ -98,6 +100,7 @@ def search_across(query: str, top_n: int | None = None) -> dict:
             rows = cursor.fetchall()
             top = [dict(row) for row in rows]
         except Exception:
+            conn.rollback()
             top = []
 
         results[entity] = {"count": count, "top": top}

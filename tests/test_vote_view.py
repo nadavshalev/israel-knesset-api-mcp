@@ -1,6 +1,6 @@
 """Tests for views/vote_view.py (single detail view)
 
-Integration tests use the real data.sqlite database with known historical
+Integration tests use the real PostgreSQL database with known historical
 data.  Tests verify the single-vote detail including members and related votes.
 """
 

@@ -37,7 +37,7 @@ def _get_stage_vote(cursor, bill_id, session_id):
         SELECT v.Id, v.VoteTitle, v.VoteDateTime, v.IsAccepted,
                v.TotalFor, v.TotalAgainst, v.TotalAbstain
         FROM plenum_vote_raw v
-        WHERE v.ItemID = ? AND v.SessionID = ?
+        WHERE v.ItemID = %s AND v.SessionID = %s
         ORDER BY v.VoteDateTime DESC, v.Id DESC
         LIMIT 1
         """,
@@ -47,9 +47,9 @@ def _get_stage_vote(cursor, bill_id, session_id):
     if not row:
         return None
 
-    total_for = row["TotalFor"]
-    total_against = row["TotalAgainst"]
-    total_abstain = row["TotalAbstain"]
+    total_for = row["totalfor"]
+    total_against = row["totalagainst"]
+    total_abstain = row["totalabstain"]
 
     # If stored totals are missing, try computing from per-MK results
     if total_for is None:
@@ -60,9 +60,9 @@ def _get_stage_vote(cursor, bill_id, session_id):
                 SUM(CASE WHEN ResultCode = 8 THEN 1 ELSE 0 END) AS total_against,
                 SUM(CASE WHEN ResultCode = 9 THEN 1 ELSE 0 END) AS total_abstain
             FROM plenum_vote_result_raw
-            WHERE VoteID = ?
+            WHERE VoteID = %s
             """,
-            (row["Id"],),
+            (row["id"],),
         )
         counts = cursor.fetchone()
         if counts and counts["total_for"] is not None:
@@ -70,14 +70,14 @@ def _get_stage_vote(cursor, bill_id, session_id):
             total_against = counts["total_against"]
             total_abstain = counts["total_abstain"]
 
-    is_accepted = row["IsAccepted"]
+    is_accepted = row["isaccepted"]
     if is_accepted is None and total_for is not None and total_against is not None:
         is_accepted = 1 if total_for > total_against else 0
 
     return {
-        "vote_id": row["Id"],
-        "title": row["VoteTitle"] or "",
-        "date": simple_date(row["VoteDateTime"]),
+        "vote_id": row["id"],
+        "title": row["votetitle"] or "",
+        "date": simple_date(row["votedatetime"]),
         "is_accepted": bool(is_accepted) if is_accepted is not None else None,
         "total_for": total_for,
         "total_against": total_against,
@@ -110,11 +110,11 @@ def get_bill(bill_id: int) -> dict | None:
     # Bill metadata
     cursor.execute(
         """
-        SELECT b.*, st.[Desc] AS StatusDesc, c.Name AS CommitteeName
+        SELECT b.*, st."Desc" AS StatusDesc, c.Name AS CommitteeName
         FROM bill_raw b
         LEFT JOIN status_raw st ON b.StatusID = st.Id
         LEFT JOIN committee_raw c ON b.CommitteeID = c.Id
-        WHERE b.Id = ?
+        WHERE b.Id = %s
         """,
         (bill_id,),
     )
@@ -127,12 +127,12 @@ def get_bill(bill_id: int) -> dict | None:
     cursor.execute(
         """
         SELECT i.Id AS item_id,
-               ist.[Desc] AS StageStatusDesc,
+               ist."Desc" AS StageStatusDesc,
                s.StartDate, s.Id AS session_id
         FROM plm_session_item_raw i
         JOIN plenum_session_raw s ON i.PlenumSessionID = s.Id
         LEFT JOIN status_raw ist ON i.StatusID = ist.Id
-        WHERE i.ItemID = ?
+        WHERE i.ItemID = %s
         ORDER BY s.StartDate ASC, i.Id ASC
         """,
         (bill_id,),
@@ -150,8 +150,8 @@ def get_bill(bill_id: int) -> dict | None:
     stages = []
     for row in stage_rows:
         stage = {
-            "date": simple_date(row["StartDate"]),
-            "status": row["StageStatusDesc"],
+            "date": simple_date(row["startdate"]),
+            "status": row["stagestatusdesc"],
             "session_id": row["session_id"],
         }
         # Attach the final (decisive) vote only to the last sub-stage
@@ -162,16 +162,16 @@ def get_bill(bill_id: int) -> dict | None:
         stages.append(stage)
 
     obj = {
-        "bill_id": bill["Id"],
-        "name": bill["Name"],
-        "knesset_num": bill["KnessetNum"],
-        "sub_type": bill["SubTypeDesc"],
-        "status": bill["StatusDesc"],
-        "committee": bill["CommitteeName"],
-        "committee_id": bill["CommitteeID"],
-        "publication_date": simple_date(bill["PublicationDate"]),
-        "publication_series": bill["PublicationSeriesDesc"],
-        "summary": bill["SummaryLaw"],
+        "bill_id": bill["id"],
+        "name": bill["name"],
+        "knesset_num": bill["knessetnum"],
+        "sub_type": bill["subtypedesc"],
+        "status": bill["statusdesc"],
+        "committee": bill["committeename"],
+        "committee_id": bill["committeeid"],
+        "publication_date": simple_date(bill["publicationdate"]),
+        "publication_series": bill["publicationseriesdesc"],
+        "summary": bill["summarylaw"],
         "stages": stages,
     }
 

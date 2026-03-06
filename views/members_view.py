@@ -23,15 +23,16 @@ register_search({
     "entity_key": "members",
     "count_sql": """
         SELECT COUNT(DISTINCT PersonID) FROM person_raw
-        WHERE FirstName LIKE ? OR LastName LIKE ?
+        WHERE FirstName LIKE %s OR LastName LIKE %s
     """,
     "search_sql": """
         SELECT DISTINCT PersonID AS id,
-               FirstName || ' ' || LastName AS name
+               FirstName || ' ' || LastName AS name,
+               LastName, FirstName
         FROM person_raw
-        WHERE FirstName LIKE ? OR LastName LIKE ?
+        WHERE FirstName LIKE %s OR LastName LIKE %s
         ORDER BY LastName, FirstName
-        LIMIT ?
+        LIMIT %s
     """,
     "param_count": 2,
 })
@@ -40,23 +41,30 @@ register_search({
 def _resolve_role_ids(cursor, role_type: str) -> list:
     """Map a free-text role_type to matching Position IDs."""
     cursor.execute(
-        "SELECT Id, Description FROM position_raw WHERE Description LIKE ?",
+        "SELECT Id, Description FROM position_raw WHERE Description LIKE %s",
         (f"%{role_type}%",),
     )
     rows = cursor.fetchall()
-    return [row["Id"] for row in rows]
+    return [row["id"] for row in rows]
 
 
 # ---------------------------------------------------------------------------
-# Search — find (PersonID, KnessetNum) tuples matching filters
+# Bulk query — fetch all matching members in a single round-trip
 # ---------------------------------------------------------------------------
 
-def _find_matching_persons(cursor, *, knesset_num=None, first_name=None,
-                           last_name=None, role=None, role_ids=None,
-                           party=None, person_id=None):
-    """Return a set of (PersonID, KnessetNum) tuples matching all filters."""
+def _fetch_members_bulk(cursor, *, knesset_num=None, first_name=None,
+                        last_name=None, role=None, role_ids=None,
+                        party=None, person_id=None):
+    """Fetch all matching members in one query and group in Python.
+
+    Returns a list of summary dicts sorted by (knesset_num, member_id).
+    Uses a single SQL query instead of per-member round-trips.
+    """
     sql = """
-    SELECT DISTINCT p.PersonID, ptp.KnessetNum
+    SELECT p.PersonID, p.FirstName, p.LastName, p.GenderDesc,
+           ptp.KnessetNum, ptp.FactionName,
+           pos.Description AS OfficialPositionTitle,
+           ptp.StartDate
     FROM person_raw p
     JOIN person_to_position_raw ptp ON p.PersonID = ptp.PersonID
     LEFT JOIN position_raw pos ON ptp.PositionID = pos.Id
@@ -65,32 +73,32 @@ def _find_matching_persons(cursor, *, knesset_num=None, first_name=None,
     params = []
 
     if knesset_num is not None:
-        sql += " AND ptp.KnessetNum = ?"
+        sql += " AND ptp.KnessetNum = %s"
         params.append(knesset_num)
 
     if person_id is not None:
-        sql += " AND p.PersonID = ?"
+        sql += " AND p.PersonID = %s"
         params.append(person_id)
 
     if first_name:
-        sql += " AND p.FirstName LIKE ?"
+        sql += " AND p.FirstName LIKE %s"
         params.append(f"%{first_name}%")
 
     if last_name:
-        sql += " AND p.LastName LIKE ?"
+        sql += " AND p.LastName LIKE %s"
         params.append(f"%{last_name}%")
 
     if role:
         sql += """ AND (
-            pos.Description LIKE ? OR
-            ptp.DutyDesc LIKE ? OR
-            ptp.GovMinistryName LIKE ? OR
-            ptp.CommitteeName LIKE ?
+            pos.Description LIKE %s OR
+            ptp.DutyDesc LIKE %s OR
+            ptp.GovMinistryName LIKE %s OR
+            ptp.CommitteeName LIKE %s
         )"""
         params.extend([f"%{role}%"] * 4)
 
     if role_ids:
-        placeholders = ", ".join(["?"] * len(role_ids))
+        placeholders = ", ".join(["%s"] * len(role_ids))
         sql += f" AND ptp.PositionID IN ({placeholders})"
         params.extend(role_ids)
 
@@ -100,69 +108,43 @@ def _find_matching_persons(cursor, *, knesset_num=None, first_name=None,
             SELECT 1 FROM person_to_position_raw f
             WHERE f.PersonID = p.PersonID
               AND f.KnessetNum = ptp.KnessetNum
-              AND f.FactionName LIKE ?
+              AND f.FactionName LIKE %s
         )"""
         params.append(f"%{party}%")
 
+    sql += " ORDER BY ptp.KnessetNum, p.PersonID, ptp.StartDate ASC"
+
     cursor.execute(sql, params)
-    return {
-        (r["PersonID"], r["KnessetNum"])
-        for r in cursor.fetchall()
-        if r["PersonID"] and isinstance(r["KnessetNum"], int)
-    }
+    rows = cursor.fetchall()
 
+    # Group rows by (PersonID, KnessetNum) preserving order
+    members = {}
+    order = []
+    for row in rows:
+        pid = row["personid"]
+        kns = row["knessetnum"]
+        if not pid or not isinstance(kns, int):
+            continue
+        key = (pid, kns)
+        if key not in members:
+            members[key] = {
+                "member_id": pid,
+                "name": format_person_name(row["firstname"], row["lastname"]),
+                "gender": row["genderdesc"],
+                "knesset_num": kns,
+                "faction": [],
+                "role_types": [],
+            }
+            order.append(key)
+        m = members[key]
+        fn = row["factionname"]
+        if fn and fn not in m["faction"]:
+            m["faction"].append(fn)
+        title = row["officialpositiontitle"] or ""
+        if title and title not in m["role_types"]:
+            m["role_types"].append(title)
 
-# ---------------------------------------------------------------------------
-# Build — summary member object for one (PersonID, KnessetNum)
-# ---------------------------------------------------------------------------
-
-def _build_member_summary(cursor, person_id, knesset_num):
-    """Build a summary dict for one member in one Knesset term.
-
-    Returns general info (name, gender, faction) plus a ``role_types`` list
-    of all distinct role types the member held (e.g. חבר כנסת, שר).
-    """
-    cursor.execute(
-        "SELECT FirstName, LastName, GenderDesc FROM person_raw WHERE PersonID = ?",
-        (person_id,),
-    )
-    p_info = cursor.fetchone()
-    if not p_info:
-        return None
-
-    # Get all rows for this person+knesset to extract faction and role types
-    cursor.execute(
-        """
-        SELECT ptp.FactionName, ptp.GovMinistryName,
-               pos.Description AS OfficialPositionTitle
-        FROM person_to_position_raw ptp
-        LEFT JOIN position_raw pos ON ptp.PositionID = pos.Id
-        WHERE ptp.PersonID = ? AND ptp.KnessetNum = ?
-        ORDER BY ptp.StartDate ASC
-        """,
-        (person_id, knesset_num),
-    )
-    role_rows = cursor.fetchall()
-
-    factions = []
-    role_types = []
-
-    for row in role_rows:
-        if row["FactionName"] and row["FactionName"] not in factions:
-            factions.append(row["FactionName"])
-
-        title = row["OfficialPositionTitle"] or ""
-        if title and title not in role_types:
-            role_types.append(title)
-
-    return {
-        "member_id": person_id,
-        "name": format_person_name(p_info['FirstName'], p_info['LastName']),
-        "gender": p_info["GenderDesc"],
-        "knesset_num": knesset_num,
-        "faction": factions,
-        "role_types": role_types,
-    }
+    return [members[k] for k in order]
 
 
 # ---------------------------------------------------------------------------
@@ -210,8 +192,7 @@ def search_members(
             conn.close()
             return []
 
-    # Find matching (PersonID, KnessetNum) pairs
-    matches = _find_matching_persons(
+    results = _fetch_members_bulk(
         cursor,
         knesset_num=knesset_num,
         first_name=first_name,
@@ -221,13 +202,6 @@ def search_members(
         party=party,
         person_id=person_id,
     )
-
-    # Build summary objects
-    results = []
-    for p_id, kns in sorted(matches, key=lambda x: (x[1], x[0])):
-        obj = _build_member_summary(cursor, p_id, kns)
-        if obj:
-            results.append(obj)
 
     conn.close()
     return results

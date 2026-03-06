@@ -1,6 +1,6 @@
 """Tests for views/search_across_view.py
 
-Integration tests use the real data.sqlite database with known historical
+Integration tests use the real PostgreSQL database with known historical
 data from older Knessets (19, 20) which are stable and won't change.
 """
 

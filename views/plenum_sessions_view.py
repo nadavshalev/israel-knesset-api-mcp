@@ -25,7 +25,7 @@ register_search({
         FROM plenum_session_raw ps
         LEFT JOIN plm_session_item_raw psi
                ON ps.Id = psi.PlenumSessionID
-        WHERE ps.Name LIKE ? OR psi.Name LIKE ?
+        WHERE ps.Name LIKE %s OR psi.Name LIKE %s
     """,
     "search_sql": """
         SELECT DISTINCT ps.Id AS id,
@@ -35,9 +35,9 @@ register_search({
         FROM plenum_session_raw ps
         LEFT JOIN plm_session_item_raw psi
                ON ps.Id = psi.PlenumSessionID
-        WHERE ps.Name LIKE ? OR psi.Name LIKE ?
+        WHERE ps.Name LIKE %s OR psi.Name LIKE %s
         ORDER BY ps.Id DESC
-        LIMIT ?
+        LIMIT %s
     """,
     "param_count": 2,
 })
@@ -87,29 +87,29 @@ def search_sessions(
     params = []
 
     if knesset_num is not None:
-        sql += " AND s.KnessetNum = ?"
+        sql += " AND s.KnessetNum = %s"
         params.append(knesset_num)
 
     if from_date:
-        sql += " AND s.StartDate >= ?"
+        sql += " AND s.StartDate >= %s"
         params.append(from_date)
 
     if to_date:
-        sql += " AND s.StartDate <= ?"
+        sql += " AND s.StartDate <= %s"
         params.append(to_date)
 
     if date:
-        sql += " AND s.StartDate LIKE ?"
+        sql += " AND s.StartDate LIKE %s"
         params.append(f"{date}%")
 
     if name:
         sql += """
         AND (
-            s.Name LIKE ?
+            s.Name LIKE %s
             OR EXISTS (
                 SELECT 1 FROM plm_session_item_raw i
                 WHERE i.PlenumSessionID = s.Id
-                  AND i.Name LIKE ?
+                  AND i.Name LIKE %s
             )
         )"""
         params.extend([f"%{name}%", f"%{name}%"])
@@ -119,7 +119,7 @@ def search_sessions(
         AND EXISTS (
             SELECT 1 FROM plm_session_item_raw i
             WHERE i.PlenumSessionID = s.Id
-              AND i.ItemTypeDesc LIKE ?
+              AND i.ItemTypeDesc LIKE %s
         )"""
         params.append(f"%{item_type}%")
 
@@ -131,10 +131,10 @@ def search_sessions(
     results = []
     for row in rows:
         results.append({
-            "session_id": row["Id"],
-            "knesset_num": row["KnessetNum"],
-            "name": row["Name"],
-            "date": simple_date(row["StartDate"]),
+            "session_id": row["id"],
+            "knesset_num": row["knessetnum"],
+            "name": row["name"],
+            "date": simple_date(row["startdate"]),
         })
 
     conn.close()

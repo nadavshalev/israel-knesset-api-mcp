@@ -1,6 +1,6 @@
 """Tests for views/bill_view.py (single bill detail — with stages/votes)
 
-Integration tests use the real data.sqlite database with known historical
+Integration tests use the real PostgreSQL database with known historical
 data.  Bill data from older Knessets (19, 20) is stable.
 """
 

@@ -41,10 +41,10 @@ def _date_clauses(from_date, to_date, date_column="cs.StartDate"):
     frags: list[str] = []
     params: list[str] = []
     if from_date:
-        frags.append(f"AND {date_column} >= ?")
+        frags.append(f"AND {date_column} >= %s")
         params.append(from_date)
     if to_date:
-        frags.append(f"AND {date_column} < date(?, '+1 day')")
+        frags.append(f"AND {date_column} < (%s::date + INTERVAL '1 day')::text")
         params.append(to_date)
     return frags, params
 
@@ -61,7 +61,7 @@ def _get_sessions(cursor, committee_id, from_date=None, to_date=None):
         SELECT Id, Number, StartDate, FinishDate, TypeDesc, StatusDesc,
                Location, SessionUrl, BroadcastUrl
         FROM committee_session_raw
-        WHERE CommitteeID = ?
+        WHERE CommitteeID = %s
         {' '.join(date_frags)}
         ORDER BY StartDate DESC, Id DESC
     """
@@ -69,16 +69,16 @@ def _get_sessions(cursor, committee_id, from_date=None, to_date=None):
     rows = cursor.fetchall()
     return [
         {
-            "session_id": row["Id"],
-            "number": row["Number"],
-            "date": simple_date(row["StartDate"]),
-            "start_time": simple_time(row["StartDate"]),
-            "end_time": simple_time(row["FinishDate"]),
-            "type": row["TypeDesc"],
-            "status": row["StatusDesc"],
-            "location": row["Location"],
-            "url": row["SessionUrl"],
-            "broadcast_url": row["BroadcastUrl"],
+            "session_id": row["id"],
+            "number": row["number"],
+            "date": simple_date(row["startdate"]),
+            "start_time": simple_time(row["startdate"]),
+            "end_time": simple_time(row["finishdate"]),
+            "type": row["typedesc"],
+            "status": row["statusdesc"],
+            "location": row["location"],
+            "url": row["sessionurl"],
+            "broadcast_url": row["broadcasturl"],
         }
         for row in rows
     ]
@@ -96,14 +96,14 @@ def _get_members(cursor, committee_id, from_date=None, to_date=None):
         # Member must not have finished before the window starts
         overlap_frags.append(
             "AND (ptp.FinishDate IS NULL OR ptp.FinishDate = '' "
-            "OR ptp.FinishDate >= ?)"
+            "OR ptp.FinishDate >= %s)"
         )
         overlap_params.append(from_date)
     if to_date:
         # Member must have started before the window ends
         overlap_frags.append(
             "AND (ptp.StartDate IS NULL OR ptp.StartDate = '' "
-            "OR ptp.StartDate <= ?)"
+            "OR ptp.StartDate <= %s)"
         )
         overlap_params.append(to_date)
 
@@ -115,7 +115,7 @@ def _get_members(cursor, committee_id, from_date=None, to_date=None):
         FROM person_to_position_raw ptp
         JOIN person_raw p ON ptp.PersonID = p.PersonID
         LEFT JOIN position_raw pos ON ptp.PositionID = pos.Id
-        WHERE ptp.CommitteeID = ?
+        WHERE ptp.CommitteeID = %s
         {' '.join(overlap_frags)}
         ORDER BY ptp.KnessetNum, p.LastName, p.FirstName, ptp.StartDate
     """
@@ -123,12 +123,12 @@ def _get_members(cursor, committee_id, from_date=None, to_date=None):
     rows = cursor.fetchall()
     return [
         {
-            "member_id": row["PersonID"],
-            "name": format_person_name(row['FirstName'], row['LastName']),
-            "knesset_num": row["KnessetNum"],
-            "role": row["PositionTitle"],
-            "start": simple_date(row["StartDate"]),
-            "end": simple_date(row["FinishDate"]),
+            "member_id": row["personid"],
+            "name": format_person_name(row['firstname'], row['lastname']),
+            "knesset_num": row["knessetnum"],
+            "role": row["positiontitle"],
+            "start": simple_date(row["startdate"]),
+            "end": simple_date(row["finishdate"]),
         }
         for row in rows
     ]
@@ -144,12 +144,12 @@ def _get_bills(cursor, committee_id, from_date=None, to_date=None):
     date_frags, date_params = _date_clauses(from_date, to_date)
     sql = f"""
         SELECT DISTINCT b.Id, b.Name, b.KnessetNum, b.SubTypeDesc,
-               st.[Desc] AS StatusDesc
+               st."Desc" AS StatusDesc
         FROM cmt_session_item_raw csi
         JOIN committee_session_raw cs ON csi.CommitteeSessionID = cs.Id
         JOIN bill_raw b ON csi.ItemID = b.Id
         LEFT JOIN status_raw st ON b.StatusID = st.Id
-        WHERE cs.CommitteeID = ? AND csi.ItemTypeID = 2
+        WHERE cs.CommitteeID = %s AND csi.ItemTypeID = 2
         {' '.join(date_frags)}
         ORDER BY b.Name
     """
@@ -157,11 +157,11 @@ def _get_bills(cursor, committee_id, from_date=None, to_date=None):
     rows = cursor.fetchall()
     return [
         {
-            "bill_id": row["Id"],
-            "name": row["Name"],
-            "knesset_num": row["KnessetNum"],
-            "sub_type": row["SubTypeDesc"],
-            "status": row["StatusDesc"],
+            "bill_id": row["id"],
+            "name": row["name"],
+            "knesset_num": row["knessetnum"],
+            "sub_type": row["subtypedesc"],
+            "status": row["statusdesc"],
         }
         for row in rows
     ]
@@ -179,7 +179,7 @@ def _get_documents(cursor, committee_id, from_date=None, to_date=None):
                d.FilePath, cs.Id AS session_id, cs.StartDate AS SessionDate
         FROM document_committee_session_raw d
         JOIN committee_session_raw cs ON d.CommitteeSessionID = cs.Id
-        WHERE cs.CommitteeID = ?
+        WHERE cs.CommitteeID = %s
         {' '.join(date_frags)}
         ORDER BY cs.StartDate DESC, d.Id DESC
     """
@@ -187,13 +187,13 @@ def _get_documents(cursor, committee_id, from_date=None, to_date=None):
     rows = cursor.fetchall()
     return [
         {
-            "document_id": row["Id"],
-            "type": row["GroupTypeDesc"],
-            "name": row["DocumentName"],
-            "format": row["ApplicationDesc"],
-            "file_path": row["FilePath"],
+            "document_id": row["id"],
+            "type": row["grouptypedesc"],
+            "name": row["documentname"],
+            "format": row["applicationdesc"],
+            "file_path": row["filepath"],
             "session_id": row["session_id"],
-            "session_date": simple_date(row["SessionDate"]),
+            "session_date": simple_date(row["sessiondate"]),
         }
         for row in rows
     ]
@@ -256,24 +256,24 @@ def get_committee(
     cursor = conn.cursor()
 
     # Committee metadata
-    cursor.execute("SELECT * FROM committee_raw WHERE Id = ?", (committee_id,))
+    cursor.execute("SELECT * FROM committee_raw WHERE Id = %s", (committee_id,))
     committee = cursor.fetchone()
     if not committee:
         conn.close()
         return None
 
     obj: dict = {
-        "committee_id": committee["Id"],
-        "name": committee["Name"],
-        "knesset_num": committee["KnessetNum"],
-        "type": committee["CommitteeTypeDesc"],
-        "category": committee["CategoryDesc"],
-        "is_current": bool(committee["IsCurrent"]),
-        "start_date": simple_date(committee["StartDate"]),
-        "end_date": simple_date(committee["FinishDate"]),
-        "parent_committee_id": committee["ParentCommitteeID"],
-        "parent_committee_name": committee["CommitteeParentName"],
-        "email": committee["Email"],
+        "committee_id": committee["id"],
+        "name": committee["name"],
+        "knesset_num": committee["knessetnum"],
+        "type": committee["committeetypedesc"],
+        "category": committee["categorydesc"],
+        "is_current": bool(committee["iscurrent"]),
+        "start_date": simple_date(committee["startdate"]),
+        "end_date": simple_date(committee["finishdate"]),
+        "parent_committee_id": committee["parentcommitteeid"],
+        "parent_committee_name": committee["committeeparentname"],
+        "email": committee["email"],
     }
 
     if include_sessions:

@@ -1,6 +1,6 @@
 """Tests for views/votes_view.py (list view)
 
-Integration tests use the real data.sqlite database with known historical
+Integration tests use the real PostgreSQL database with known historical
 data.  Vote data from older Knessets (16-20) is stable via CSV-origin rows.
 """
 
@@ -58,7 +58,7 @@ class TestSimpleTime(unittest.TestCase):
 
 
 # ===================================================================
-# Integration tests — use real data.sqlite
+# Integration tests — use real PostgreSQL database
 # ===================================================================
 
 

@@ -1,6 +1,8 @@
 from typing import Any, Dict, Iterable, Optional, Tuple
 from datetime import datetime, timezone
 
+import psycopg2.extras
+
 from core.odata_client import _utc_now_iso, fetch_odata_table
 from core.db import update_metadata
 
@@ -56,11 +58,17 @@ def _insert_to_db(conn, rows: Iterable[Dict[str, Any]]) -> Tuple[int, Optional[s
     cur = conn.cursor()
     now = _utc_now_iso()
     sql = (
-        f"INSERT OR REPLACE INTO {TABLE_NAME} "
+        f"INSERT INTO {TABLE_NAME} "
         "(Id, VoteID, MkId, VoteDate, ResultCode, ResultDesc, "
         "LastUpdatedDate, LastName, FirstName, SessionID, ItemID, fetched_at) "
-        "VALUES (:Id, :VoteID, :MkId, :VoteDate, :ResultCode, :ResultDesc, "
-        ":LastUpdatedDate, :LastName, :FirstName, :SessionID, :ItemID, :fetched_at)"
+        "VALUES (%(Id)s, %(VoteID)s, %(MkId)s, %(VoteDate)s, %(ResultCode)s, %(ResultDesc)s, "
+        "%(LastUpdatedDate)s, %(LastName)s, %(FirstName)s, %(SessionID)s, %(ItemID)s, %(fetched_at)s) "
+        "ON CONFLICT (Id) DO UPDATE SET "
+        "VoteID=EXCLUDED.VoteID, MkId=EXCLUDED.MkId, VoteDate=EXCLUDED.VoteDate, "
+        "ResultCode=EXCLUDED.ResultCode, ResultDesc=EXCLUDED.ResultDesc, "
+        "LastUpdatedDate=EXCLUDED.LastUpdatedDate, LastName=EXCLUDED.LastName, "
+        "FirstName=EXCLUDED.FirstName, SessionID=EXCLUDED.SessionID, "
+        "ItemID=EXCLUDED.ItemID, fetched_at=EXCLUDED.fetched_at"
     )
     payload = []
     max_updated: Optional[str] = None
@@ -91,11 +99,11 @@ def _insert_to_db(conn, rows: Iterable[Dict[str, Any]]) -> Tuple[int, Optional[s
         )
         # Batch insert every 10,000 rows for memory efficiency
         if len(payload) >= 10_000:
-            cur.executemany(sql, payload)
+            psycopg2.extras.execute_batch(cur, sql, payload)
             count += len(payload)
             payload.clear()
     if payload:
-        cur.executemany(sql, payload)
+        psycopg2.extras.execute_batch(cur, sql, payload)
         count += len(payload)
     conn.commit()
     return count, max_updated, max_id
@@ -118,9 +126,9 @@ def fetch_rows(conn, since: Optional[str] = None) -> None:
         cursor_val = since
     else:
         # Check if we have existing data to resume from
-        row = conn.execute(
-            f"SELECT MAX(Id) FROM {TABLE_NAME}"
-        ).fetchone()
+        cur = conn.cursor()
+        cur.execute(f"SELECT MAX(Id) FROM {TABLE_NAME}")
+        row = cur.fetchone()
         max_existing = row[0] if row and row[0] is not None else None
         cursor_val = str(max_existing) if max_existing else None
 
@@ -145,5 +153,7 @@ def fetch_rows(conn, since: Optional[str] = None) -> None:
         db_max_updated = row[0] if row else None
         update_metadata(conn, TABLE_NAME, _utc_now_iso(), db_max_updated)
 
-    total = conn.execute(f"SELECT COUNT(*) FROM {TABLE_NAME}").fetchone()[0]
+    cur = conn.cursor()
+    cur.execute(f"SELECT COUNT(*) FROM {TABLE_NAME}")
+    total = cur.fetchone()[0]
     print(f"Fetched {count} rows. Total {TABLE_NAME}: {total}")

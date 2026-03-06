@@ -1,5 +1,7 @@
 from typing import Any, Dict, Iterable, Optional, Tuple
 
+import psycopg2.extras
+
 from core.odata_client import _utc_now_iso, fetch_csv_table, fetch_odata_table
 from core.db import update_metadata
 
@@ -45,19 +47,31 @@ def _insert_to_db(conn, rows: Iterable[Dict[str, Any]]) -> Tuple[int, Optional[s
     cur = conn.cursor()
     now = _utc_now_iso()
     sql = (
-        f"INSERT OR REPLACE INTO {TABLE_NAME} "
+        f"INSERT INTO {TABLE_NAME} "
         "(Id, VoteDateTime, SessionID, ItemID, Ordinal, "
         "VoteMethodID, VoteMethodDesc, VoteStatusCode, VoteStatusDesc, "
         "VoteTitle, VoteSubject, IsNoConfidenceInGov, "
         "ForOptionID, ForOptionDesc, AgainstOptionID, AgainstOptionDesc, "
         "IsAccepted, TotalFor, TotalAgainst, TotalAbstain, "
         "LastUpdatedDate, fetched_at) "
-        "VALUES (:Id, :VoteDateTime, :SessionID, :ItemID, :Ordinal, "
-        ":VoteMethodID, :VoteMethodDesc, :VoteStatusCode, :VoteStatusDesc, "
-        ":VoteTitle, :VoteSubject, :IsNoConfidenceInGov, "
-        ":ForOptionID, :ForOptionDesc, :AgainstOptionID, :AgainstOptionDesc, "
-        ":IsAccepted, :TotalFor, :TotalAgainst, :TotalAbstain, "
-        ":LastUpdatedDate, :fetched_at)"
+        "VALUES (%(Id)s, %(VoteDateTime)s, %(SessionID)s, %(ItemID)s, %(Ordinal)s, "
+        "%(VoteMethodID)s, %(VoteMethodDesc)s, %(VoteStatusCode)s, %(VoteStatusDesc)s, "
+        "%(VoteTitle)s, %(VoteSubject)s, %(IsNoConfidenceInGov)s, "
+        "%(ForOptionID)s, %(ForOptionDesc)s, %(AgainstOptionID)s, %(AgainstOptionDesc)s, "
+        "%(IsAccepted)s, %(TotalFor)s, %(TotalAgainst)s, %(TotalAbstain)s, "
+        "%(LastUpdatedDate)s, %(fetched_at)s) "
+        "ON CONFLICT (Id) DO UPDATE SET "
+        "VoteDateTime=EXCLUDED.VoteDateTime, SessionID=EXCLUDED.SessionID, "
+        "ItemID=EXCLUDED.ItemID, Ordinal=EXCLUDED.Ordinal, "
+        "VoteMethodID=EXCLUDED.VoteMethodID, VoteMethodDesc=EXCLUDED.VoteMethodDesc, "
+        "VoteStatusCode=EXCLUDED.VoteStatusCode, VoteStatusDesc=EXCLUDED.VoteStatusDesc, "
+        "VoteTitle=EXCLUDED.VoteTitle, VoteSubject=EXCLUDED.VoteSubject, "
+        "IsNoConfidenceInGov=EXCLUDED.IsNoConfidenceInGov, "
+        "ForOptionID=EXCLUDED.ForOptionID, ForOptionDesc=EXCLUDED.ForOptionDesc, "
+        "AgainstOptionID=EXCLUDED.AgainstOptionID, AgainstOptionDesc=EXCLUDED.AgainstOptionDesc, "
+        "IsAccepted=EXCLUDED.IsAccepted, TotalFor=EXCLUDED.TotalFor, "
+        "TotalAgainst=EXCLUDED.TotalAgainst, TotalAbstain=EXCLUDED.TotalAbstain, "
+        "LastUpdatedDate=EXCLUDED.LastUpdatedDate, fetched_at=EXCLUDED.fetched_at"
     )
     payload = []
     max_updated: Optional[str] = None
@@ -92,7 +106,7 @@ def _insert_to_db(conn, rows: Iterable[Dict[str, Any]]) -> Tuple[int, Optional[s
             }
         )
     if payload:
-        cur.executemany(sql, payload)
+        psycopg2.extras.execute_batch(cur, sql, payload)
     conn.commit()
     return len(payload), max_updated
 
@@ -202,5 +216,7 @@ def fetch_rows(conn, since: Optional[str] = None) -> None:
     db_max_updated = row[0] if row else None
     update_metadata(conn, TABLE_NAME, _utc_now_iso(), db_max_updated)
 
-    total = conn.execute(f"SELECT COUNT(*) FROM {TABLE_NAME}").fetchone()[0]
+    cur = conn.cursor()
+    cur.execute(f"SELECT COUNT(*) FROM {TABLE_NAME}")
+    total = cur.fetchone()[0]
     print(f"Total {TABLE_NAME} rows: {total}")

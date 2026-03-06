@@ -1,6 +1,6 @@
 """Tests for views/database_status_view.py
 
-Integration tests use the real data.sqlite database.
+Integration tests use the real PostgreSQL database.
 """
 
 import sys
@@ -107,7 +107,7 @@ class TestDatabaseStatusSync(unittest.TestCase):
     def test_last_sync_has_value(self):
         """If data has been synced, last_sync should be a non-empty string."""
         status = get_database_status()
-        # data.sqlite has been populated, so metadata should exist
+        # PostgreSQL database has been populated, so metadata should exist
         self.assertIsNotNone(status["last_sync"])
         self.assertGreater(len(status["last_sync"]), 0)
 

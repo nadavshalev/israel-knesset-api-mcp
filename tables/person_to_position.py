@@ -1,5 +1,7 @@
 from typing import Any, Dict, Iterable, Optional, Tuple
 
+import psycopg2.extras
+
 from core.odata_client import _utc_now_iso, fetch_odata_table, fetch_table_with_csv_first
 from core.db import update_metadata
 
@@ -40,9 +42,17 @@ def _insert_to_db(conn, rows: Iterable[Dict[str, Any]]) -> Tuple[int, Optional[s
     cur = conn.cursor()
     now = _utc_now_iso()
     sql = (
-        f"INSERT OR REPLACE INTO {TABLE_NAME} (PersonToPositionID, PersonID, PositionID, KnessetNum, GovMinistryID, GovMinistryName, DutyDesc, "
+        f"INSERT INTO {TABLE_NAME} (PersonToPositionID, PersonID, PositionID, KnessetNum, GovMinistryID, GovMinistryName, DutyDesc, "
         "FactionID, FactionName, GovernmentNum, CommitteeID, CommitteeName, StartDate, FinishDate, IsCurrent, LastUpdatedDate, fetched_at) "
-        "VALUES (:PersonToPositionID, :PersonID, :PositionID, :KnessetNum, :GovMinistryID, :GovMinistryName, :DutyDesc, :FactionID, :FactionName, :GovernmentNum, :CommitteeID, :CommitteeName, :StartDate, :FinishDate, :IsCurrent, :LastUpdatedDate, :fetched_at)"
+        "VALUES (%(PersonToPositionID)s, %(PersonID)s, %(PositionID)s, %(KnessetNum)s, %(GovMinistryID)s, %(GovMinistryName)s, %(DutyDesc)s, "
+        "%(FactionID)s, %(FactionName)s, %(GovernmentNum)s, %(CommitteeID)s, %(CommitteeName)s, %(StartDate)s, %(FinishDate)s, %(IsCurrent)s, %(LastUpdatedDate)s, %(fetched_at)s) "
+        "ON CONFLICT (PersonToPositionID) DO UPDATE SET "
+        "PersonID=EXCLUDED.PersonID, PositionID=EXCLUDED.PositionID, KnessetNum=EXCLUDED.KnessetNum, "
+        "GovMinistryID=EXCLUDED.GovMinistryID, GovMinistryName=EXCLUDED.GovMinistryName, DutyDesc=EXCLUDED.DutyDesc, "
+        "FactionID=EXCLUDED.FactionID, FactionName=EXCLUDED.FactionName, GovernmentNum=EXCLUDED.GovernmentNum, "
+        "CommitteeID=EXCLUDED.CommitteeID, CommitteeName=EXCLUDED.CommitteeName, StartDate=EXCLUDED.StartDate, "
+        "FinishDate=EXCLUDED.FinishDate, IsCurrent=EXCLUDED.IsCurrent, LastUpdatedDate=EXCLUDED.LastUpdatedDate, "
+        "fetched_at=EXCLUDED.fetched_at"
     )
     payload = []
     max_updated: Optional[str] = None
@@ -72,7 +82,7 @@ def _insert_to_db(conn, rows: Iterable[Dict[str, Any]]) -> Tuple[int, Optional[s
             }
         )
     if payload:
-        cur.executemany(sql, payload)
+        psycopg2.extras.execute_batch(cur, sql, payload)
     conn.commit()
     return len(payload), max_updated
 
