@@ -14,36 +14,45 @@ if str(ROOT.parent) not in sys.path:
     sys.path.insert(0, str(ROOT.parent))
 
 from core.db import connect_readonly
+from core.helpers import simple_date, simple_time
+from core.mcp_meta import mcp_tool
+from core.search_meta import register_search
 
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _simple_date(date_str) -> str:
-    """Strip time component from an ISO datetime string."""
-    if not date_str:
-        return ""
-    return str(date_str).split("T")[0]
-
-
-def _simple_time(datetime_str) -> str:
-    """Extract HH:MM time from an ISO datetime string."""
-    if not datetime_str:
-        return ""
-    s = str(datetime_str)
-    if "T" in s:
-        time_part = s.split("T")[1]
-        if "+" in time_part:
-            time_part = time_part.split("+")[0]
-        return time_part[:5]
-    return ""
+register_search({
+    "entity_key": "votes",
+    "count_sql": """
+        SELECT COUNT(*) FROM plenum_vote_raw
+        WHERE VoteTitle LIKE ? OR VoteSubject LIKE ?
+    """,
+    "search_sql": """
+        SELECT v.Id AS id, v.VoteTitle AS name,
+               s.KnessetNum AS knesset_num,
+               v.VoteDateTime AS date
+        FROM plenum_vote_raw v
+        LEFT JOIN plenum_session_raw s ON v.SessionID = s.Id
+        WHERE v.VoteTitle LIKE ? OR v.VoteSubject LIKE ?
+        ORDER BY v.Id DESC
+        LIMIT ?
+    """,
+    "param_count": 2,
+})
 
 
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
+@mcp_tool(
+    name="search_votes",
+    description=(
+        "Search for Knesset plenum votes. Returns summary info: title, "
+        "subject, date, totals, accepted/rejected. "
+        "Use get_vote for full detail including per-member breakdown."
+    ),
+    entity="Plenum Votes",
+    count_sql="SELECT COUNT(*) FROM plenum_vote_raw",
+    is_list=True,
+)
 def search_votes(
     knesset_num=None,
     name=None,
@@ -161,8 +170,8 @@ def search_votes(
             "session_id": vote["SessionID"],
             "title": vote["VoteTitle"],
             "subject": vote["VoteSubject"],
-            "date": _simple_date(vote["VoteDateTime"]),
-            "time": _simple_time(vote["VoteDateTime"]),
+            "date": simple_date(vote["VoteDateTime"]),
+            "time": simple_time(vote["VoteDateTime"]),
             "is_accepted": bool(is_accepted) if is_accepted is not None else None,
             "total_for": total_for,
             "total_against": vote["TotalAgainst"],

@@ -15,17 +15,26 @@ if str(ROOT.parent) not in sys.path:
     sys.path.insert(0, str(ROOT.parent))
 
 from core.db import connect_readonly
+from core.helpers import simple_date, format_person_name
+from core.mcp_meta import mcp_tool
+from core.search_meta import register_search
 
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _simple_date(date_str) -> str:
-    """Strip time component from an ISO datetime string."""
-    if not date_str:
-        return ""
-    return str(date_str).split("T")[0]
+register_search({
+    "entity_key": "members",
+    "count_sql": """
+        SELECT COUNT(DISTINCT PersonID) FROM person_raw
+        WHERE FirstName LIKE ? OR LastName LIKE ?
+    """,
+    "search_sql": """
+        SELECT DISTINCT PersonID AS id,
+               FirstName || ' ' || LastName AS name
+        FROM person_raw
+        WHERE FirstName LIKE ? OR LastName LIKE ?
+        ORDER BY LastName, FirstName
+        LIMIT ?
+    """,
+    "param_count": 2,
+})
 
 
 def _resolve_role_ids(cursor, role_type: str) -> list:
@@ -43,8 +52,8 @@ def _resolve_role_ids(cursor, role_type: str) -> list:
 # ---------------------------------------------------------------------------
 
 def _find_matching_persons(cursor, *, knesset_num=None, first_name=None,
-                           last_name=None, role_query=None, role_ids=None,
-                           faction_query=None, person_id=None):
+                           last_name=None, role=None, role_ids=None,
+                           party=None, person_id=None):
     """Return a set of (PersonID, KnessetNum) tuples matching all filters."""
     sql = """
     SELECT DISTINCT p.PersonID, ptp.KnessetNum
@@ -71,21 +80,21 @@ def _find_matching_persons(cursor, *, knesset_num=None, first_name=None,
         sql += " AND p.LastName LIKE ?"
         params.append(f"%{last_name}%")
 
-    if role_query:
+    if role:
         sql += """ AND (
             pos.Description LIKE ? OR
             ptp.DutyDesc LIKE ? OR
             ptp.GovMinistryName LIKE ? OR
             ptp.CommitteeName LIKE ?
         )"""
-        params.extend([f"%{role_query}%"] * 4)
+        params.extend([f"%{role}%"] * 4)
 
     if role_ids:
         placeholders = ", ".join(["?"] * len(role_ids))
         sql += f" AND ptp.PositionID IN ({placeholders})"
         params.extend(role_ids)
 
-    if faction_query:
+    if party:
         sql += """
         AND EXISTS (
             SELECT 1 FROM person_to_position_raw f
@@ -93,7 +102,7 @@ def _find_matching_persons(cursor, *, knesset_num=None, first_name=None,
               AND f.KnessetNum = ptp.KnessetNum
               AND f.FactionName LIKE ?
         )"""
-        params.append(f"%{faction_query}%")
+        params.append(f"%{party}%")
 
     cursor.execute(sql, params)
     return {
@@ -148,7 +157,7 @@ def _build_member_summary(cursor, person_id, knesset_num):
 
     return {
         "member_id": person_id,
-        "name": f"{p_info['FirstName']} {p_info['LastName']}",
+        "name": format_person_name(p_info['FirstName'], p_info['LastName']),
         "gender": p_info["GenderDesc"],
         "knesset_num": knesset_num,
         "faction": factions,
@@ -160,20 +169,31 @@ def _build_member_summary(cursor, person_id, knesset_num):
 # Public API
 # ---------------------------------------------------------------------------
 
+@mcp_tool(
+    name="search_members",
+    description=(
+        "Search for Knesset members (MKs). Returns summary info: name, "
+        "gender, knesset number, factions, and role types. "
+        "Use get_member for full detail on a single member."
+    ),
+    entity="Knesset Members",
+    count_sql="SELECT COUNT(DISTINCT PersonID) FROM person_to_position_raw",
+    is_list=True,
+)
 def search_members(
     knesset_num=None,
     first_name=None,
     last_name=None,
-    role_query=None,
+    role=None,
     role_type=None,
-    faction_query=None,
+    party=None,
     person_id=None,
 ) -> list:
     """Search for Knesset members with dynamic filtering.
 
-    Filters (all ANDed): knesset_num, first_name, last_name, role_query
+    Filters (all ANDed): knesset_num, first_name, last_name, role
     (free text across roles/ministries/committees), role_type (position
-    category), faction_query (party name), person_id.
+    category), party (party/faction name), person_id.
 
     Returns a list of summary dicts sorted by (knesset_num, member_id).
     Each dict contains general info and a ``role_types`` list.
@@ -196,9 +216,9 @@ def search_members(
         knesset_num=knesset_num,
         first_name=first_name,
         last_name=last_name,
-        role_query=role_query,
+        role=role,
         role_ids=role_ids,
-        faction_query=faction_query,
+        party=party,
         person_id=person_id,
     )
 

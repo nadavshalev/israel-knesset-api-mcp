@@ -150,9 +150,9 @@ def main() -> None:
             knesset_num=args.knesset,
             first_name=args.first_name,
             last_name=args.last_name,
-            role_query=args.role,
+            role=args.role,
             role_type=args.role_type,
-            faction_query=args.party,
+            party=args.party,
             person_id=args.person_id,
         )
         _output(results)

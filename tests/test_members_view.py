@@ -65,7 +65,7 @@ class TestCrossCategoryFilters(unittest.TestCase):
     def test_ministers_from_likud_knesset_20(self):
         """שר + ליכוד in Knesset 20: 19 ministers."""
         results = search_members(
-            role_type="שר", faction_query="ליכוד", knesset_num=20
+            role_type="שר", party="ליכוד", knesset_num=20
         )
         self.assertEqual(len(results), 19)
         actual_ids = {m["member_id"] for m in results}
@@ -78,7 +78,7 @@ class TestCrossCategoryFilters(unittest.TestCase):
     def test_deputy_minister_bayit_yehudi_knesset_19(self):
         """סגן שר + הבית היהודי in Knesset 19: 2 deputy ministers."""
         results = search_members(
-            role_type="סגן שר", faction_query="הבית היהודי", knesset_num=19
+            role_type="סגן שר", party="הבית היהודי", knesset_num=19
         )
         self.assertEqual(len(results), 2)
         actual_ids = {m["member_id"] for m in results}
@@ -87,7 +87,7 @@ class TestCrossCategoryFilters(unittest.TestCase):
     def test_minister_meretz_knesset_20_empty(self):
         """שר + מרצ in Knesset 20: Meretz was in opposition, 0 results."""
         results = search_members(
-            role_type="שר", faction_query="מרצ", knesset_num=20
+            role_type="שר", party="מרצ", knesset_num=20
         )
         self.assertEqual(len(results), 0)
 
@@ -96,7 +96,7 @@ class TestPartyFilter(unittest.TestCase):
     def test_yesh_atid_knesset_19(self):
         """Yesh Atid had 19 members in Knesset 19."""
         results = search_members(
-            faction_query="יש עתיד", knesset_num=19
+            party="יש עתיד", knesset_num=19
         )
         self.assertEqual(len(results), 19)
         actual_ids = {m["member_id"] for m in results}
@@ -131,7 +131,7 @@ class TestNameFilters(unittest.TestCase):
 class TestRoleQuery(unittest.TestCase):
     def test_education_role_query_knesset_20(self):
         """Free text search for 'חינוך' across duties, ministries, committees."""
-        results = search_members(role_query="חינוך", knesset_num=20)
+        results = search_members(role="חינוך", knesset_num=20)
         self.assertEqual(len(results), 45)
 
 

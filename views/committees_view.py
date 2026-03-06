@@ -15,28 +15,43 @@ if str(ROOT.parent) not in sys.path:
     sys.path.insert(0, str(ROOT.parent))
 
 from core.db import connect_readonly
+from core.helpers import simple_date
+from core.mcp_meta import mcp_tool
+from core.search_meta import register_search
 
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _simple_date(date_str) -> str:
-    """Strip time component from an ISO datetime string."""
-    if not date_str:
-        return ""
-    s = str(date_str)
-    if "T" in s:
-        return s.split("T")[0]
-    if " " in s:
-        return s.split(" ")[0]
-    return s
+register_search({
+    "entity_key": "committees",
+    "count_sql": """
+        SELECT COUNT(*) FROM committee_raw
+        WHERE Name LIKE ?
+    """,
+    "search_sql": """
+        SELECT Id AS id, Name AS name, KnessetNum AS knesset_num,
+               CategoryDesc AS category
+        FROM committee_raw
+        WHERE Name LIKE ?
+        ORDER BY Id DESC
+        LIMIT ?
+    """,
+    "param_count": 1,
+})
 
 
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
+@mcp_tool(
+    name="search_committees",
+    description=(
+        "Search for Knesset committees. Returns summary info: name, type, "
+        "category, knesset number, current status. "
+        "Use get_committee for full detail on a single committee."
+    ),
+    entity="Committees",
+    count_sql="SELECT COUNT(*) FROM committee_raw",
+    is_list=True,
+)
 def search_committees(
     knesset_num=None,
     name=None,
@@ -107,8 +122,8 @@ def search_committees(
             "type": row["CommitteeTypeDesc"],
             "category": row["CategoryDesc"],
             "is_current": bool(row["IsCurrent"]),
-            "start_date": _simple_date(row["StartDate"]),
-            "end_date": _simple_date(row["FinishDate"]),
+            "start_date": simple_date(row["StartDate"]),
+            "end_date": simple_date(row["FinishDate"]),
             "parent_committee_id": row["ParentCommitteeID"],
             "parent_committee_name": row["CommitteeParentName"],
         })

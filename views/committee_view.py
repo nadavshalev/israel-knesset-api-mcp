@@ -23,38 +23,13 @@ if str(ROOT.parent) not in sys.path:
     sys.path.insert(0, str(ROOT.parent))
 
 from core.db import connect_readonly
+from core.helpers import simple_date, simple_time, format_person_name
+from core.mcp_meta import mcp_tool
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-def _simple_date(date_str) -> str:
-    """Strip time component from an ISO datetime string."""
-    if not date_str:
-        return ""
-    s = str(date_str)
-    if "T" in s:
-        return s.split("T")[0]
-    if " " in s:
-        return s.split(" ")[0]
-    return s
-
-
-def _simple_time(datetime_str) -> str:
-    """Extract HH:MM time from an ISO datetime string."""
-    if not datetime_str:
-        return ""
-    s = str(datetime_str)
-    if "T" in s:
-        time_part = s.split("T")[1]
-        if "+" in time_part:
-            time_part = time_part.split("+")[0]
-        return time_part[:5]
-    if " " in s:
-        time_part = s.split(" ")[1]
-        return time_part[:5]
-    return ""
 
 
 def _date_clauses(from_date, to_date, date_column="cs.StartDate"):
@@ -96,9 +71,9 @@ def _get_sessions(cursor, committee_id, from_date=None, to_date=None):
         {
             "session_id": row["Id"],
             "number": row["Number"],
-            "date": _simple_date(row["StartDate"]),
-            "start_time": _simple_time(row["StartDate"]),
-            "end_time": _simple_time(row["FinishDate"]),
+            "date": simple_date(row["StartDate"]),
+            "start_time": simple_time(row["StartDate"]),
+            "end_time": simple_time(row["FinishDate"]),
             "type": row["TypeDesc"],
             "status": row["StatusDesc"],
             "location": row["Location"],
@@ -149,11 +124,11 @@ def _get_members(cursor, committee_id, from_date=None, to_date=None):
     return [
         {
             "member_id": row["PersonID"],
-            "name": f"{row['FirstName']} {row['LastName']}",
+            "name": format_person_name(row['FirstName'], row['LastName']),
             "knesset_num": row["KnessetNum"],
             "role": row["PositionTitle"],
-            "start": _simple_date(row["StartDate"]),
-            "end": _simple_date(row["FinishDate"]),
+            "start": simple_date(row["StartDate"]),
+            "end": simple_date(row["FinishDate"]),
         }
         for row in rows
     ]
@@ -218,7 +193,7 @@ def _get_documents(cursor, committee_id, from_date=None, to_date=None):
             "format": row["ApplicationDesc"],
             "file_path": row["FilePath"],
             "session_id": row["session_id"],
-            "session_date": _simple_date(row["SessionDate"]),
+            "session_date": simple_date(row["SessionDate"]),
         }
         for row in rows
     ]
@@ -228,6 +203,17 @@ def _get_documents(cursor, committee_id, from_date=None, to_date=None):
 # Public API
 # ---------------------------------------------------------------------------
 
+@mcp_tool(
+    name="get_committee",
+    description=(
+        "Get full detail for a single committee by ID. Always returns "
+        "committee metadata. Use opt-in flags to include sessions, "
+        "members, bills, or documents. Date filters narrow the included "
+        "data to a time window."
+    ),
+    entity="Committees",
+    is_list=False,
+)
 def get_committee(
     committee_id: int,
     knesset_num: int | None = None,
@@ -283,8 +269,8 @@ def get_committee(
         "type": committee["CommitteeTypeDesc"],
         "category": committee["CategoryDesc"],
         "is_current": bool(committee["IsCurrent"]),
-        "start_date": _simple_date(committee["StartDate"]),
-        "end_date": _simple_date(committee["FinishDate"]),
+        "start_date": simple_date(committee["StartDate"]),
+        "end_date": simple_date(committee["FinishDate"]),
         "parent_committee_id": committee["ParentCommitteeID"],
         "parent_committee_name": committee["CommitteeParentName"],
         "email": committee["Email"],

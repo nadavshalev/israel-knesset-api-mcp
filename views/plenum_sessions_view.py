@@ -14,23 +14,50 @@ if str(ROOT.parent) not in sys.path:
     sys.path.insert(0, str(ROOT.parent))
 
 from core.db import connect_readonly
+from core.helpers import simple_date
+from core.mcp_meta import mcp_tool
+from core.search_meta import register_search
 
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _simple_date(date_str) -> str:
-    """Strip time component from an ISO datetime string."""
-    if not date_str:
-        return ""
-    return str(date_str).split("T")[0]
+register_search({
+    "entity_key": "plenums",
+    "count_sql": """
+        SELECT COUNT(DISTINCT ps.Id)
+        FROM plenum_session_raw ps
+        LEFT JOIN plm_session_item_raw psi
+               ON ps.Id = psi.PlenumSessionID
+        WHERE ps.Name LIKE ? OR psi.Name LIKE ?
+    """,
+    "search_sql": """
+        SELECT DISTINCT ps.Id AS id,
+               ps.Name AS name,
+               ps.KnessetNum AS knesset_num,
+               ps.StartDate AS date
+        FROM plenum_session_raw ps
+        LEFT JOIN plm_session_item_raw psi
+               ON ps.Id = psi.PlenumSessionID
+        WHERE ps.Name LIKE ? OR psi.Name LIKE ?
+        ORDER BY ps.Id DESC
+        LIMIT ?
+    """,
+    "param_count": 2,
+})
 
 
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
+@mcp_tool(
+    name="search_plenums",
+    description=(
+        "Search for Knesset plenum sessions. Returns summary info: "
+        "session ID, knesset number, name, date. "
+        "Use get_plenum for full detail including agenda items and documents."
+    ),
+    entity="Plenum Sessions",
+    count_sql="SELECT COUNT(*) FROM plenum_session_raw",
+    is_list=True,
+)
 def search_sessions(
     knesset_num=None,
     from_date=None,
@@ -107,7 +134,7 @@ def search_sessions(
             "session_id": row["Id"],
             "knesset_num": row["KnessetNum"],
             "name": row["Name"],
-            "date": _simple_date(row["StartDate"]),
+            "date": simple_date(row["StartDate"]),
         })
 
     conn.close()

@@ -17,9 +17,8 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from core.helpers import simple_date, simple_time
 from views.committee_view import (
-    _simple_date,
-    _simple_time,
     get_committee,
 )
 
@@ -31,36 +30,36 @@ from views.committee_view import (
 
 class TestSimpleDate(unittest.TestCase):
     def test_iso_datetime(self):
-        self.assertEqual(_simple_date("2019-01-30T10:00:00"), "2019-01-30")
+        self.assertEqual(simple_date("2019-01-30T10:00:00"), "2019-01-30")
 
     def test_space_datetime(self):
-        self.assertEqual(_simple_date("2019-01-30 10:00:00"), "2019-01-30")
+        self.assertEqual(simple_date("2019-01-30 10:00:00"), "2019-01-30")
 
     def test_date_only(self):
-        self.assertEqual(_simple_date("2019-01-30"), "2019-01-30")
+        self.assertEqual(simple_date("2019-01-30"), "2019-01-30")
 
     def test_empty_string(self):
-        self.assertEqual(_simple_date(""), "")
+        self.assertEqual(simple_date(""), "")
 
     def test_none(self):
-        self.assertEqual(_simple_date(None), "")
+        self.assertEqual(simple_date(None), "")
 
 
 class TestSimpleTime(unittest.TestCase):
     def test_iso_datetime(self):
-        self.assertEqual(_simple_time("2019-01-30T10:00:00"), "10:00")
+        self.assertEqual(simple_time("2019-01-30T10:00:00"), "10:00")
 
     def test_space_datetime(self):
-        self.assertEqual(_simple_time("2019-01-30 10:30:00"), "10:30")
+        self.assertEqual(simple_time("2019-01-30 10:30:00"), "10:30")
 
     def test_empty_string(self):
-        self.assertEqual(_simple_time(""), "")
+        self.assertEqual(simple_time(""), "")
 
     def test_none(self):
-        self.assertEqual(_simple_time(None), "")
+        self.assertEqual(simple_time(None), "")
 
     def test_with_timezone(self):
-        self.assertEqual(_simple_time("2019-01-30T10:00:00+02:00"), "10:00")
+        self.assertEqual(simple_time("2019-01-30T10:00:00+02:00"), "10:00")
 
 
 # ===================================================================

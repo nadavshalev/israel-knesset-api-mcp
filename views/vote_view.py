@@ -15,36 +15,24 @@ if str(ROOT.parent) not in sys.path:
     sys.path.insert(0, str(ROOT.parent))
 
 from core.db import connect_readonly
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _simple_date(date_str) -> str:
-    """Strip time component from an ISO datetime string."""
-    if not date_str:
-        return ""
-    return str(date_str).split("T")[0]
-
-
-def _simple_time(datetime_str) -> str:
-    """Extract HH:MM time from an ISO datetime string."""
-    if not datetime_str:
-        return ""
-    s = str(datetime_str)
-    if "T" in s:
-        time_part = s.split("T")[1]
-        if "+" in time_part:
-            time_part = time_part.split("+")[0]
-        return time_part[:5]
-    return ""
+from core.helpers import simple_date, simple_time
+from core.mcp_meta import mcp_tool
 
 
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
+@mcp_tool(
+    name="get_vote",
+    description=(
+        "Get full detail for a single plenum vote by ID. Includes vote "
+        "metadata, per-member breakdown (who voted for/against/abstained), "
+        "and related votes from the same session."
+    ),
+    entity="Plenum Votes",
+    is_list=False,
+)
 def get_vote(vote_id: int) -> dict | None:
     """Return full detail for a single vote, or None if not found.
 
@@ -110,8 +98,8 @@ def get_vote(vote_id: int) -> dict | None:
         "session_id": vote["SessionID"],
         "title": vote["VoteTitle"],
         "subject": vote["VoteSubject"],
-        "date": _simple_date(vote["VoteDateTime"]),
-        "time": _simple_time(vote["VoteDateTime"]),
+        "date": simple_date(vote["VoteDateTime"]),
+        "time": simple_time(vote["VoteDateTime"]),
         "is_accepted": bool(is_accepted) if is_accepted is not None else None,
         "total_for": total_for,
         "total_against": total_against,
@@ -192,8 +180,8 @@ def get_vote(vote_id: int) -> dict | None:
                 "vote_id": r["Id"],
                 "subject": r["VoteSubject"],
                 "for_option": r["ForOptionDesc"],
-                "date": _simple_date(r["VoteDateTime"]),
-                "time": _simple_time(r["VoteDateTime"]),
+                "date": simple_date(r["VoteDateTime"]),
+                "time": simple_time(r["VoteDateTime"]),
                 "is_accepted": bool(r_accepted) if r_accepted is not None else None,
                 "total_for": r_total_for,
                 "total_against": r_total_against,

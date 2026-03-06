@@ -15,6 +15,8 @@ if str(ROOT.parent) not in sys.path:
     sys.path.insert(0, str(ROOT.parent))
 
 from core.db import connect_readonly
+from core.helpers import simple_date, format_person_name
+from core.mcp_meta import mcp_tool
 
 
 # ---------------------------------------------------------------------------
@@ -54,13 +56,6 @@ def _is_transition_gov(knesset_num: int, gov_num: int) -> bool:
     return gov_num < primary_gov_mapping.get(knesset_num, 0)
 
 
-def _simple_date(date_str) -> str:
-    """Strip time component from an ISO datetime string."""
-    if not date_str:
-        return ""
-    return str(date_str).split("T")[0]
-
-
 # ---------------------------------------------------------------------------
 # Build — full member object for one (PersonID, KnessetNum)
 # ---------------------------------------------------------------------------
@@ -92,7 +87,7 @@ def _build_member_detail(cursor, person_id, knesset_num):
 
     member = {
         "member_id": person_id,
-        "name": f"{p_info['FirstName']} {p_info['LastName']}",
+        "name": format_person_name(p_info['FirstName'], p_info['LastName']),
         "gender": p_info["GenderDesc"],
         "knesset_num": knesset_num,
         "faction": [],
@@ -115,8 +110,8 @@ def _build_member_detail(cursor, person_id, knesset_num):
                 "title": display_title,
                 "ministry": row["GovMinistryName"],
                 "is_transition": _is_transition_gov(knesset_num, row["GovernmentNum"]),
-                "start": _simple_date(row["StartDate"]),
-                "end": _simple_date(row["FinishDate"]),
+                "start": simple_date(row["StartDate"]),
+                "end": simple_date(row["FinishDate"]),
             })
 
         elif cat == "committee":
@@ -124,16 +119,16 @@ def _build_member_detail(cursor, person_id, knesset_num):
                 "id": row["CommitteeID"],
                 "name": row["CommitteeName"],
                 "role": row["OfficialPositionTitle"],
-                "start": _simple_date(row["StartDate"]),
-                "end": _simple_date(row["FinishDate"]),
+                "start": simple_date(row["StartDate"]),
+                "end": simple_date(row["FinishDate"]),
             })
 
         else:  # parliamentary
             member["roles"]["parliamentary"].append({
                 "name": display_title,
                 "role": row["OfficialPositionTitle"],
-                "start": _simple_date(row["StartDate"]),
-                "end": _simple_date(row["FinishDate"]),
+                "start": simple_date(row["StartDate"]),
+                "end": simple_date(row["FinishDate"]),
             })
 
     return member
@@ -143,6 +138,16 @@ def _build_member_detail(cursor, person_id, knesset_num):
 # Public API
 # ---------------------------------------------------------------------------
 
+@mcp_tool(
+    name="get_member",
+    description=(
+        "Get full detail for a single Knesset member by ID. Includes "
+        "factions, government roles, committee memberships, and "
+        "parliamentary roles. If knesset_num is omitted, returns all terms."
+    ),
+    entity="Knesset Members",
+    is_list=False,
+)
 def get_member(member_id: int, knesset_num: int = None) -> dict | list | None:
     """Return full detail for a single member.
 

@@ -15,23 +15,23 @@ if str(ROOT.parent) not in sys.path:
     sys.path.insert(0, str(ROOT.parent))
 
 from core.db import connect_readonly
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _simple_date(date_str) -> str:
-    """Strip time component from an ISO datetime string."""
-    if not date_str:
-        return ""
-    return str(date_str).split("T")[0]
+from core.helpers import simple_date
+from core.mcp_meta import mcp_tool
 
 
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
+@mcp_tool(
+    name="get_plenum",
+    description=(
+        "Get full detail for a single plenum session by ID. Includes "
+        "session metadata, all agenda items, and documents."
+    ),
+    entity="Plenum Sessions",
+    is_list=False,
+)
 def get_session(session_id: int) -> dict | None:
     """Return full detail for a single plenum session, or None if not found.
 
@@ -80,7 +80,7 @@ def get_session(session_id: int) -> dict | None:
         "session_id": session["Id"],
         "knesset_num": session["KnessetNum"],
         "name": session["Name"],
-        "date": _simple_date(session["StartDate"]),
+        "date": simple_date(session["StartDate"]),
         "items": [
             {
                 "item_id": item["ItemID"],

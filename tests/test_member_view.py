@@ -12,10 +12,10 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from core.helpers import simple_date
 from views.member_view import (
     _is_transition_gov,
     _row_category,
-    _simple_date,
     get_member,
 )
 
@@ -58,16 +58,16 @@ class TestRowCategory(unittest.TestCase):
 
 class TestSimpleDate(unittest.TestCase):
     def test_valid_datetime(self):
-        self.assertEqual(_simple_date("2015-03-31T00:00:00"), "2015-03-31")
+        self.assertEqual(simple_date("2015-03-31T00:00:00"), "2015-03-31")
 
     def test_date_only(self):
-        self.assertEqual(_simple_date("2015-03-31"), "2015-03-31")
+        self.assertEqual(simple_date("2015-03-31"), "2015-03-31")
 
     def test_empty_string(self):
-        self.assertEqual(_simple_date(""), "")
+        self.assertEqual(simple_date(""), "")
 
     def test_none(self):
-        self.assertEqual(_simple_date(None), "")
+        self.assertEqual(simple_date(None), "")
 
 
 class TestIsTransitionGov(unittest.TestCase):

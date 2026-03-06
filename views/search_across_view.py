@@ -7,6 +7,10 @@ allowing the caller to decide which entity to drill into.
 Designed to be fast: uses LIKE on indexed name/title columns with LIMIT per
 entity.  Not meant for exhaustive results — use the per-entity search tools
 for that.
+
+Search SQL for each entity is defined in the respective view module via
+``register_search()`` from ``core.search_meta``, keeping all view-specific
+code in the view.
 """
 
 import sys
@@ -20,111 +24,34 @@ if str(ROOT.parent) not in sys.path:
 
 from config import SEARCH_ACROSS_TOP_N
 from core.db import connect_readonly
+from core.mcp_meta import mcp_tool
 
 
-# ---------------------------------------------------------------------------
-# Per-entity search definitions
-# ---------------------------------------------------------------------------
+def _get_entity_queries() -> list[dict]:
+    """Discover search entries from view modules.
 
-_ENTITY_QUERIES = [
-    {
-        "entity": "members",
-        "count_sql": """
-            SELECT COUNT(DISTINCT PersonID) FROM person_raw
-            WHERE FirstName LIKE ? OR LastName LIKE ?
-        """,
-        "search_sql": """
-            SELECT DISTINCT PersonID AS id,
-                   FirstName || ' ' || LastName AS name
-            FROM person_raw
-            WHERE FirstName LIKE ? OR LastName LIKE ?
-            ORDER BY LastName, FirstName
-            LIMIT ?
-        """,
-        "param_count": 2,
-    },
-    {
-        "entity": "bills",
-        "count_sql": """
-            SELECT COUNT(*) FROM bill_raw
-            WHERE Name LIKE ?
-        """,
-        "search_sql": """
-            SELECT b.Id AS id, b.Name AS name, b.KnessetNum AS knesset_num,
-                   b.SubTypeDesc AS sub_type,
-                   st.[Desc] AS status
-            FROM bill_raw b
-            LEFT JOIN status_raw st ON b.StatusID = st.Id
-            WHERE b.Name LIKE ?
-            ORDER BY b.Id DESC
-            LIMIT ?
-        """,
-        "param_count": 1,
-    },
-    {
-        "entity": "committees",
-        "count_sql": """
-            SELECT COUNT(*) FROM committee_raw
-            WHERE Name LIKE ?
-        """,
-        "search_sql": """
-            SELECT Id AS id, Name AS name, KnessetNum AS knesset_num,
-                   CategoryDesc AS category
-            FROM committee_raw
-            WHERE Name LIKE ?
-            ORDER BY Id DESC
-            LIMIT ?
-        """,
-        "param_count": 1,
-    },
-    {
-        "entity": "votes",
-        "count_sql": """
-            SELECT COUNT(*) FROM plenum_vote_raw
-            WHERE VoteTitle LIKE ? OR VoteSubject LIKE ?
-        """,
-        "search_sql": """
-            SELECT v.Id AS id, v.VoteTitle AS name,
-                   s.KnessetNum AS knesset_num,
-                   v.VoteDateTime AS date
-            FROM plenum_vote_raw v
-            LEFT JOIN plenum_session_raw s ON v.SessionID = s.Id
-            WHERE v.VoteTitle LIKE ? OR v.VoteSubject LIKE ?
-            ORDER BY v.Id DESC
-            LIMIT ?
-        """,
-        "param_count": 2,
-    },
-    {
-        "entity": "plenums",
-        "count_sql": """
-            SELECT COUNT(DISTINCT ps.Id)
-            FROM plenum_session_raw ps
-            LEFT JOIN plm_session_item_raw psi
-                   ON ps.Id = psi.PlenumSessionID
-            WHERE ps.Name LIKE ? OR psi.Name LIKE ?
-        """,
-        "search_sql": """
-            SELECT DISTINCT ps.Id AS id,
-                   ps.Name AS name,
-                   ps.KnessetNum AS knesset_num,
-                   ps.StartDate AS date
-            FROM plenum_session_raw ps
-            LEFT JOIN plm_session_item_raw psi
-                   ON ps.Id = psi.PlenumSessionID
-            WHERE ps.Name LIKE ? OR psi.Name LIKE ?
-            ORDER BY ps.Id DESC
-            LIMIT ?
-        """,
-        "param_count": 2,
-    },
-]
+    Import is deferred to avoid circular imports (views/__init__.py imports
+    this module, and the view modules that call register_search() are
+    siblings).
+    """
+    from core.search_meta import get_search_entries
+    return get_search_entries()
 
 
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
+@mcp_tool(
+    name="search_across",
+    description=(
+        "Search across all entity types (members, bills, committees, votes, "
+        "plenums) with a single query. Returns match counts and top results "
+        "per entity type. Use this as a triage tool to find which entity "
+        "type has relevant data, then drill down with specific search tools."
+    ),
+    entity="Cross-Entity Search",
+)
 def search_across(query: str, top_n: int | None = None) -> dict:
     """Search across all entity types for *query*.
 
@@ -151,9 +78,11 @@ def search_across(query: str, top_n: int | None = None) -> dict:
     conn = connect_readonly()
     cursor = conn.cursor()
 
+    entity_queries = _get_entity_queries()
+
     results = {}
-    for eq in _ENTITY_QUERIES:
-        entity = eq["entity"]
+    for eq in entity_queries:
+        entity = eq["entity_key"]
         n_params = eq["param_count"]
 
         # Count

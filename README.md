@@ -243,7 +243,7 @@ local_query.py            CLI for querying views (12 subcommands, JSON output)
 config.py                 Configuration (loaded from .env)
 core/
   db.py                   SQLite connection (read-only + writable), indexes, metadata
-  registry.py             Tool registry — descriptions, filters, handler mappings
+  mcp_meta.py             @mcp_tool decorator — attaches metadata to view functions
   rate_limit.py           Per-IP ASGI rate limiting middleware
   odata_client.py         CSV+OData fetching with pagination
   db_cli.py               Fetch CLI (13 subcommands)
@@ -261,7 +261,7 @@ tests/                    Integration tests against real data.sqlite
 ### Key design decisions
 
 - **Read-only queries**: all view functions use `connect_readonly()` (SQLite URI mode `?mode=ro`). Write access is only used once at startup for index creation.
-- **Registry-driven tools**: `core/registry.py` is the single source of truth for tool names, descriptions, parameter schemas, and handler mappings. Used by both the MCP server and `get_database_status`.
+- **Decorator-driven tools**: each view function is decorated with `@mcp_tool(...)` from `core/mcp_meta.py`, which attaches metadata (name, description, entity, count SQL, search SQL). The MCP server, `database_status`, and `search_across` all discover tools by inspecting decorated functions -- no central registry file needed.
 - **Explicit parameter schemas**: MCP tool handlers have dynamically constructed typed signatures so the MCP Inspector shows proper input fields (not generic kwargs).
 - Raw tables mirror OData fields exactly; views provide the structured query layer.
 - CSV-first fetching: bulk CSV download, then OData for rows newer than the CSV's max `LastUpdatedDate`.

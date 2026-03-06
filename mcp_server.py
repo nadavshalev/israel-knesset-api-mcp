@@ -1,8 +1,8 @@
 """MCP server for Knesset data API.
 
-Exposes all view functions as MCP tools over Streamable HTTP transport
-(stateless mode, JSON responses).  Includes per-IP rate limiting and
-response size validation.
+Exposes all @mcp_tool-decorated view functions as MCP tools over Streamable
+HTTP transport (stateless mode, JSON responses).  Includes per-IP rate
+limiting and response size validation.
 
 Usage::
 
@@ -29,13 +29,15 @@ from config import (
     MCP_HOST,
     MCP_PORT,
     RATE_LIMIT_PER_MINUTE,
-    SEARCH_ACROSS_TOP_N,
 )
 from core.db import connect_db, ensure_indexes
 from core.rate_limit import RateLimitMiddleware
-from core.registry import TOOLS
-from views.database_status_view import get_database_status
-from views.search_across_view import search_across
+
+# Import all view modules so @mcp_tool decorators and register_search()
+# calls run and populate their global registries.
+import views  # noqa: F401 — triggers views/__init__.py which imports all view modules
+
+from core.mcp_meta import get_all_tools
 
 
 # ---------------------------------------------------------------------------
@@ -93,53 +95,20 @@ def _validate_size(result, max_size: int | None = None) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Register tools from registry
+# Register all tools from decorated views
 # ---------------------------------------------------------------------------
 
-# Type map from registry filter types to Python types
-_TYPE_MAP = {
-    "integer": int,
-    "boolean": bool,
-    "string": str,
-}
+def _make_handler(view_fn):
+    """Create an async MCP handler that wraps a view function.
 
-
-def _make_handler(tool_entry: dict):
-    """Create an MCP tool handler with explicit typed parameters.
-
-    FastMCP infers the input schema from function signatures, so we
-    dynamically build a function with properly typed/named parameters
-    instead of using generic **kwargs.
+    The handler has the same typed parameters as the view function, plus
+    an extra ``max_results_size`` parameter.  FastMCP infers the MCP input
+    schema from the handler's signature.
     """
-    handler = tool_entry["handler"]
-    param_map = tool_entry["handler_param_map"]
-    filters = tool_entry["filters"]
+    view_sig = inspect.signature(view_fn)
 
-    # Build parameter list for the dynamic function
-    params = []
-    for f in filters:
-        py_type = _TYPE_MAP.get(f["type"], str)
-        if f.get("required"):
-            # Required param — no default
-            params.append(
-                inspect.Parameter(
-                    f["name"],
-                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                    annotation=py_type,
-                )
-            )
-        else:
-            # Optional param — default None
-            params.append(
-                inspect.Parameter(
-                    f["name"],
-                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                    default=None,
-                    annotation=Optional[py_type],
-                )
-            )
-
-    # Add max_results_size as optional int
+    # Build new parameter list: all view params + max_results_size
+    params = list(view_sig.parameters.values())
     params.append(
         inspect.Parameter(
             "max_results_size",
@@ -149,83 +118,30 @@ def _make_handler(tool_entry: dict):
         )
     )
 
-    # Build the actual handler that calls the view function
-    async def _impl(**kwargs) -> str:
+    async def handler(**kwargs) -> str:
         max_size = kwargs.pop("max_results_size", None)
-        view_kwargs = {}
-        for mcp_name, view_name in param_map.items():
-            if mcp_name in kwargs and kwargs[mcp_name] is not None:
-                view_kwargs[view_name] = kwargs[mcp_name]
-        result = handler(**view_kwargs)
+        # Remove None-valued optional params so the view uses its defaults
+        view_kwargs = {k: v for k, v in kwargs.items() if v is not None}
+        result = view_fn(**view_kwargs)
         return _validate_size(result, max_size)
 
-    # Create a new signature and attach it to the function
-    sig = inspect.Signature(params, return_annotation=str)
-    _impl.__signature__ = sig
-    _impl.__name__ = tool_entry["tool_name"]
-    _impl.__qualname__ = tool_entry["tool_name"]
-
-    # Build annotations dict for FastMCP introspection
-    _impl.__annotations__ = {p.name: p.annotation for p in params}
-    _impl.__annotations__["return"] = str
-
-    # Build docstring from filter descriptions
-    doc_lines = [tool_entry["description"], ""]
-    for f in filters:
-        req = " (required)" if f.get("required") else ""
-        doc_lines.append(f"  {f['name']}: {f['description']}{req}")
-    doc_lines.append(
-        f"  max_results_size: Max response size in characters "
-        f"(default: {MAX_RESULTS_SIZE})"
+    # Attach the combined signature so FastMCP can introspect it
+    handler.__signature__ = inspect.Signature(
+        params, return_annotation=str
     )
-    _impl.__doc__ = "\n".join(doc_lines)
+    handler.__annotations__ = {p.name: p.annotation for p in params}
+    handler.__annotations__["return"] = str
 
-    return _impl
+    return handler
 
 
-# Register all registry tools
-for _tool_entry in TOOLS:
-    _handler = _make_handler(_tool_entry)
+for _fn in get_all_tools():
+    _meta = _fn._mcp_tool
+    _handler = _make_handler(_fn)
     mcp.tool(
-        name=_tool_entry["tool_name"],
-        description=_tool_entry["description"],
+        name=_meta["name"],
+        description=_meta["description"],
     )(_handler)
-
-
-# ---------------------------------------------------------------------------
-# Additional tools: database_status and search_across
-# ---------------------------------------------------------------------------
-
-@mcp.tool(
-    name="get_database_status",
-    description=(
-        "Get database status: entity counts, available tools with their "
-        "filters, and last sync time. Call this first to understand what "
-        "data is available."
-    ),
-)
-async def tool_database_status() -> str:
-    result = get_database_status()
-    return _validate_size(result)
-
-
-@mcp.tool(
-    name="search_across",
-    description=(
-        "Search across all entity types (members, bills, committees, votes, "
-        "plenums) with a single query. Returns match counts and top results "
-        "per entity type. Use this as a triage tool to find which entity "
-        "type has relevant data, then drill down with specific search tools."
-    ),
-)
-async def tool_search_across(
-    query: str,
-    top_n: int | None = None,
-    max_results_size: int | None = None,
-) -> str:
-    """Search across all entities."""
-    result = search_across(query, top_n=top_n)
-    return _validate_size(result, max_results_size)
 
 
 # ---------------------------------------------------------------------------

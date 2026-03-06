@@ -14,23 +14,45 @@ if str(ROOT.parent) not in sys.path:
     sys.path.insert(0, str(ROOT.parent))
 
 from core.db import connect_readonly
+from core.helpers import simple_date
+from core.mcp_meta import mcp_tool
+from core.search_meta import register_search
 
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _simple_date(date_str) -> str:
-    """Strip time component from an ISO datetime string."""
-    if not date_str:
-        return ""
-    return str(date_str).split("T")[0]
+register_search({
+    "entity_key": "bills",
+    "count_sql": """
+        SELECT COUNT(*) FROM bill_raw
+        WHERE Name LIKE ?
+    """,
+    "search_sql": """
+        SELECT b.Id AS id, b.Name AS name, b.KnessetNum AS knesset_num,
+               b.SubTypeDesc AS sub_type,
+               st.[Desc] AS status
+        FROM bill_raw b
+        LEFT JOIN status_raw st ON b.StatusID = st.Id
+        WHERE b.Name LIKE ?
+        ORDER BY b.Id DESC
+        LIMIT ?
+    """,
+    "param_count": 1,
+})
 
 
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
+@mcp_tool(
+    name="search_bills",
+    description=(
+        "Search for Knesset bills (legislation). Returns summary info: "
+        "name, knesset number, type, status, committee, publication. "
+        "Use get_bill for full detail including plenum stages and votes."
+    ),
+    entity="Bills",
+    count_sql="SELECT COUNT(*) FROM bill_raw",
+    is_list=True,
+)
 def search_bills(
     knesset_num=None,
     name=None,
@@ -123,7 +145,7 @@ def search_bills(
             "status": row["StatusDesc"],
             "committee": row["CommitteeName"],
             "committee_id": row["CommitteeID"],
-            "publication_date": _simple_date(row["PublicationDate"]),
+            "publication_date": simple_date(row["PublicationDate"]),
             "publication_series": row["PublicationSeriesDesc"],
             "summary": row["SummaryLaw"],
         })

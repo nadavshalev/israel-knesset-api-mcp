@@ -54,9 +54,9 @@ class TestDatabaseStatusTools(unittest.TestCase):
         cls.status = get_database_status()
         cls.tools = cls.status["tools"]
 
-    def test_has_10_tools(self):
-        """Registry defines 10 tools (5 search + 5 detail)."""
-        self.assertEqual(len(self.tools), 10)
+    def test_has_12_tools(self):
+        """All @mcp_tool-decorated views: 5 search + 7 detail (5 entity + database_status + search_across)."""
+        self.assertEqual(len(self.tools), 12)
 
     def test_tool_has_required_keys(self):
         for tool in self.tools:
@@ -73,7 +73,7 @@ class TestDatabaseStatusTools(unittest.TestCase):
 
     def test_detail_tools_count(self):
         detail = [t for t in self.tools if t["type"] == "detail"]
-        self.assertEqual(len(detail), 5)
+        self.assertEqual(len(detail), 7)
 
     def test_tool_names(self):
         names = {t["name"] for t in self.tools}
@@ -83,16 +83,16 @@ class TestDatabaseStatusTools(unittest.TestCase):
             "search_plenums", "get_plenum",
             "search_bills", "get_bill",
             "search_votes", "get_vote",
+            "get_database_status", "search_across",
         }
         self.assertEqual(names, expected)
 
     def test_filters_structure(self):
-        """Each filter should have name, type, description, required."""
+        """Each filter should have name, type, required."""
         for tool in self.tools:
             for f in tool["filters"]:
                 self.assertIn("name", f)
                 self.assertIn("type", f)
-                self.assertIn("description", f)
                 self.assertIn("required", f)
 
 

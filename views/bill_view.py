@@ -14,30 +14,8 @@ if str(ROOT.parent) not in sys.path:
     sys.path.insert(0, str(ROOT.parent))
 
 from core.db import connect_readonly
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _simple_date(date_str) -> str:
-    """Strip time component from an ISO datetime string."""
-    if not date_str:
-        return ""
-    return str(date_str).split("T")[0]
-
-
-def _simple_time(datetime_str) -> str:
-    """Extract HH:MM time from an ISO datetime string."""
-    if not datetime_str:
-        return ""
-    s = str(datetime_str)
-    if "T" in s:
-        time_part = s.split("T")[1]
-        if "+" in time_part:
-            time_part = time_part.split("+")[0]
-        return time_part[:5]
-    return ""
+from core.helpers import simple_date
+from core.mcp_meta import mcp_tool
 
 
 # ---------------------------------------------------------------------------
@@ -99,7 +77,7 @@ def _get_stage_vote(cursor, bill_id, session_id):
     return {
         "vote_id": row["Id"],
         "title": row["VoteTitle"] or "",
-        "date": _simple_date(row["VoteDateTime"]),
+        "date": simple_date(row["VoteDateTime"]),
         "is_accepted": bool(is_accepted) if is_accepted is not None else None,
         "total_for": total_for,
         "total_against": total_against,
@@ -111,6 +89,15 @@ def _get_stage_vote(cursor, bill_id, session_id):
 # Public API
 # ---------------------------------------------------------------------------
 
+@mcp_tool(
+    name="get_bill",
+    description=(
+        "Get full detail for a single bill by ID. Includes bill metadata, "
+        "plenum stages (readings), and vote results per stage."
+    ),
+    entity="Bills",
+    is_list=False,
+)
 def get_bill(bill_id: int) -> dict | None:
     """Return full detail for a single bill, or None if not found.
 
@@ -163,7 +150,7 @@ def get_bill(bill_id: int) -> dict | None:
     stages = []
     for row in stage_rows:
         stage = {
-            "date": _simple_date(row["StartDate"]),
+            "date": simple_date(row["StartDate"]),
             "status": row["StageStatusDesc"],
             "session_id": row["session_id"],
         }
@@ -182,7 +169,7 @@ def get_bill(bill_id: int) -> dict | None:
         "status": bill["StatusDesc"],
         "committee": bill["CommitteeName"],
         "committee_id": bill["CommitteeID"],
-        "publication_date": _simple_date(bill["PublicationDate"]),
+        "publication_date": simple_date(bill["PublicationDate"]),
         "publication_series": bill["PublicationSeriesDesc"],
         "summary": bill["SummaryLaw"],
         "stages": stages,
