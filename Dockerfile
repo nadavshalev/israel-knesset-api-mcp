@@ -11,3 +11,7 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 COPY . /app
 
 RUN chmod +x /app/docker/mcp-entrypoint.sh /app/docker/updater-entrypoint.sh /app/docker/mcp-healthcheck.sh
+
+# No default CMD - set the command in the VPS per service:
+#   MCP server:  /app/docker/mcp-entrypoint.sh
+#   Data updater: /app/docker/updater-entrypoint.sh

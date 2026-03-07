@@ -34,15 +34,10 @@ npx @modelcontextprotocol/inspector
 
 # ------------------------------------------
 # PostgreSQL
-## SSH into the PostgreSQL server
-```bash
-ssh -p 22222 service_hudmhfx6yd2u@default-server-u5xbns.sliplane.app
-```
+## Connect Commands
+* SSH into the PostgreSQL server: `ssh -p 22222 service_hudmhfx6yd2u@default-server-u5xbns.sliplane.app`
 
-## connect to the PostgreSQL database using psql
-```bash
-psql -h localhost -U postgres -d mydb -W
-```
+* run psql: `psql -h localhost -U postgres -d mydb -W`
 
 ## psql commands
 * list databases: `\l`
@@ -50,4 +45,13 @@ psql -h localhost -U postgres -d mydb -W
 * list tables: `\dt+`
 * describe a table: `\d+ table_name`
 * run a query: `SELECT * FROM table_name LIMIT 10;`
+* exit psql: `\q`
+
+# ------------------------------------------
+# Docker
+## Commands
+* Run docer-compose: `sudo docker compose up -d --build`
+* View logs in real-time: `sudo docker compose logs -f`
+* Stop containers: `sudo docker compose down`
+* Restart containers: `sudo docker compose restart`
 
