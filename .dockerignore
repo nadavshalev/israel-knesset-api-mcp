@@ -1,0 +1,13 @@
+.git
+.gitignore
+.pytest_cache
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.sqlite
+data.sqlite
+tests
+my_bash_helper.md
+

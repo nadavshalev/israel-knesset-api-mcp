@@ -24,6 +24,50 @@ python mcp_server.py
 
 The server starts at `http://0.0.0.0:8000/mcp` by default.
 
+## Docker Deployment (VPS)
+
+This repository includes Docker Compose for running:
+
+- `mcp`: the MCP HTTP server
+- `updater`: a background worker that runs `update_all.py` every `UPDATE_CYCLE_MINUTES`
+
+### 1) Configure environment
+
+```bash
+cp .env.example .env
+```
+
+Set your external PostgreSQL credentials/host in `.env`:
+
+- `POSTGRES_PATH`
+- `POSTGRES_PORT`
+- `POSTGRES_DB`
+- `POSTGRES_USER`
+- `POSTGRES_PASSWORD`
+
+Set updater cycle:
+
+- `UPDATE_CYCLE_MINUTES` (for example `30`)
+- `UPDATE_RUN_ON_START` (`true` or `false`)
+
+### 2) Build and start
+
+```bash
+docker compose up -d --build
+```
+
+### 3) Verify
+
+```bash
+docker compose ps
+docker compose logs -f mcp
+docker compose logs -f updater
+```
+
+MCP endpoint will be available at:
+
+`http://<your-vps-ip>:${MCP_PORT}/mcp`
+
 ## MCP Server
 
 The server exposes 12 tools over Streamable HTTP (stateless mode, JSON responses). Any MCP-compatible client can connect to it.
