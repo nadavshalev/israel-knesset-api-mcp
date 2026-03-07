@@ -26,48 +26,11 @@ if str(ROOT) not in sys.path:
 
 from core.db import connect_db, ensure_indexes
 
-from tables import persons
-from tables import positions
-from tables import person_to_position
-from tables import plenum_session
-from tables import plm_session_item
-from tables import document_plenum_session
-from tables import status
-from tables import bill
-from tables import committee
-from tables import committee_session
-from tables import document_committee_session
-from tables import cmt_session_item
-from tables import plenum_vote
-from tables import plenum_vote_result
+from tables import TableSpec, get_table_spec, get_table_specs
 
 
 # ---------------------------------------------------------------------------
-# Table registry — order matters (reference tables first, dependents later)
-# ---------------------------------------------------------------------------
-
-TABLES = [
-    # Reference / dimension tables
-    ("persons",                      persons,                      "person_raw"),
-    ("positions",                    positions,                    "position_raw"),
-    ("status",                       status,                       "status_raw"),
-    # People → positions
-    ("person_to_position",           person_to_position,           "person_to_position_raw"),
-    # Bills
-    ("bill",                         bill,                         "bill_raw"),
-    # Committees
-    ("committee",                    committee,                    "committee_raw"),
-    ("committee_session",            committee_session,            "committee_session_raw"),
-    ("document_committee_session",   document_committee_session,   "document_committee_session_raw"),
-    ("cmt_session_item",             cmt_session_item,             "cmt_session_item_raw"),
-    # Plenum
-    ("plenum_session",               plenum_session,               "plenum_session_raw"),
-    ("plm_session_item",             plm_session_item,             "plm_session_item_raw"),
-    ("document_plenum_session",      document_plenum_session,      "document_plenum_session_raw"),
-    # Votes (headers then per-MK results)
-    ("plenum_vote",                  plenum_vote,                  "plenum_vote_raw"),
-    ("plenum_vote_result",           plenum_vote_result,           "plenum_vote_result_raw"),
-]
+TABLES: tuple[TableSpec, ...] = get_table_specs()
 
 
 # ---------------------------------------------------------------------------
@@ -140,16 +103,16 @@ def _format_duration(seconds: float) -> str:
 def show_status(conn):
     """Print sync status for all tables."""
     meta = _get_all_metadata(conn)
-    valid_names = {raw_name for _, _, raw_name in TABLES}
+    valid_names = {spec.table_name for spec in TABLES}
 
     print(f"\n{'Table':<40} {'Rows':>10}   {'Last Sync':<22} {'Cutoff':<22}")
     print("-" * 100)
-    for label, _module, raw_name in TABLES:
-        count = _get_row_count(conn, raw_name)
-        sync_at, cutoff = meta.get(raw_name, (None, None))
+    for spec in TABLES:
+        count = _get_row_count(conn, spec.table_name)
+        sync_at, cutoff = meta.get(spec.table_name, (None, None))
         sync_str = sync_at[:19] if sync_at else "never"
         cutoff_str = cutoff[:19] if cutoff else "n/a"
-        print(f"{raw_name:<40} {count:>10,}   {sync_str:<22} {cutoff_str:<22}")
+        print(f"{spec.table_name:<40} {count:>10,}   {sync_str:<22} {cutoff_str:<22}")
 
     # Warn about stale metadata rows
     stale = sorted(k for k in meta if k not in valid_names)
@@ -163,7 +126,7 @@ def show_status(conn):
 
 def repair_metadata(conn):
     """Remove metadata rows for tables that no longer exist in TABLES."""
-    valid_names = {raw_name for _, _, raw_name in TABLES}
+    valid_names = {spec.table_name for spec in TABLES}
     meta = _get_all_metadata(conn)
     stale = sorted(k for k in meta if k not in valid_names)
 
@@ -191,62 +154,62 @@ def update_tables(conn, table_filter=None, full=False, dry_run=False):
     """Run incremental (or full) updates on selected tables."""
     # Determine which tables to update
     if table_filter:
-        selected = []
-        valid_labels = {label for label, _, _ in TABLES}
+        selected: list[TableSpec] = []
         for name in table_filter:
-            matches = [(l, m, r) for l, m, r in TABLES if l == name]
-            if not matches:
-                print(f"ERROR: Unknown table '{name}'. Valid names: {', '.join(sorted(valid_labels))}")
+            try:
+                spec = get_table_spec(name)
+            except KeyError as exc:
+                print(f"ERROR: {exc.args[0]}")
                 sys.exit(1)
-            selected.extend(matches)
+            selected.append(spec)
     else:
         selected = list(TABLES)
 
     total_start = time.time()
     results = []
 
-    for label, module, raw_name in selected:
+    for spec in selected:
         # Determine the since value
         if full:
             since = None
             mode = "full"
-        elif raw_name == "plenum_vote_result_raw":
+        elif spec.cursor_mode == "id":
             # This table uses Id-based cursor internally;
             # passing since=None makes it resume from MAX(Id) in the DB.
             since = None
             mode = "incremental (Id-based)"
         else:
-            since = _get_cutoff(conn, raw_name)
+            since = _get_cutoff(conn, spec.table_name)
             if since:
                 mode = f"incremental (since {since[:19]})"
             else:
                 mode = "initial load (no prior sync)"
 
-        row_count_before = _get_row_count(conn, raw_name)
+        row_count_before = _get_row_count(conn, spec.table_name)
 
-        print(f"\n--- {label} ({raw_name}) ---")
+        print(f"\n--- {spec.label} ({spec.table_name}) ---")
         print(f"  Mode: {mode}")
         print(f"  Rows before: {row_count_before:,}")
 
         if dry_run:
             print("  [dry-run] Skipping fetch")
-            results.append((label, 0, 0.0))
+            results.append((spec.label, 0, 0.0))
             continue
 
         t0 = time.time()
         try:
-            module.fetch_rows(conn, since=since)
+            spec.module.fetch_rows(conn, since=since)
         except Exception as e:
             print(f"  ERROR: {e}")
-            results.append((label, 0, time.time() - t0))
+            results.append((spec.label, 0, time.time() - t0))
             continue
         elapsed = time.time() - t0
 
-        row_count_after = _get_row_count(conn, raw_name)
+        row_count_after = _get_row_count(conn, spec.table_name)
         delta = row_count_after - row_count_before
         print(f"  Rows after:  {row_count_after:,}  (delta: {delta:+,})")
         print(f"  Time: {_format_duration(elapsed)}")
-        results.append((label, delta, elapsed))
+        results.append((spec.label, delta, elapsed))
 
     # Rebuild indexes after all fetches
     if not dry_run:
@@ -276,7 +239,7 @@ def parse_args():
     parser.add_argument(
         "--table", action="append", dest="tables", default=None,
         help="Update only specific table(s). Can be repeated. "
-             "Valid names: " + ", ".join(l for l, _, _ in TABLES),
+             "Valid names: " + ", ".join(spec.label for spec in TABLES),
     )
     parser.add_argument(
         "--full", action="store_true",

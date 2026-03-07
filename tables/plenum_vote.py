@@ -7,6 +7,9 @@ from core.db import update_metadata
 
 ODATA_NAME = "KNS_PlenumVote"
 TABLE_NAME = "plenum_vote_raw"
+ENSURE_INDEXES = [
+    "CREATE INDEX IF NOT EXISTS idx_vote_title ON plenum_vote_raw (VoteTitle)",
+]
 CSV_URL = "https://production.oknesset.org/pipelines/data/votes/view_vote_rslts_hdr_approved/view_vote_rslts_hdr_approved.csv"
 
 

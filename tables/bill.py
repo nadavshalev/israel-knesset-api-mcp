@@ -7,6 +7,10 @@ from core.db import update_metadata
 
 ODATA_NAME = "KNS_Bill"
 TABLE_NAME = "bill_raw"
+ENSURE_INDEXES = [
+    "CREATE INDEX IF NOT EXISTS idx_bill_knessetnum ON bill_raw (KnessetNum)",
+    "CREATE INDEX IF NOT EXISTS idx_bill_committeeid ON bill_raw (CommitteeID)",
+]
 CSV_URL = "https://production.oknesset.org/pipelines/data/bills/kns_bill/kns_bill.csv"
 
 
@@ -38,7 +42,6 @@ def create_table(conn) -> None:
         )
         """
     )
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_bill_knessetnum ON bill_raw (KnessetNum)")
     conn.commit()
 
 

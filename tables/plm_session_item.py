@@ -7,6 +7,10 @@ from core.db import update_metadata
 
 ODATA_NAME = "KNS_PlmSessionItem"
 TABLE_NAME = "plm_session_item_raw"
+ENSURE_INDEXES = [
+    "CREATE INDEX IF NOT EXISTS idx_psi_itemid ON plm_session_item_raw (ItemID)",
+    "CREATE INDEX IF NOT EXISTS idx_psi_session ON plm_session_item_raw (PlenumSessionID)",
+]
 CSV_URL = "https://production.oknesset.org/pipelines/data/plenum/kns_plmsessionitem/kns_plmsessionitem.csv"
 
 
@@ -29,8 +33,6 @@ def create_table(conn) -> None:
         )
         """
     )
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_psi_itemid ON plm_session_item_raw (ItemID)")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_psi_session ON plm_session_item_raw (PlenumSessionID)")
     conn.commit()
 
 

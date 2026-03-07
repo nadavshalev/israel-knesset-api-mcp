@@ -7,6 +7,9 @@ from core.db import update_metadata
 
 ODATA_NAME = "KNS_Committee"
 TABLE_NAME = "committee_raw"
+ENSURE_INDEXES = [
+    "CREATE INDEX IF NOT EXISTS idx_committee_knessetnum ON committee_raw (KnessetNum)",
+]
 CSV_URL = "https://production.oknesset.org/pipelines/data/committees/kns_committee/kns_committee.csv"
 
 

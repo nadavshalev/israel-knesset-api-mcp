@@ -7,6 +7,7 @@ from core.db import update_metadata
 
 ODATA_NAME = "KNS_DocumentPlenumSession"
 TABLE_NAME = "document_plenum_session_raw"
+ENSURE_INDEXES: list[str] = []
 CSV_URL = "https://production.oknesset.org/pipelines/data/plenum/kns_documentplenumsession/kns_documentplenumsession.csv"
 
 

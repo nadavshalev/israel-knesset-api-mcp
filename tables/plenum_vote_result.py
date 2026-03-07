@@ -8,6 +8,10 @@ from core.db import update_metadata
 
 ODATA_NAME = "KNS_PlenumVoteResult"
 TABLE_NAME = "plenum_vote_result_raw"
+CURSOR_MODE = "id"
+ENSURE_INDEXES = [
+    "CREATE INDEX IF NOT EXISTS idx_pvr_vote_id ON plenum_vote_result_raw (VoteID)",
+]
 
 
 def _normalize_dt(value: Optional[str]) -> Optional[str]:
@@ -42,10 +46,6 @@ def create_table(conn) -> None:
             fetched_at TEXT
         )
         """
-    )
-    # Index for the most common query pattern: all MKs for a given vote
-    cur.execute(
-        "CREATE INDEX IF NOT EXISTS idx_pvr_vote_id ON plenum_vote_result_raw (VoteID)"
     )
     conn.commit()
 

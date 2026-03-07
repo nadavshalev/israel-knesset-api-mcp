@@ -7,6 +7,9 @@ from core.db import update_metadata
 
 ODATA_NAME = "KNS_DocumentCommitteeSession"
 TABLE_NAME = "document_committee_session_raw"
+ENSURE_INDEXES = [
+    "CREATE INDEX IF NOT EXISTS idx_dcs_session ON document_committee_session_raw (CommitteeSessionID)",
+]
 CSV_URL = "https://production.oknesset.org/pipelines/data/committees/kns_documentcommitteesession/kns_documentcommitteesession.csv"
 
 
@@ -28,7 +31,6 @@ def create_table(conn) -> None:
         )
         """
     )
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_dcs_session ON document_committee_session_raw (CommitteeSessionID)")
     conn.commit()
 
 

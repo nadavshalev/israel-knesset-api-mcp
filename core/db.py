@@ -123,26 +123,14 @@ def return_conn(conn) -> None:
 
 
 def ensure_indexes(conn) -> None:
-    """Create indexes needed by views.  Idempotent (IF NOT EXISTS)."""
+    """Create indexes declared by table modules. Idempotent (IF NOT EXISTS)."""
+    # Import lazily to avoid circular imports with table modules.
+    from tables import get_table_specs
+
     cur = conn.cursor()
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_psi_itemid ON plm_session_item_raw (ItemID)")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_psi_session ON plm_session_item_raw (PlenumSessionID)")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_ps_startdate ON plenum_session_raw (StartDate)")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_ps_knessetnum ON plenum_session_raw (KnessetNum)")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_bill_knessetnum ON bill_raw (KnessetNum)")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_pvr_vote_id ON plenum_vote_result_raw (VoteID)")
-    # Committee indexes
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_committee_knessetnum ON committee_raw (KnessetNum)")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_cs_committee ON committee_session_raw (CommitteeID)")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_cs_startdate ON committee_session_raw (StartDate)")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_csi_session ON cmt_session_item_raw (CommitteeSessionID)")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_csi_itemtype ON cmt_session_item_raw (ItemTypeID)")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_dcs_session ON document_committee_session_raw (CommitteeSessionID)")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_ptp_committeeid ON person_to_position_raw (CommitteeID)")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_bill_committeeid ON bill_raw (CommitteeID)")
-    # Name indexes for search_across
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_person_lastname ON person_raw (LastName)")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_vote_title ON plenum_vote_raw (VoteTitle)")
+    for spec in get_table_specs():
+        for sql in getattr(spec.module, "ENSURE_INDEXES", []):
+            cur.execute(sql)
     cur.close()
     conn.commit()
 

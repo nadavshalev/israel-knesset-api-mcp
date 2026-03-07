@@ -7,6 +7,7 @@ from core.db import update_metadata
 
 ODATA_NAME = "KNS_Position"
 TABLE_NAME = "position_raw"
+ENSURE_INDEXES: list[str] = []
 CSV_URL = "https://production.oknesset.org/pipelines/data/members/kns_position/kns_position.csv"
 
 '''

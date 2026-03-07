@@ -7,6 +7,7 @@ from core.db import update_metadata
 
 ODATA_NAME = "KNS_Status"
 TABLE_NAME = "status_raw"
+ENSURE_INDEXES: list[str] = []
 
 
 def create_table(conn) -> None:
