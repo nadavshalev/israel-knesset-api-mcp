@@ -10,5 +10,4 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY . /app
 
-RUN chmod +x /app/docker/mcp-entrypoint.sh /app/docker/updater-entrypoint.sh
-
+RUN chmod +x /app/docker/mcp-entrypoint.sh /app/docker/updater-entrypoint.sh /app/docker/mcp-healthcheck.sh
