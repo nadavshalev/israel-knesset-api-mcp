@@ -29,7 +29,7 @@ The server starts at `http://0.0.0.0:8000/mcp` by default.
 This repository includes Docker Compose for running:
 
 - `mcp`: the MCP HTTP server
-- `updater`: a background worker that runs `update_all.py` every `UPDATE_CYCLE_MINUTES`
+- `updater`: a background worker that runs `update_all.py` on a day/hour schedule
 
 ### 1) Configure environment
 
@@ -47,7 +47,8 @@ Set your external PostgreSQL credentials/host in `.env`:
 
 Set updater cycle:
 
-- `UPDATE_CYCLE_MINUTES` (for example `30`)
+- `UPDATE_CYCLE_DAYS` (for example `1`)
+- `UPDATE_HOUR_IN_DAY` (0-23, for example `3`)
 - `UPDATE_RUN_ON_START` (`true` or `false`)
 
 ### 2) Build and start

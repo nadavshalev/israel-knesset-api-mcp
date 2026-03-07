@@ -70,11 +70,11 @@ check_updater_logs() {
   local logs
   logs="$(docker compose logs --no-color --tail=200 "$UPDATER_SERVICE" 2>&1 || true)"
 
-  echo "$logs" | rg -q "Updater cycle is every" || fail "Updater did not print cycle configuration"
+  echo "$logs" | rg -q "Updater schedule:" || fail "Updater did not print schedule configuration"
   echo "$logs" | rg -q "Running update_all.py" || fail "Updater has not attempted update_all.py yet"
 
-  if echo "$logs" | rg -q "ERROR: UPDATE_CYCLE_MINUTES"; then
-    fail "Updater has invalid UPDATE_CYCLE_MINUTES configuration"
+  if echo "$logs" | rg -q "ERROR: UPDATE_CYCLE_DAYS|ERROR: UPDATE_HOUR_IN_DAY"; then
+    fail "Updater has invalid scheduler configuration (UPDATE_CYCLE_DAYS/UPDATE_HOUR_IN_DAY)"
   fi
 
   pass "Updater loop is active and update_all.py was triggered"
