@@ -25,6 +25,7 @@ from mcp.server.fastmcp import FastMCP
 
 from config import (
     MAX_OUTPUT_TOKENS,
+    MAX_OUTPUT_TOKENS_HARD_CAP,
     MCP_ENDPOINT,
     MCP_HOST,
     MCP_PORT,
@@ -77,12 +78,26 @@ mcp = FastMCP(
 # Response size validation
 # ---------------------------------------------------------------------------
 
-def _validate_size(result, max_size: int | None = None) -> str:
+def _resolve_output_limit(requested_limit: int | None) -> int:
+    """Resolve effective response limit from server defaults and client request.
+
+    Policy:
+    - If client omits/invalidates the value -> use server default.
+    - Client can only increase the limit (not decrease below default).
+    - Effective limit is capped by MAX_OUTPUT_TOKENS_HARD_CAP.
+    """
+    limit = MAX_OUTPUT_TOKENS
+    if isinstance(requested_limit, int) and requested_limit > 0:
+        limit = max(limit, requested_limit)
+    return min(limit, MAX_OUTPUT_TOKENS_HARD_CAP)
+
+
+def _validate_size(result, requested_limit: int | None = None) -> str:
     """Serialize result to JSON and check size.
 
     Returns the JSON string if within limits, or an error message if too large.
     """
-    limit = max_size if max_size is not None else MAX_OUTPUT_TOKENS
+    limit = _resolve_output_limit(requested_limit)
     text = json.dumps(result, ensure_ascii=False, default=str)
     if len(text) > limit:
         return json.dumps({
@@ -119,11 +134,11 @@ def _make_handler(view_fn):
     )
 
     async def handler(**kwargs) -> str:
-        max_size = kwargs.pop("max_output_tokens", None)
+        requested_limit = kwargs.pop("max_output_tokens", None)
         # Remove None-valued optional params so the view uses its defaults
         view_kwargs = {k: v for k, v in kwargs.items() if v is not None}
         result = view_fn(**view_kwargs)
-        return _validate_size(result, max_size)
+        return _validate_size(result, requested_limit)
 
     # Attach the combined signature so FastMCP can introspect it
     handler.__signature__ = inspect.Signature(
