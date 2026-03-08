@@ -28,5 +28,5 @@ MCP_ENDPOINT = os.getenv("MCP_ENDPOINT", "/mcp")
 RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "60"))
 
 # Response limits
-MAX_RESULTS_SIZE = int(os.getenv("MAX_RESULTS_SIZE", "50000"))
+MAX_OUTPUT_TOKENS = int(os.getenv("MAX_OUTPUT_TOKENS", "50000"))
 SEARCH_ACROSS_TOP_N = int(os.getenv("SEARCH_ACROSS_TOP_N", "5"))

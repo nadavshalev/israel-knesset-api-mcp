@@ -108,7 +108,7 @@ Start with `get_database_status` to see what data is available, or use `search_a
 
 ### Response Size Limits
 
-Every tool accepts an optional `max_results_size` parameter (max characters in the JSON response). If a response exceeds the limit, an error is returned with a hint to add more filters. The global default is set in `.env` (`MAX_RESULTS_SIZE`, default 50,000 chars).
+Every tool accepts an optional `max_output_tokens` parameter (max characters in the JSON response). If a response exceeds the limit, an error is returned with a hint to add more filters. The global default is set in `.env` (`MAX_OUTPUT_TOKENS`, default 50,000 chars).
 
 ### Rate Limiting
 
@@ -125,7 +125,7 @@ All configuration is loaded from `.env` (see `.env.example`):
 | `MCP_PORT` | `8000` | Server port |
 | `MCP_ENDPOINT` | `/mcp` | MCP endpoint path |
 | `RATE_LIMIT_PER_MINUTE` | `60` | Max requests per IP per minute |
-| `MAX_RESULTS_SIZE` | `50000` | Default max response size (characters) |
+| `MAX_OUTPUT_TOKENS` | `50000` | Default max response size (characters) |
 | `SEARCH_ACROSS_TOP_N` | `5` | Top results per entity in `search_across` |
 
 ### Running with uvicorn

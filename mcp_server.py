@@ -24,7 +24,7 @@ if str(ROOT) not in sys.path:
 from mcp.server.fastmcp import FastMCP
 
 from config import (
-    MAX_RESULTS_SIZE,
+    MAX_OUTPUT_TOKENS,
     MCP_ENDPOINT,
     MCP_HOST,
     MCP_PORT,
@@ -82,14 +82,14 @@ def _validate_size(result, max_size: int | None = None) -> str:
 
     Returns the JSON string if within limits, or an error message if too large.
     """
-    limit = max_size if max_size is not None else MAX_RESULTS_SIZE
+    limit = max_size if max_size is not None else MAX_OUTPUT_TOKENS
     text = json.dumps(result, ensure_ascii=False, default=str)
     if len(text) > limit:
         return json.dumps({
             "error": "Response too large",
             "size": len(text),
             "limit": limit,
-            "hint": "Add more filters to narrow results, or reduce max_results_size.",
+            "hint": "Add more filters to narrow results, or reduce max_output_tokens.",
         }, ensure_ascii=False)
     return text
 
@@ -102,16 +102,16 @@ def _make_handler(view_fn):
     """Create an async MCP handler that wraps a view function.
 
     The handler has the same typed parameters as the view function, plus
-    an extra ``max_results_size`` parameter.  FastMCP infers the MCP input
+    an extra ``max_output_tokens`` parameter.  FastMCP infers the MCP input
     schema from the handler's signature.
     """
     view_sig = inspect.signature(view_fn)
 
-    # Build new parameter list: all view params + max_results_size
+    # Build new parameter list: all view params + max_output_tokens
     params = list(view_sig.parameters.values())
     params.append(
         inspect.Parameter(
-            "max_results_size",
+            "max_output_tokens",
             inspect.Parameter.POSITIONAL_OR_KEYWORD,
             default=None,
             annotation=Optional[int],
@@ -119,7 +119,7 @@ def _make_handler(view_fn):
     )
 
     async def handler(**kwargs) -> str:
-        max_size = kwargs.pop("max_results_size", None)
+        max_size = kwargs.pop("max_output_tokens", None)
         # Remove None-valued optional params so the view uses its defaults
         view_kwargs = {k: v for k, v in kwargs.items() if v is not None}
         result = view_fn(**view_kwargs)
