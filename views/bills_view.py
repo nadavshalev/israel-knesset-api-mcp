@@ -13,8 +13,11 @@ if str(ROOT) not in sys.path:
 if str(ROOT.parent) not in sys.path:
     sys.path.insert(0, str(ROOT.parent))
 
+from typing import Annotated
+from pydantic import Field
+
 from core.db import connect_readonly
-from core.helpers import simple_date
+from core.helpers import simple_date, normalize_inputs
 from core.mcp_meta import mcp_tool
 from core.search_meta import register_search
 
@@ -54,13 +57,13 @@ register_search({
     is_list=True,
 )
 def search_bills(
-    knesset_num=None,
-    name=None,
-    status=None,
-    sub_type=None,
-    from_date=None,
-    to_date=None,
-    date=None,
+    knesset_num: Annotated[int | None, Field(description="Filter by Knesset number")] = None,
+    name: Annotated[str | None, Field(description="Bill name contains text")] = None,
+    status: Annotated[str | None, Field(description="Bill status description contains text")] = None,
+    sub_type: Annotated[str | None, Field(description="Bill sub-type: פרטית (private), ממשלתית (government), ועדה (committee)")] = None,
+    from_date: Annotated[str | None, Field(description="Start of date range (YYYY-MM-DD) for plenum appearance")] = None,
+    to_date: Annotated[str | None, Field(description="End of date range (YYYY-MM-DD) for plenum appearance")] = None,
+    date: Annotated[str | None, Field(description="Exact date (YYYY-MM-DD) for plenum appearance")] = None,
 ) -> list:
     """Search for bills and return summary metadata (no stages/votes).
 
@@ -73,6 +76,15 @@ def search_bills(
 
     Returns a list of bill summary dicts sorted by (knesset_num, name).
     """
+    normalized = normalize_inputs(locals())
+    knesset_num = normalized["knesset_num"]
+    name = normalized["name"]
+    status = normalized["status"]
+    sub_type = normalized["sub_type"]
+    from_date = normalized["from_date"]
+    to_date = normalized["to_date"]
+    date = normalized["date"]
+
     conn = connect_readonly()
     cursor = conn.cursor()
 

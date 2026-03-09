@@ -15,7 +15,6 @@ import inspect
 import json
 import sys
 from pathlib import Path
-from typing import Optional
 
 ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
@@ -25,7 +24,6 @@ from mcp.server.fastmcp import FastMCP
 
 from config import (
     MAX_OUTPUT_TOKENS,
-    MAX_OUTPUT_TOKENS_HARD_CAP,
     MCP_ENDPOINT,
     MCP_HOST,
     MCP_PORT,
@@ -78,33 +76,19 @@ mcp = FastMCP(
 # Response size validation
 # ---------------------------------------------------------------------------
 
-def _resolve_output_limit(requested_limit: int | None) -> int:
-    """Resolve effective response limit from server defaults and client request.
+def _validate_size(result) -> str:
+    """Serialize result to JSON and check against MAX_OUTPUT_TOKENS.
 
-    Policy:
-    - If client omits/invalidates the value -> use server default.
-    - Client can only increase the limit (not decrease below default).
-    - Effective limit is capped by MAX_OUTPUT_TOKENS_HARD_CAP.
+    Returns the JSON string if within the limit, or an error message
+    instructing the client to use better filters.
     """
-    limit = MAX_OUTPUT_TOKENS
-    if isinstance(requested_limit, int) and requested_limit > 0:
-        limit = max(limit, requested_limit)
-    return min(limit, MAX_OUTPUT_TOKENS_HARD_CAP)
-
-
-def _validate_size(result, requested_limit: int | None = None) -> str:
-    """Serialize result to JSON and check size.
-
-    Returns the JSON string if within limits, or an error message if too large.
-    """
-    limit = _resolve_output_limit(requested_limit)
     text = json.dumps(result, ensure_ascii=False, default=str)
-    if len(text) > limit:
+    if len(text) > MAX_OUTPUT_TOKENS:
         return json.dumps({
             "error": "Response too large",
             "size": len(text),
-            "limit": limit,
-            "hint": "Add more filters to narrow results, or reduce max_output_tokens.",
+            "limit": MAX_OUTPUT_TOKENS,
+            "hint": "Add more filters to narrow results.",
         }, ensure_ascii=False)
     return text
 
@@ -116,31 +100,19 @@ def _validate_size(result, requested_limit: int | None = None) -> str:
 def _make_handler(view_fn):
     """Create an async MCP handler that wraps a view function.
 
-    The handler has the same typed parameters as the view function, plus
-    an extra ``max_output_tokens`` parameter.  FastMCP infers the MCP input
-    schema from the handler's signature.
+    The handler has the same typed parameters as the view function.
+    FastMCP infers the MCP input schema from the handler's signature.
     """
     view_sig = inspect.signature(view_fn)
-
-    # Build new parameter list: all view params + max_output_tokens
     params = list(view_sig.parameters.values())
-    params.append(
-        inspect.Parameter(
-            "max_output_tokens",
-            inspect.Parameter.POSITIONAL_OR_KEYWORD,
-            default=None,
-            annotation=Optional[int],
-        )
-    )
 
     async def handler(**kwargs) -> str:
-        requested_limit = kwargs.pop("max_output_tokens", None)
         # Remove None-valued optional params so the view uses its defaults
         view_kwargs = {k: v for k, v in kwargs.items() if v is not None}
         result = view_fn(**view_kwargs)
-        return _validate_size(result, requested_limit)
+        return _validate_size(result)
 
-    # Attach the combined signature so FastMCP can introspect it
+    # Attach the view's signature so FastMCP can introspect it
     handler.__signature__ = inspect.Signature(
         params, return_annotation=str
     )

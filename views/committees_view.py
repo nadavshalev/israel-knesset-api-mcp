@@ -14,8 +14,11 @@ if str(ROOT) not in sys.path:
 if str(ROOT.parent) not in sys.path:
     sys.path.insert(0, str(ROOT.parent))
 
+from typing import Annotated
+from pydantic import Field
+
 from core.db import connect_readonly
-from core.helpers import simple_date
+from core.helpers import simple_date, normalize_inputs
 from core.mcp_meta import mcp_tool
 from core.search_meta import register_search
 
@@ -53,12 +56,12 @@ register_search({
     is_list=True,
 )
 def search_committees(
-    knesset_num=None,
-    name=None,
-    committee_type=None,
-    category=None,
-    is_current=None,
-    parent_committee_id=None,
+    knesset_num: Annotated[int | None, Field(description="Filter by Knesset number")] = None,
+    name: Annotated[str | None, Field(description="Committee name contains text")] = None,
+    committee_type: Annotated[str | None, Field(description="Committee type (e.g. ועדה ראשית, ועדת משנה)")] = None,
+    category: Annotated[str | None, Field(description="Category description contains text")] = None,
+    is_current: Annotated[bool | None, Field(description="True for current committees, False for inactive")] = None,
+    parent_committee_id: Annotated[int | None, Field(description="Parent committee ID (for sub-committees)")] = None,
 ) -> list:
     """Search for committees and return summary metadata.
 
@@ -72,6 +75,14 @@ def search_committees(
 
     Returns a list of committee summary dicts sorted by (knesset_num, name).
     """
+    normalized = normalize_inputs(locals())
+    knesset_num = normalized["knesset_num"]
+    name = normalized["name"]
+    committee_type = normalized["committee_type"]
+    category = normalized["category"]
+    is_current = normalized["is_current"]
+    parent_committee_id = normalized["parent_committee_id"]
+
     conn = connect_readonly()
     cursor = conn.cursor()
 

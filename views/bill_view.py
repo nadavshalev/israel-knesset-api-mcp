@@ -13,8 +13,11 @@ if str(ROOT) not in sys.path:
 if str(ROOT.parent) not in sys.path:
     sys.path.insert(0, str(ROOT.parent))
 
+from typing import Annotated
+from pydantic import Field
+
 from core.db import connect_readonly
-from core.helpers import simple_date
+from core.helpers import simple_date, normalize_inputs
 from core.mcp_meta import mcp_tool
 
 
@@ -98,12 +101,17 @@ def _get_stage_vote(cursor, bill_id, session_id):
     entity="Bills",
     is_list=False,
 )
-def get_bill(bill_id: int) -> dict | None:
+def get_bill(
+    bill_id: Annotated[int, Field(description="The bill ID (required)")],
+) -> dict | None:
     """Return full detail for a single bill, or None if not found.
 
     Includes metadata from KNS_Bill, plenum stages from
     plm_session_item_raw, and the final (decisive) vote per stage.
     """
+    normalized = normalize_inputs(locals())
+    bill_id = normalized["bill_id"]
+
     conn = connect_readonly()
     cursor = conn.cursor()
 

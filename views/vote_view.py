@@ -14,8 +14,11 @@ if str(ROOT) not in sys.path:
 if str(ROOT.parent) not in sys.path:
     sys.path.insert(0, str(ROOT.parent))
 
+from typing import Annotated
+from pydantic import Field
+
 from core.db import connect_readonly
-from core.helpers import simple_date, simple_time
+from core.helpers import simple_date, simple_time, normalize_inputs
 from core.mcp_meta import mcp_tool
 
 
@@ -33,7 +36,9 @@ from core.mcp_meta import mcp_tool
     entity="Plenum Votes",
     is_list=False,
 )
-def get_vote(vote_id: int) -> dict | None:
+def get_vote(
+    vote_id: Annotated[int, Field(description="The vote ID (required)")],
+) -> dict | None:
     """Return full detail for a single vote, or None if not found.
 
     Includes:
@@ -45,6 +50,9 @@ def get_vote(vote_id: int) -> dict | None:
     Args:
         vote_id: The vote ID (required).
     """
+    normalized = normalize_inputs(locals())
+    vote_id = normalized["vote_id"]
+
     conn = connect_readonly()
     cursor = conn.cursor()
 

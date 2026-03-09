@@ -13,8 +13,11 @@ if str(ROOT) not in sys.path:
 if str(ROOT.parent) not in sys.path:
     sys.path.insert(0, str(ROOT.parent))
 
+from typing import Annotated
+from pydantic import Field
+
 from core.db import connect_readonly
-from core.helpers import simple_date, simple_time
+from core.helpers import simple_date, simple_time, normalize_inputs
 from core.mcp_meta import mcp_tool
 from core.search_meta import register_search
 
@@ -54,13 +57,13 @@ register_search({
     is_list=True,
 )
 def search_votes(
-    knesset_num=None,
-    name=None,
-    from_date=None,
-    to_date=None,
-    date=None,
-    accepted=None,
-    bill_id=None,
+    knesset_num: Annotated[int | None, Field(description="Filter by Knesset number (via session join)")] = None,
+    name: Annotated[str | None, Field(description="Vote title or subject contains text")] = None,
+    from_date: Annotated[str | None, Field(description="Start of date range (YYYY-MM-DD)")] = None,
+    to_date: Annotated[str | None, Field(description="End of date range (YYYY-MM-DD)")] = None,
+    date: Annotated[str | None, Field(description="Exact date (YYYY-MM-DD)")] = None,
+    accepted: Annotated[bool | None, Field(description="True=accepted only, False=rejected only, null=both")] = None,
+    bill_id: Annotated[int | None, Field(description="Filter to votes linked to a specific bill ID")] = None,
 ) -> list:
     """Search for plenum votes and return summary results.
 
@@ -78,6 +81,15 @@ def search_votes(
     totals are computed from per-MK results and ``is_accepted`` is inferred
     as ``total_for > total_against``.
     """
+    normalized = normalize_inputs(locals())
+    knesset_num = normalized["knesset_num"]
+    name = normalized["name"]
+    from_date = normalized["from_date"]
+    to_date = normalized["to_date"]
+    date = normalized["date"]
+    accepted = normalized["accepted"]
+    bill_id = normalized["bill_id"]
+
     conn = connect_readonly()
     cursor = conn.cursor()
 

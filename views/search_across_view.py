@@ -22,8 +22,12 @@ if str(ROOT) not in sys.path:
 if str(ROOT.parent) not in sys.path:
     sys.path.insert(0, str(ROOT.parent))
 
+from typing import Annotated
+from pydantic import Field
+
 from config import SEARCH_ACROSS_TOP_N
 from core.db import connect_readonly
+from core.helpers import normalize_inputs
 from core.mcp_meta import mcp_tool
 
 
@@ -52,7 +56,10 @@ def _get_entity_queries() -> list[dict]:
     ),
     entity="Cross-Entity Search",
 )
-def search_across(query: str, top_n: int | None = None) -> dict:
+def search_across(
+    query: Annotated[str, Field(description="Free-text search term")],
+    top_n: Annotated[int | None, Field(description="Max results per entity type (default from server config)")] = None,
+) -> dict:
     """Search across all entity types for *query*.
 
     Parameters
@@ -68,6 +75,10 @@ def search_across(query: str, top_n: int | None = None) -> dict:
     dict
         ``{"query": ..., "results": {entity: {"count": N, "top": [...]}}}``
     """
+    normalized = normalize_inputs(locals())
+    query = normalized["query"]
+    top_n = normalized["top_n"]
+
     if not query or not query.strip():
         return {"query": query, "results": {}}
 

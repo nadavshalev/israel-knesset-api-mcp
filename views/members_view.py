@@ -14,8 +14,11 @@ if str(ROOT) not in sys.path:
 if str(ROOT.parent) not in sys.path:
     sys.path.insert(0, str(ROOT.parent))
 
+from typing import Annotated
+from pydantic import Field
+
 from core.db import connect_readonly
-from core.helpers import simple_date, format_person_name
+from core.helpers import simple_date, format_person_name, normalize_inputs
 from core.mcp_meta import mcp_tool
 from core.search_meta import register_search
 
@@ -163,13 +166,13 @@ def _fetch_members_bulk(cursor, *, knesset_num=None, first_name=None,
     is_list=True,
 )
 def search_members(
-    knesset_num=None,
-    first_name=None,
-    last_name=None,
-    role=None,
-    role_type=None,
-    party=None,
-    person_id=None,
+    knesset_num: Annotated[int | None, Field(description="Filter by Knesset number")] = None,
+    first_name: Annotated[str | None, Field(description="First name contains text")] = None,
+    last_name: Annotated[str | None, Field(description="Last name contains text")] = None,
+    role: Annotated[str | None, Field(description="Free text search across roles, ministries, and committees")] = None,
+    role_type: Annotated[str | None, Field(description="Position category (e.g. חבר הכנסת, שר)")] = None,
+    party: Annotated[str | None, Field(description="Party/faction name contains text")] = None,
+    person_id: Annotated[int | None, Field(description="Filter by specific person ID")] = None,
 ) -> list:
     """Search for Knesset members with dynamic filtering.
 
@@ -181,6 +184,15 @@ def search_members(
     Each dict contains general info and a ``role_types`` list.
     For full detail on a single member, use ``member_view.get_member()``.
     """
+    normalized = normalize_inputs(locals())
+    knesset_num = normalized["knesset_num"]
+    first_name = normalized["first_name"]
+    last_name = normalized["last_name"]
+    role = normalized["role"]
+    role_type = normalized["role_type"]
+    party = normalized["party"]
+    person_id = normalized["person_id"]
+
     conn = connect_readonly()
     cursor = conn.cursor()
 

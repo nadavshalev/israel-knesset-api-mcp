@@ -22,8 +22,11 @@ if str(ROOT) not in sys.path:
 if str(ROOT.parent) not in sys.path:
     sys.path.insert(0, str(ROOT.parent))
 
+from typing import Annotated
+from pydantic import Field
+
 from core.db import connect_readonly
-from core.helpers import simple_date, simple_time, format_person_name
+from core.helpers import simple_date, simple_time, format_person_name, normalize_inputs
 from core.mcp_meta import mcp_tool
 
 
@@ -215,15 +218,15 @@ def _get_documents(cursor, committee_id, from_date=None, to_date=None):
     is_list=False,
 )
 def get_committee(
-    committee_id: int,
-    knesset_num: int | None = None,
-    date: str | None = None,
-    from_date: str | None = None,
-    to_date: str | None = None,
-    include_sessions: bool = False,
-    include_members: bool = False,
-    include_bills: bool = False,
-    include_documents: bool = False,
+    committee_id: Annotated[int, Field(description="The committee ID (required)")],
+    knesset_num: Annotated[int | None, Field(description="Knesset number (informational context)")] = None,
+    date: Annotated[str | None, Field(description="Single-date shortcut (YYYY-MM-DD); sets both from_date and to_date")] = None,
+    from_date: Annotated[str | None, Field(description="Start of date range (YYYY-MM-DD) for sessions/bills/documents")] = None,
+    to_date: Annotated[str | None, Field(description="End of date range (YYYY-MM-DD) for sessions/bills/documents")] = None,
+    include_sessions: Annotated[bool, Field(description="Include committee sessions")] = False,
+    include_members: Annotated[bool, Field(description="Include members who served on the committee")] = False,
+    include_bills: Annotated[bool, Field(description="Include bills discussed in committee sessions")] = False,
+    include_documents: Annotated[bool, Field(description="Include documents from committee sessions")] = False,
 ) -> dict | None:
     """Return detail for a single committee, or ``None`` if not found.
 
@@ -247,6 +250,17 @@ def get_committee(
     ``knesset_num``
         Passed through for informational context (not used for filtering).
     """
+    normalized = normalize_inputs(locals())
+    committee_id = normalized["committee_id"]
+    knesset_num = normalized["knesset_num"]
+    date = normalized["date"]
+    from_date = normalized["from_date"]
+    to_date = normalized["to_date"]
+    include_sessions = normalized["include_sessions"]
+    include_members = normalized["include_members"]
+    include_bills = normalized["include_bills"]
+    include_documents = normalized["include_documents"]
+
     # Normalise date shortcut
     if date:
         from_date = from_date or date

@@ -14,8 +14,11 @@ if str(ROOT) not in sys.path:
 if str(ROOT.parent) not in sys.path:
     sys.path.insert(0, str(ROOT.parent))
 
+from typing import Annotated
+from pydantic import Field
+
 from core.db import connect_readonly
-from core.helpers import simple_date, format_person_name
+from core.helpers import simple_date, format_person_name, normalize_inputs
 from core.mcp_meta import mcp_tool
 
 
@@ -159,13 +162,20 @@ def _build_member_detail(cursor, person_id, knesset_num):
     entity="Knesset Members",
     is_list=False,
 )
-def get_member(member_id: int, knesset_num: int = None) -> dict | list | None:
+def get_member(
+    member_id: Annotated[int, Field(description="The member's person ID (required)")],
+    knesset_num: Annotated[int | None, Field(description="Knesset number to filter by; omit for all terms")] = None,
+) -> dict | list | None:
     """Return full detail for a single member.
 
     If ``knesset_num`` is provided, returns a single dict for that term.
     If omitted, returns a list of dicts — one per Knesset term the member
     served in.  Returns ``None`` if no data is found.
     """
+    normalized = normalize_inputs(locals())
+    member_id = normalized["member_id"]
+    knesset_num = normalized["knesset_num"]
+
     conn = connect_readonly()
     cursor = conn.cursor()
 

@@ -14,8 +14,11 @@ if str(ROOT) not in sys.path:
 if str(ROOT.parent) not in sys.path:
     sys.path.insert(0, str(ROOT.parent))
 
+from typing import Annotated
+from pydantic import Field
+
 from core.db import connect_readonly
-from core.helpers import simple_date
+from core.helpers import simple_date, normalize_inputs
 from core.mcp_meta import mcp_tool
 
 
@@ -32,7 +35,9 @@ from core.mcp_meta import mcp_tool
     entity="Plenum Sessions",
     is_list=False,
 )
-def get_session(session_id: int) -> dict | None:
+def get_session(
+    session_id: Annotated[int, Field(description="The plenum session ID (required)")],
+) -> dict | None:
     """Return full detail for a single plenum session, or None if not found.
 
     Includes session metadata, all items, and documents.
@@ -40,6 +45,9 @@ def get_session(session_id: int) -> dict | None:
     Args:
         session_id: The session ID (required).
     """
+    normalized = normalize_inputs(locals())
+    session_id = normalized["session_id"]
+
     conn = connect_readonly()
     cursor = conn.cursor()
 
