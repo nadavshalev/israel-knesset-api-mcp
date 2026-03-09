@@ -56,14 +56,75 @@ _ensure_indexes_at_startup()
 # MCP server instance
 # ---------------------------------------------------------------------------
 
+_INSTRUCTIONS = """\
+Israeli Knesset (parliament) data API — members, committees, bills, \
+plenum sessions, and votes.
+
+## Getting Started
+1. Call `get_database_status` first. It returns entity counts, the list of \
+tools with their filters, and the last sync time so you know what data is \
+available.
+2. Use `search_across` for broad discovery — it searches all entity types \
+at once and returns the top matches per type.
+
+## Search → Detail Workflow
+- **Search tools** (`search_members`, `search_bills`, `search_votes`, \
+`search_committees`, `search_plenums`) return compact summaries. Use them \
+to find IDs.
+- **Detail tools** (`get_member`, `get_bill`, `get_vote`, `get_committee`, \
+`get_plenum`) return the full record for a single entity by ID.
+- Always search first to find the ID, then call the detail tool. \
+Do not guess IDs.
+
+## Always Filter — Responses Are Size-Capped
+Responses that exceed the server limit are rejected with an error. \
+The more filters you provide, the smaller and faster the response.
+- **`knesset_num`** is the single most important filter — always provide it \
+when you know which Knesset term you need (e.g. 25 for the current Knesset, \
+20 for the 2015-2019 term).
+- Combine `knesset_num` with name, type, status, or date filters to narrow \
+results further.
+- If you get a "Response too large" error, add more filters — do not retry \
+the same query.
+
+## Date Filtering — Use Ranges, Not Single Days
+Several search tools accept `from_date`, `to_date`, and `date` \
+(all in `YYYY-MM-DD` format).
+- **Use `from_date` + `to_date` for date ranges.** \
+For example, to get all votes in March 2020: \
+`from_date="2020-03-01", to_date="2020-03-31"`. \
+Do NOT send a separate request for each day — a single range query is \
+faster and uses one response.
+- **`date` is a shortcut for a single day** — equivalent to setting both \
+`from_date` and `to_date` to the same value.
+- **Always provide `to_date` when using `from_date`**, otherwise you get \
+everything from that date to the present, which is usually too large.
+- Date-filterable search tools: `search_votes`, `search_bills`, \
+`search_plenums`. The detail tool `get_committee` also accepts date \
+params to scope its sessions, members, bills, and documents.
+
+## Common Patterns
+- **Find a member's activity**: `search_members` by name/party → \
+`get_member` with `knesset_num` for full roles and committees.
+- **Find a bill and its votes**: `search_bills` by name → `get_bill` \
+by ID (includes plenum stages with vote summaries).
+- **Explore a committee**: `search_committees` by name/type → \
+`get_committee` by ID with `include_sessions=True` (and date filters \
+to scope the time window).
+- **Votes on a specific bill**: `search_votes` with `bill_id` filter.
+
+## Parameter Types
+- IDs (`vote_id`, `bill_id`, `member_id`, etc.) are integers.
+- `knesset_num` is an integer.
+- Boolean flags (`accepted`, `is_current`, `include_sessions`, etc.) \
+accept `true`/`false`.
+- All text filters (names, types, statuses) are Hebrew strings \
+with case-insensitive substring matching.
+"""
+
 mcp = FastMCP(
     "Knesset Data API",
-    instructions=(
-        "Israeli Knesset (parliament) data API. Search and retrieve information "
-        "about Knesset members, committees, bills, plenum sessions, and votes. "
-        "Start with get_database_status to see available data, or use "
-        "search_across to find items across all entity types."
-    ),
+    instructions=_INSTRUCTIONS,
     stateless_http=True,
     json_response=True,
     host=MCP_HOST,
