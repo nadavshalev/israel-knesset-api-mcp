@@ -54,6 +54,7 @@ register_search({
     ),
     entity="Bills",
     count_sql="SELECT COUNT(*) FROM bill_raw",
+    most_recent_date_sql="SELECT MAX(PublicationDate) FROM bill_raw",
     is_list=True,
 )
 def search_bills(

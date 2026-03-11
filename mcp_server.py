@@ -80,8 +80,7 @@ Do not guess IDs.
 Responses that exceed the server limit are rejected with an error. \
 The more filters you provide, the smaller and faster the response.
 - **`knesset_num`** is the single most important filter — always provide it \
-when you know which Knesset term you need (e.g. 25 for the current Knesset, \
-20 for the 2015-2019 term).
+when you know which Knesset term you need.
 - Combine `knesset_num` with name, type, status, or date filters to narrow \
 results further.
 - If you get a "Response too large" error, add more filters — do not retry \

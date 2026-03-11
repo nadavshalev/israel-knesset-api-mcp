@@ -59,6 +59,7 @@ register_search({
     ),
     entity="Plenum Sessions",
     count_sql="SELECT COUNT(*) FROM plenum_session_raw",
+    most_recent_date_sql="SELECT MAX(StartDate) FROM plenum_session_raw",
     is_list=True,
 )
 def search_sessions(

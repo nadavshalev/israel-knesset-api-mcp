@@ -53,6 +53,7 @@ register_search({
     ),
     entity="Committees",
     count_sql="SELECT COUNT(*) FROM committee_raw",
+    most_recent_date_sql="SELECT MAX(StartDate) FROM committee_raw",
     is_list=True,
 )
 def search_committees(

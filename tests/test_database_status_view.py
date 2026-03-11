@@ -41,9 +41,20 @@ class TestDatabaseStatusStructure(unittest.TestCase):
         self.assertEqual(set(self.status["entity_counts"].keys()), expected)
 
     def test_entity_counts_are_positive(self):
-        for entity, count in self.status["entity_counts"].items():
-            self.assertIsNotNone(count, f"{entity} count is None")
-            self.assertGreater(count, 0, f"{entity} has 0 records")
+        for entity, info in self.status["entity_counts"].items():
+            self.assertIsInstance(info, dict, f"{entity} value is not a dict")
+            self.assertIn("count", info, f"{entity} missing 'count' key")
+            self.assertIn("most_recent_date", info, f"{entity} missing 'most_recent_date' key")
+            self.assertIsNotNone(info["count"], f"{entity} count is None")
+            self.assertGreater(info["count"], 0, f"{entity} has 0 records")
+
+    def test_entity_most_recent_dates(self):
+        """Each entity should have a non-empty most_recent_date string."""
+        for entity, info in self.status["entity_counts"].items():
+            date = info["most_recent_date"]
+            self.assertIsNotNone(date, f"{entity} most_recent_date is None")
+            self.assertIsInstance(date, str, f"{entity} most_recent_date is not a string")
+            self.assertEqual(len(date), 10, f"{entity} most_recent_date '{date}' is not YYYY-MM-DD format")
 
 
 class TestDatabaseStatusTools(unittest.TestCase):

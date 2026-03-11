@@ -109,7 +109,7 @@ def get_database_status() -> dict:
     conn = connect_readonly()
     cursor = conn.cursor()
 
-    # --- Entity counts ---
+    # --- Entity counts and most recent dates ---
     entities = {}
     for fn in all_tools:
         meta = fn._mcp_tool
@@ -119,12 +119,30 @@ def get_database_status() -> dict:
         entity = meta["entity"]
         if entity in entities:
             continue  # already counted via another tool for same entity
+
+        entry = {"count": None, "most_recent_date": None}
+
         try:
             cursor.execute(count_sql)
             row = cursor.fetchone()
-            entities[entity] = list(row.values())[0] if row else 0
+            entry["count"] = list(row.values())[0] if row else 0
         except Exception:
-            entities[entity] = None  # table might not exist yet
+            pass  # table might not exist yet
+
+        date_sql = meta.get("most_recent_date_sql")
+        if date_sql:
+            try:
+                cursor.execute(date_sql)
+                row = cursor.fetchone()
+                val = list(row.values())[0] if row else None
+                # Normalise to YYYY-MM-DD (values may be full timestamps)
+                if val and isinstance(val, str) and len(val) >= 10:
+                    val = val[:10]
+                entry["most_recent_date"] = val
+            except Exception:
+                pass  # column/table might not exist yet
+
+        entities[entity] = entry
 
     # --- Available tools ---
     tools_info = []

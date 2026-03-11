@@ -31,6 +31,7 @@ def mcp_tool(
     description: str,
     entity: str,
     count_sql: str | None = None,
+    most_recent_date_sql: str | None = None,
     is_list: bool = False,
 ) -> Callable:
     """Decorator that attaches MCP metadata to a view function.
@@ -45,6 +46,8 @@ def mcp_tool(
         Entity category (e.g. ``"Knesset Members"``).
     count_sql : str, optional
         SQL to count entities (search/list tools only).
+    most_recent_date_sql : str, optional
+        SQL returning the most recent content date (search/list tools only).
     is_list : bool
         True for search/list tools, False for detail tools.
     """
@@ -54,6 +57,7 @@ def mcp_tool(
             "description": description,
             "entity": entity,
             "count_sql": count_sql,
+            "most_recent_date_sql": most_recent_date_sql,
             "is_list": is_list,
         }
         _ALL_TOOLS.append(fn)

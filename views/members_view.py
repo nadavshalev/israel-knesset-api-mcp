@@ -163,6 +163,7 @@ def _fetch_members_bulk(cursor, *, knesset_num=None, first_name=None,
     ),
     entity="Knesset Members",
     count_sql="SELECT COUNT(DISTINCT PersonID) FROM person_to_position_raw",
+    most_recent_date_sql="SELECT MAX(StartDate) FROM person_to_position_raw",
     is_list=True,
 )
 def search_members(

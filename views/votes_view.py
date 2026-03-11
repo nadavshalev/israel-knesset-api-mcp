@@ -54,6 +54,7 @@ register_search({
     ),
     entity="Plenum Votes",
     count_sql="SELECT COUNT(*) FROM plenum_vote_raw",
+    most_recent_date_sql="SELECT MAX(VoteDateTime) FROM plenum_vote_raw",
     is_list=True,
 )
 def search_votes(
