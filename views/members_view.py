@@ -164,6 +164,9 @@ def _fetch_members_bulk(cursor, *, knesset_num=None, first_name=None,
     entity="Knesset Members",
     count_sql="SELECT COUNT(DISTINCT PersonID) FROM person_to_position_raw",
     most_recent_date_sql="SELECT MAX(StartDate) FROM person_to_position_raw",
+    enum_sql={
+        "role_type": "SELECT DISTINCT Description FROM position_raw ORDER BY Description",
+    },
     is_list=True,
 )
 def search_members(
@@ -171,7 +174,7 @@ def search_members(
     first_name: Annotated[str | None, Field(description="First name contains text")] = None,
     last_name: Annotated[str | None, Field(description="Last name contains text")] = None,
     role: Annotated[str | None, Field(description="Free text search across roles, ministries, and committees")] = None,
-    role_type: Annotated[str | None, Field(description="Position category (e.g. חבר הכנסת, שר)")] = None,
+    role_type: Annotated[str | None, Field(description="Position category")] = None,
     party: Annotated[str | None, Field(description="Party/faction name contains text")] = None,
     person_id: Annotated[int | None, Field(description="Filter by specific person ID")] = None,
 ) -> list:

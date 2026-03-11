@@ -60,6 +60,9 @@ register_search({
     entity="Plenum Sessions",
     count_sql="SELECT COUNT(*) FROM plenum_session_raw",
     most_recent_date_sql="SELECT MAX(StartDate) FROM plenum_session_raw",
+    enum_sql={
+        "item_type": "SELECT DISTINCT ItemTypeDesc FROM plm_session_item_raw WHERE ItemTypeDesc IS NOT NULL ORDER BY ItemTypeDesc",
+    },
     is_list=True,
 )
 def search_sessions(

@@ -55,13 +55,17 @@ register_search({
     entity="Bills",
     count_sql="SELECT COUNT(*) FROM bill_raw",
     most_recent_date_sql="SELECT MAX(PublicationDate) FROM bill_raw",
+    enum_sql={
+        "status": 'SELECT DISTINCT "Desc" FROM status_raw ORDER BY "Desc"',
+        "sub_type": "SELECT DISTINCT SubTypeDesc FROM bill_raw WHERE SubTypeDesc IS NOT NULL ORDER BY SubTypeDesc",
+    },
     is_list=True,
 )
 def search_bills(
     knesset_num: Annotated[int | None, Field(description="Filter by Knesset number")] = None,
     name: Annotated[str | None, Field(description="Bill name contains text")] = None,
-    status: Annotated[str | None, Field(description="Bill status description contains text")] = None,
-    sub_type: Annotated[str | None, Field(description="Bill sub-type: פרטית (private), ממשלתית (government), ועדה (committee)")] = None,
+    status: Annotated[str | None, Field(description="Bill status")] = None,
+    sub_type: Annotated[str | None, Field(description="Bill sub-type")] = None,
     from_date: Annotated[str | None, Field(description="Start of date range (YYYY-MM-DD) for plenum appearance")] = None,
     to_date: Annotated[str | None, Field(description="End of date range (YYYY-MM-DD) for plenum appearance")] = None,
     date: Annotated[str | None, Field(description="Exact date (YYYY-MM-DD) for plenum appearance")] = None,

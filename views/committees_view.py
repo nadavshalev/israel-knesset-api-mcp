@@ -54,12 +54,15 @@ register_search({
     entity="Committees",
     count_sql="SELECT COUNT(*) FROM committee_raw",
     most_recent_date_sql="SELECT MAX(StartDate) FROM committee_raw",
+    enum_sql={
+        "committee_type": "SELECT DISTINCT CommitteeTypeDesc FROM committee_raw ORDER BY CommitteeTypeDesc",
+    },
     is_list=True,
 )
 def search_committees(
     knesset_num: Annotated[int | None, Field(description="Filter by Knesset number")] = None,
     name: Annotated[str | None, Field(description="Committee name contains text")] = None,
-    committee_type: Annotated[str | None, Field(description="Committee type (e.g. ועדה ראשית, ועדת משנה)")] = None,
+    committee_type: Annotated[str | None, Field(description="Committee type")] = None,
     category: Annotated[str | None, Field(description="Category description contains text")] = None,
     is_current: Annotated[bool | None, Field(description="True for current committees, False for inactive")] = None,
     parent_committee_id: Annotated[int | None, Field(description="Parent committee ID (for sub-committees)")] = None,

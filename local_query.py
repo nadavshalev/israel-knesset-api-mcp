@@ -20,7 +20,6 @@ from views import bills_view
 from views import bill_view
 from views import votes_view
 from views import vote_view
-from views import database_status_view
 from views import search_across_view
 
 
@@ -130,9 +129,6 @@ def parse_args() -> argparse.Namespace:
     sa_p.add_argument("query", type=str, help="Free-text search term")
     sa_p.add_argument("--top-n", dest="top_n", type=int, default=None,
                        help="Max results per entity type (default from config)")
-
-    # --- status ---
-    sub.add_parser("status", help="Show database status: entity counts, tools, last sync")
 
     return parser.parse_args()
 
@@ -260,10 +256,6 @@ def main() -> None:
         _output(result)
         return
 
-    if args.command == "status":
-        result = database_status_view.get_database_status()
-        _output(result)
-        return
 
 
 if __name__ == "__main__":

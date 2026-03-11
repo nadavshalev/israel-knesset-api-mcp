@@ -91,7 +91,6 @@ Connect to `http://localhost:8000/mcp` with transport type "Streamable HTTP".
 
 | Tool | Type | Description |
 |------|------|-------------|
-| `get_database_status` | Status | Entity counts, available tools, last sync time |
 | `search_across` | Search | Cross-entity search (members, bills, committees, votes, plenums) |
 | `search_members` | Search | Search Knesset members by name, party, role, knesset number |
 | `get_member` | Detail | Full member detail: factions, roles, committees |
@@ -104,7 +103,7 @@ Connect to `http://localhost:8000/mcp` with transport type "Streamable HTTP".
 | `search_votes` | Search | Search votes by name, date, outcome, linked bill |
 | `get_vote` | Detail | Full vote detail with per-member breakdown |
 
-Start with `get_database_status` to see what data is available, or use `search_across` to find items across all entity types before drilling down with specific tools.
+Each search tool's description includes record counts and data freshness. Parameter schemas include enum constraints with exact allowed values where applicable. Use `search_across` to find items across all entity types before drilling down with specific tools.
 
 ### Response Size Limits
 
@@ -306,7 +305,8 @@ tests/                    Integration tests against real data.sqlite
 ### Key design decisions
 
 - **Read-only queries**: all view functions use `connect_readonly()` (SQLite URI mode `?mode=ro`). Write access is only used once at startup for index creation.
-- **Decorator-driven tools**: each view function is decorated with `@mcp_tool(...)` from `core/mcp_meta.py`, which attaches metadata (name, description, entity, count SQL, search SQL). The MCP server, `database_status`, and `search_across` all discover tools by inspecting decorated functions -- no central registry file needed.
+- **Decorator-driven tools**: each view function is decorated with `@mcp_tool(...)` from `core/mcp_meta.py`, which attaches metadata (name, description, entity, count SQL, enum SQL). The MCP server and `search_across` discover tools by inspecting decorated functions -- no central registry file needed.
+- **Dynamic schema enrichment**: at startup the MCP server queries the database for enum values, entity counts, and data freshness dates. Enum-constrained parameters are exposed as `Literal[...]` types in the JSON schema, and tool descriptions include record counts and last-data dates.
 - **Explicit parameter schemas**: MCP tool handlers have dynamically constructed typed signatures so the MCP Inspector shows proper input fields (not generic kwargs).
 - Raw tables mirror OData fields exactly; views provide the structured query layer.
 - CSV-first fetching: bulk CSV download, then OData for rows newer than the CSV's max `LastUpdatedDate`.
