@@ -17,7 +17,6 @@ POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "")
 
 BASE_URL = "https://knesset.gov.il/OdataV4/ParliamentInfo/"
 DEFAULT_PAGE_SIZE = 200
-MAX_KNESSET_NUM = 30
 
 # MCP Server
 MCP_HOST = os.getenv("MCP_HOST", "0.0.0.0")

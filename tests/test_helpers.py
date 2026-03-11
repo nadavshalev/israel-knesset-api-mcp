@@ -17,7 +17,7 @@ from core.helpers import normalize_inputs
 def typed_vote_filters(
     knesset_num: int | None = None,
     bill_id: int | None = None,
-    from_date: str | None = None,
+    date: str | None = None,
     accepted: bool | None = None,
 ) -> dict:
     return normalize_inputs(locals())
@@ -26,7 +26,7 @@ def typed_vote_filters(
 def annotated_filters(
     knesset_num: Annotated[int | None, Field(description="Knesset number")] = None,
     name: Annotated[str | None, Field(description="Name contains text")] = None,
-    from_date: Annotated[str | None, Field(description="Start date (YYYY-MM-DD)")] = None,
+    date: Annotated[str | None, Field(description="Start date (YYYY-MM-DD)")] = None,
     accepted: Annotated[bool | None, Field(description="Accepted filter")] = None,
 ) -> dict:
     return normalize_inputs(locals())
@@ -39,20 +39,20 @@ class TestNormalizeInputs(unittest.TestCase):
         normalized = typed_vote_filters(
             knesset_num="",
             bill_id="   ",
-            from_date="2026-03-01",
+            date="2026-03-01",
         )
         self.assertIsNone(normalized["knesset_num"])
         self.assertIsNone(normalized["bill_id"])
-        self.assertEqual(normalized["from_date"], "2026-03-01")
+        self.assertEqual(normalized["date"], "2026-03-01")
 
     def test_none_string_becomes_none(self):
-        normalized = typed_vote_filters(knesset_num="None", from_date="null")
+        normalized = typed_vote_filters(knesset_num="None", date="null")
         self.assertIsNone(normalized["knesset_num"])
-        self.assertIsNone(normalized["from_date"])
+        self.assertIsNone(normalized["date"])
 
     def test_undefined_string_becomes_none(self):
-        normalized = typed_vote_filters(from_date="undefined")
-        self.assertIsNone(normalized["from_date"])
+        normalized = typed_vote_filters(date="undefined")
+        self.assertIsNone(normalized["date"])
 
     # --- int coercion ---
 
@@ -122,11 +122,11 @@ class TestNormalizeInputs(unittest.TestCase):
 
     def test_bool_for_str_raises(self):
         with self.assertRaises(ValueError):
-            typed_vote_filters(from_date=True)
+            typed_vote_filters(date=True)
 
     def test_list_for_str_raises(self):
         with self.assertRaises(ValueError):
-            typed_vote_filters(from_date=["2026-03-01"])
+            typed_vote_filters(date=["2026-03-01"])
 
     def test_string_max_length_rejected(self):
         long_str = "a" * 501
@@ -148,21 +148,21 @@ class TestNormalizeInputs(unittest.TestCase):
     # --- date validation ---
 
     def test_valid_date_accepted(self):
-        normalized = typed_vote_filters(from_date="2026-03-01")
-        self.assertEqual(normalized["from_date"], "2026-03-01")
+        normalized = typed_vote_filters(date="2026-03-01")
+        self.assertEqual(normalized["date"], "2026-03-01")
 
     def test_invalid_date_format_raises(self):
         with self.assertRaises(ValueError) as ctx:
-            typed_vote_filters(from_date="yesterday")
+            typed_vote_filters(date="yesterday")
         self.assertIn("YYYY-MM-DD", str(ctx.exception))
 
     def test_date_without_hyphens_raises(self):
         with self.assertRaises(ValueError):
-            typed_vote_filters(from_date="20260301")
+            typed_vote_filters(date="20260301")
 
     def test_date_none_skips_validation(self):
-        normalized = typed_vote_filters(from_date=None)
-        self.assertIsNone(normalized["from_date"])
+        normalized = typed_vote_filters(date=None)
+        self.assertIsNone(normalized["date"])
 
     # --- Annotated type hints ---
 
@@ -184,12 +184,12 @@ class TestNormalizeInputs(unittest.TestCase):
         self.assertIsNone(normalized["name"])
 
     def test_annotated_date_validated(self):
-        normalized = annotated_filters(from_date="2026-03-01")
-        self.assertEqual(normalized["from_date"], "2026-03-01")
+        normalized = annotated_filters(date="2026-03-01")
+        self.assertEqual(normalized["date"], "2026-03-01")
 
     def test_annotated_invalid_date_raises(self):
         with self.assertRaises(ValueError):
-            annotated_filters(from_date="not-a-date")
+            annotated_filters(date="not-a-date")
 
     # --- explicit annotations kwarg ---
 
@@ -231,11 +231,11 @@ class TestNormalizeInputs(unittest.TestCase):
 
     def test_none_stays_none(self):
         normalized = typed_vote_filters(
-            knesset_num=None, accepted=None, from_date=None
+            knesset_num=None, accepted=None, date=None
         )
         self.assertIsNone(normalized["knesset_num"])
         self.assertIsNone(normalized["accepted"])
-        self.assertIsNone(normalized["from_date"])
+        self.assertIsNone(normalized["date"])
 
 
 if __name__ == "__main__":

@@ -75,9 +75,8 @@ def parse_args() -> argparse.Namespace:
     committee_p = sub.add_parser("committee", help="Get full detail for a single committee (metadata + opt-in lists)")
     committee_p.add_argument("--committee-id", dest="committee_id", type=int, required=True, help="Committee ID (required)")
     committee_p.add_argument("--knesset", type=int, default=None, help="Knesset number (informational context)")
-    committee_p.add_argument("--date", type=str, default=None, help="Single date (YYYY-MM-DD)")
-    committee_p.add_argument("--from-date", dest="from_date", type=str, default=None, help="From date (YYYY-MM-DD)")
-    committee_p.add_argument("--to-date", dest="to_date", type=str, default=None, help="To date (YYYY-MM-DD)")
+    committee_p.add_argument("--date", type=str, default=None, help="Single date or start of range (YYYY-MM-DD)")
+    committee_p.add_argument("--date-to", dest="date_to", type=str, default=None, help="End of range (YYYY-MM-DD)")
     committee_p.add_argument("--sessions", dest="include_sessions", action="store_true", help="Include committee sessions")
     committee_p.add_argument("--members", dest="include_members", action="store_true", help="Include committee members")
     committee_p.add_argument("--bills", dest="include_bills", action="store_true", help="Include bills discussed")
@@ -86,9 +85,8 @@ def parse_args() -> argparse.Namespace:
     # --- plenums (list) ---
     plenum_p = sub.add_parser("plenums", help="Search plenum sessions (summary, no items/docs)")
     plenum_p.add_argument("--knesset", type=int, default=None, help="Knesset number")
-    plenum_p.add_argument("--from-date", dest="from_date", type=str, default=None, help="From date (YYYY-MM-DD)")
-    plenum_p.add_argument("--to-date", dest="to_date", type=str, default=None, help="To date (YYYY-MM-DD)")
-    plenum_p.add_argument("--date", type=str, default=None, help="Exact date (YYYY-MM-DD)")
+    plenum_p.add_argument("--date", type=str, default=None, help="Single date or start of range (YYYY-MM-DD)")
+    plenum_p.add_argument("--date-to", dest="date_to", type=str, default=None, help="End of range (YYYY-MM-DD)")
     plenum_p.add_argument("--name", type=str, default=None, help="Session/item name contains text")
     plenum_p.add_argument("--item-type", dest="item_type", type=str, default=None, help="Item type contains text")
 
@@ -102,9 +100,8 @@ def parse_args() -> argparse.Namespace:
     bills_p.add_argument("--name", type=str, default=None, help="Bill name contains text")
     bills_p.add_argument("--status", type=str, default=None, help="Current status contains text")
     bills_p.add_argument("--sub-type", dest="sub_type", type=str, default=None, help="Sub-type (פרטית/ממשלתית/ועדה)")
-    bills_p.add_argument("--from-date", dest="from_date", type=str, default=None, help="Plenum date from (YYYY-MM-DD)")
-    bills_p.add_argument("--to-date", dest="to_date", type=str, default=None, help="Plenum date to (YYYY-MM-DD)")
-    bills_p.add_argument("--date", type=str, default=None, help="Plenum date (YYYY-MM-DD)")
+    bills_p.add_argument("--date", type=str, default=None, help="Single date or start of range (YYYY-MM-DD)")
+    bills_p.add_argument("--date-to", dest="date_to", type=str, default=None, help="End of range (YYYY-MM-DD)")
 
     # --- bill (single) ---
     bill_p = sub.add_parser("bill", help="Get full detail for a single bill (with stages/votes)")
@@ -115,9 +112,8 @@ def parse_args() -> argparse.Namespace:
     votes_p.add_argument("--knesset", type=int, default=None, help="Knesset number")
     votes_p.add_argument("--bill-id", dest="bill_id", type=int, default=None, help="Filter votes by bill ID")
     votes_p.add_argument("--name", type=str, default=None, help="Vote title/subject contains text")
-    votes_p.add_argument("--from-date", dest="from_date", type=str, default=None, help="From date (YYYY-MM-DD)")
-    votes_p.add_argument("--to-date", dest="to_date", type=str, default=None, help="To date (YYYY-MM-DD)")
-    votes_p.add_argument("--date", type=str, default=None, help="Exact date (YYYY-MM-DD)")
+    votes_p.add_argument("--date", type=str, default=None, help="Single date or start of range (YYYY-MM-DD)")
+    votes_p.add_argument("--date-to", dest="date_to", type=str, default=None, help="End of range (YYYY-MM-DD)")
     votes_p.add_argument("--accepted", dest="accepted", default=None, action="store_true", help="Accepted votes only")
     votes_p.add_argument("--rejected", dest="rejected", default=None, action="store_true", help="Rejected votes only")
 
@@ -187,8 +183,7 @@ def main() -> None:
             args.committee_id,
             knesset_num=args.knesset,
             date=args.date,
-            from_date=args.from_date,
-            to_date=args.to_date,
+            date_to=args.date_to,
             include_sessions=args.include_sessions,
             include_members=args.include_members,
             include_bills=args.include_bills,
@@ -200,9 +195,8 @@ def main() -> None:
     if args.command == "plenums":
         results = plenum_sessions_view.search_sessions(
             knesset_num=args.knesset,
-            from_date=args.from_date,
-            to_date=args.to_date,
             date=args.date,
+            date_to=args.date_to,
             name=args.name,
             item_type=args.item_type,
         )
@@ -220,9 +214,8 @@ def main() -> None:
             name=args.name,
             status=args.status,
             sub_type=args.sub_type,
-            from_date=args.from_date,
-            to_date=args.to_date,
             date=args.date,
+            date_to=args.date_to,
         )
         _output(results)
         return
@@ -243,9 +236,8 @@ def main() -> None:
             knesset_num=args.knesset,
             bill_id=args.bill_id,
             name=args.name,
-            from_date=args.from_date,
-            to_date=args.to_date,
             date=args.date,
+            date_to=args.date_to,
             accepted=accepted,
         )
         _output(results)

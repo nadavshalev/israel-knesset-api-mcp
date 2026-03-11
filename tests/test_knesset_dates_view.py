@@ -29,22 +29,23 @@ class TestNoFilters(unittest.TestCase):
         # Knessets 0 (provisional council) through 25
         self.assertEqual(len(results), 26)
 
-    def test_sorted_by_knesset_num(self):
-        """Results should be sorted ascending by knesset_num."""
+    def test_sorted_by_knesset_num_desc(self):
+        """Results should be sorted descending by knesset_num."""
         results = get_knesset_dates()
         nums = [r["knesset_num"] for r in results]
-        self.assertEqual(nums, sorted(nums))
+        self.assertEqual(nums, sorted(nums, reverse=True))
 
-    def test_first_is_provisional_council(self):
-        """First entry should be knesset 0 (provisional council)."""
+    def test_first_is_current(self):
+        """First entry should be the current knesset (25)."""
         results = get_knesset_dates()
-        self.assertEqual(results[0]["knesset_num"], 0)
-        self.assertEqual(results[0]["name"], "מועצת המדינה הזמנית")
+        self.assertEqual(results[0]["knesset_num"], 25)
+        self.assertTrue(results[0]["is_current"])
 
-    def test_last_is_current(self):
-        """Last entry should be the current knesset."""
+    def test_last_is_provisional_council(self):
+        """Last entry should be knesset 0 (provisional council)."""
         results = get_knesset_dates()
-        self.assertTrue(results[-1]["is_current"])
+        self.assertEqual(results[-1]["knesset_num"], 0)
+        self.assertEqual(results[-1]["name"], "מועצת המדינה הזמנית")
 
 
 class TestKnessetNumFilter(unittest.TestCase):

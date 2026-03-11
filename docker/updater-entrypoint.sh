@@ -45,7 +45,7 @@ echo "Updater schedule: every ${CYCLE_DAYS} day(s) at ${UPDATE_HOUR}:00 (contain
 
 run_update() {
   echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Running update_all.py"
-  if ! python update_all.py; then
+  if ! python ./scripts/update_all.py; then
     echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] update_all.py failed (will retry next cycle)"
   fi
 }

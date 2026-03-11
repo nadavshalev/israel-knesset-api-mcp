@@ -67,9 +67,8 @@ register_search({
 )
 def search_sessions(
     knesset_num: Annotated[int | None, Field(description="Filter by Knesset number")] = None,
-    from_date: Annotated[str | None, Field(description="Start of date range (YYYY-MM-DD)")] = None,
-    to_date: Annotated[str | None, Field(description="End of date range (YYYY-MM-DD)")] = None,
-    date: Annotated[str | None, Field(description="Exact date (YYYY-MM-DD)")] = None,
+    date: Annotated[str | None, Field(description="Single date or start of range (YYYY-MM-DD)")] = None,
+    date_to: Annotated[str | None, Field(description="End of date range (YYYY-MM-DD); use with date for a range")] = None,
     name: Annotated[str | None, Field(description="Session name or agenda item name contains text")] = None,
     item_type: Annotated[str | None, Field(description="Filter to sessions with items of this type")] = None,
 ) -> list:
@@ -77,17 +76,16 @@ def search_sessions(
 
     Filters (all ANDed):
       - knesset_num: Knesset number
-      - from_date / to_date / date: session date range
+      - date / date_to: session date filter (single day or range)
       - name: session name or item name contains text
       - item_type: session has items of this type
 
-    Returns a list of session summary dicts sorted by (knesset_num, date).
+    Returns a list of session summary dicts sorted by (date DESC, session_id DESC).
     """
     normalized = normalize_inputs(locals())
     knesset_num = normalized["knesset_num"]
-    from_date = normalized["from_date"]
-    to_date = normalized["to_date"]
     date = normalized["date"]
+    date_to = normalized["date_to"]
     name = normalized["name"]
     item_type = normalized["item_type"]
 
@@ -105,15 +103,14 @@ def search_sessions(
         sql += " AND s.KnessetNum = %s"
         params.append(knesset_num)
 
-    if from_date:
+    if date and date_to:
+        # Date range
         sql += " AND s.StartDate >= %s"
-        params.append(from_date)
-
-    if to_date:
+        params.append(date)
         sql += " AND s.StartDate <= %s"
-        params.append(to_date)
-
-    if date:
+        params.append(date_to)
+    elif date:
+        # Single day
         sql += " AND s.StartDate LIKE %s"
         params.append(f"{date}%")
 
@@ -138,7 +135,7 @@ def search_sessions(
         )"""
         params.append(f"%{item_type}%")
 
-    sql += " ORDER BY s.KnessetNum, s.StartDate"
+    sql += " ORDER BY s.StartDate DESC, s.Id DESC"
 
     cursor.execute(sql, params)
     rows = cursor.fetchall()

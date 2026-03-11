@@ -186,7 +186,7 @@ def _validate_date_str(key: str, value: str) -> None:
 
 
 # Parameter names that are expected to contain date strings.
-_DATE_PARAM_NAMES = frozenset({"date", "from_date", "to_date"})
+_DATE_PARAM_NAMES = frozenset({"date", "date_to"})
 
 
 # ---------------------------------------------------------------------------
@@ -204,7 +204,7 @@ def normalize_inputs(params: dict, annotations: dict | None = None) -> dict:
       - ``123`` for a ``str`` field -> coerced to ``'123'``
       - Non-scalar types (lists, dicts) for scalar fields -> rejected
       - Strings longer than 500 chars -> rejected
-      - Date params (``date``, ``from_date``, ``to_date``) -> validated as YYYY-MM-DD
+      - Date params (``date``, ``date_to``) -> validated as YYYY-MM-DD
 
     Supports ``Annotated[type, Field(description=...)]`` hints — the
     ``Annotated`` wrapper is unwrapped automatically.

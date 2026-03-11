@@ -77,7 +77,7 @@ def search_committees(
       - is_current: True for current committees, False for inactive
       - parent_committee_id: parent committee ID (for sub-committees)
 
-    Returns a list of committee summary dicts sorted by (knesset_num, name).
+    Returns a list of committee summary dicts sorted by (start_date DESC, committee_id DESC).
     """
     normalized = normalize_inputs(locals())
     knesset_num = normalized["knesset_num"]
@@ -123,7 +123,7 @@ def search_committees(
         sql += " AND c.ParentCommitteeID = %s"
         params.append(parent_committee_id)
 
-    sql += ' ORDER BY c.KnessetNum, c.Name COLLATE "C"'
+    sql += ' ORDER BY c.StartDate DESC, c.Id DESC'
 
     cursor.execute(sql, params)
     rows = cursor.fetchall()

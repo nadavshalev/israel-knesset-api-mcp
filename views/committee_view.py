@@ -6,7 +6,7 @@ Opt-in flags control which related data is included:
   - ``include_bills``     — bills discussed in committee sessions
   - ``include_documents`` — documents from committee sessions
 
-Date filtering via ``from_date``/``to_date`` (or ``date`` shortcut) narrows
+Date filtering via ``date`` (or ``date``/``date_to`` range) narrows
 sessions, bills, documents, and member overlap to the given window.
 
 For searching/filtering multiple committees, use
@@ -220,9 +220,8 @@ def _get_documents(cursor, committee_id, from_date=None, to_date=None):
 def get_committee(
     committee_id: Annotated[int, Field(description="The committee ID (required)")],
     knesset_num: Annotated[int | None, Field(description="Knesset number (informational context)")] = None,
-    date: Annotated[str | None, Field(description="Single-date shortcut (YYYY-MM-DD); sets both from_date and to_date")] = None,
-    from_date: Annotated[str | None, Field(description="Start of date range (YYYY-MM-DD) for sessions/bills/documents")] = None,
-    to_date: Annotated[str | None, Field(description="End of date range (YYYY-MM-DD) for sessions/bills/documents")] = None,
+    date: Annotated[str | None, Field(description="Single date or start of range (YYYY-MM-DD) for sessions/bills/documents")] = None,
+    date_to: Annotated[str | None, Field(description="End of date range (YYYY-MM-DD) for sessions/bills/documents; use with date for a range")] = None,
     include_sessions: Annotated[bool, Field(description="Include committee sessions")] = False,
     include_members: Annotated[bool, Field(description="Include members who served on the committee")] = False,
     include_bills: Annotated[bool, Field(description="Include bills discussed in committee sessions")] = False,
@@ -244,9 +243,10 @@ def get_committee(
     Date filtering (applied to sessions, bills, documents, member overlap):
 
     ``date``
-        Single-date shortcut — sets both *from_date* and *to_date*.
-    ``from_date`` / ``to_date``
-        Inclusive date range (YYYY-MM-DD).
+        Single date or start of date range (YYYY-MM-DD).
+    ``date_to``
+        End of date range (YYYY-MM-DD).  When provided together with
+        ``date``, forms an inclusive range.
     ``knesset_num``
         Passed through for informational context (not used for filtering).
     """
@@ -254,17 +254,22 @@ def get_committee(
     committee_id = normalized["committee_id"]
     knesset_num = normalized["knesset_num"]
     date = normalized["date"]
-    from_date = normalized["from_date"]
-    to_date = normalized["to_date"]
+    date_to = normalized["date_to"]
     include_sessions = normalized["include_sessions"]
     include_members = normalized["include_members"]
     include_bills = normalized["include_bills"]
     include_documents = normalized["include_documents"]
 
-    # Normalise date shortcut
-    if date:
-        from_date = from_date or date
-        to_date = to_date or date
+    # Resolve effective from/to for internal date filtering
+    if date and date_to:
+        eff_from = date
+        eff_to = date_to
+    elif date:
+        eff_from = date
+        eff_to = date
+    else:
+        eff_from = None
+        eff_to = None
 
     conn = connect_readonly()
     cursor = conn.cursor()
@@ -291,22 +296,22 @@ def get_committee(
     }
 
     if include_sessions:
-        sessions = _get_sessions(cursor, committee_id, from_date, to_date)
+        sessions = _get_sessions(cursor, committee_id, eff_from, eff_to)
         obj["sessions"] = sessions
         obj["session_count"] = len(sessions)
 
     if include_members:
-        members = _get_members(cursor, committee_id, from_date, to_date)
+        members = _get_members(cursor, committee_id, eff_from, eff_to)
         obj["members"] = members
         obj["member_count"] = len(members)
 
     if include_bills:
-        bills = _get_bills(cursor, committee_id, from_date, to_date)
+        bills = _get_bills(cursor, committee_id, eff_from, eff_to)
         obj["bills"] = bills
         obj["bill_count"] = len(bills)
 
     if include_documents:
-        documents = _get_documents(cursor, committee_id, from_date, to_date)
+        documents = _get_documents(cursor, committee_id, eff_from, eff_to)
         obj["documents"] = documents
         obj["document_count"] = len(documents)
 

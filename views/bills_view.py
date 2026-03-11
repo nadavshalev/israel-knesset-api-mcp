@@ -66,9 +66,8 @@ def search_bills(
     name: Annotated[str | None, Field(description="Bill name contains text")] = None,
     status: Annotated[str | None, Field(description="Bill status")] = None,
     sub_type: Annotated[str | None, Field(description="Bill sub-type")] = None,
-    from_date: Annotated[str | None, Field(description="Start of date range (YYYY-MM-DD) for plenum appearance")] = None,
-    to_date: Annotated[str | None, Field(description="End of date range (YYYY-MM-DD) for plenum appearance")] = None,
-    date: Annotated[str | None, Field(description="Exact date (YYYY-MM-DD) for plenum appearance")] = None,
+    date: Annotated[str | None, Field(description="Single date or start of range (YYYY-MM-DD) for plenum appearance")] = None,
+    date_to: Annotated[str | None, Field(description="End of date range (YYYY-MM-DD) for plenum appearance; use with date for a range")] = None,
 ) -> list:
     """Search for bills and return summary metadata (no stages/votes).
 
@@ -77,18 +76,17 @@ def search_bills(
       - name: bill name contains text
       - status: bill's current status description contains text
       - sub_type: bill sub-type (פרטית/ממשלתית/ועדה)
-      - from_date / to_date / date: appeared in a plenum session in date range
+      - date / date_to: appeared in a plenum session in date range
 
-    Returns a list of bill summary dicts sorted by (knesset_num, name).
+    Returns a list of bill summary dicts sorted by (publication_date DESC, bill_id DESC).
     """
     normalized = normalize_inputs(locals())
     knesset_num = normalized["knesset_num"]
     name = normalized["name"]
     status = normalized["status"]
     sub_type = normalized["sub_type"]
-    from_date = normalized["from_date"]
-    to_date = normalized["to_date"]
     date = normalized["date"]
+    date_to = normalized["date_to"]
 
     conn = connect_readonly()
     cursor = conn.cursor()
@@ -124,15 +122,14 @@ def search_bills(
     stage_conditions = []
     stage_params = []
 
-    if from_date:
+    if date and date_to:
+        # Date range
         stage_conditions.append("s.StartDate >= %s")
-        stage_params.append(from_date)
-
-    if to_date:
+        stage_params.append(date)
         stage_conditions.append("s.StartDate <= %s")
-        stage_params.append(to_date)
-
-    if date:
+        stage_params.append(date_to)
+    elif date:
+        # Single day
         stage_conditions.append("s.StartDate LIKE %s")
         stage_params.append(f"{date}%")
 
@@ -147,7 +144,7 @@ def search_bills(
         )"""
         params.extend(stage_params)
 
-    sql += ' ORDER BY b.KnessetNum, b.Name COLLATE "C", b.Id'
+    sql += ' ORDER BY b.PublicationDate DESC, b.Id DESC'
 
     cursor.execute(sql, params)
     rows = cursor.fetchall()

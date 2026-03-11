@@ -92,9 +92,13 @@ class TestDateFilters(unittest.TestCase):
         for v in results:
             self.assertEqual(v["date"], "2015-03-31")
 
-    def test_from_date(self):
-        """Votes from 2015-03-31 onward in Knesset 20."""
-        results = search_votes(from_date="2015-03-31", knesset_num=20)
+    def test_date_range_open_end(self):
+        """Votes from 2015-03-31 onward in Knesset 20 (date without date_to).
+
+        With the new API, passing only ``date`` means a single-day filter,
+        so we use a range instead to test "from X onward".
+        """
+        results = search_votes(date="2015-03-31", date_to="2018-12-31", knesset_num=20)
         self.assertGreater(len(results), 0)
         for v in results:
             self.assertGreaterEqual(v["date"], "2015-03-31")
@@ -102,7 +106,7 @@ class TestDateFilters(unittest.TestCase):
     def test_date_range(self):
         """Votes in first week of Knesset 20."""
         results = search_votes(
-            from_date="2015-03-31", to_date="2015-04-07", knesset_num=20
+            date="2015-03-31", date_to="2015-04-07", knesset_num=20
         )
         self.assertGreater(len(results), 0)
         for v in results:
@@ -143,16 +147,16 @@ class TestAcceptedFilter(unittest.TestCase):
 
 
 class TestSortOrder(unittest.TestCase):
-    """Results should be sorted by (date, time, vote_id)."""
+    """Results should be sorted by date DESC, time DESC, vote_id DESC."""
 
-    def test_sorted_by_date_time(self):
+    def test_sorted_by_date_time_desc(self):
         results = search_votes(knesset_num=20, date="2015-03-31")
         for i in range(1, len(results)):
             prev = results[i - 1]
             curr = results[i]
             prev_key = (prev["date"], prev["time"], prev["vote_id"])
             curr_key = (curr["date"], curr["time"], curr["vote_id"])
-            self.assertLessEqual(prev_key, curr_key)
+            self.assertGreaterEqual(prev_key, curr_key)
 
 
 class TestOutputStructure(unittest.TestCase):

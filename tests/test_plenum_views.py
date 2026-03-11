@@ -54,8 +54,8 @@ class TestSearchSessions(unittest.TestCase):
     def test_date_range(self):
         results = search_sessions(
             knesset_num=20,
-            from_date="2015-03-31",
-            to_date="2015-04-01",
+            date="2015-03-31",
+            date_to="2015-04-01",
         )
         self.assertGreater(len(results), 0)
         for s in results:
@@ -63,11 +63,13 @@ class TestSearchSessions(unittest.TestCase):
             self.assertLessEqual(s["date"], "2015-04-01")
 
     def test_sort_order(self):
-        results = search_sessions(knesset_num=20, from_date="2015-03-31", to_date="2015-05-10")
+        """Results should be sorted by date DESC."""
+        results = search_sessions(knesset_num=20, date="2015-03-31", date_to="2015-05-10")
         for i in range(1, len(results)):
-            prev = (results[i - 1]["knesset_num"], results[i - 1]["date"])
-            curr = (results[i]["knesset_num"], results[i]["date"])
-            self.assertLessEqual(prev, curr)
+            self.assertGreaterEqual(
+                results[i - 1]["date"], results[i]["date"],
+                "Sessions should be sorted newest first",
+            )
 
 
 # ===================================================================

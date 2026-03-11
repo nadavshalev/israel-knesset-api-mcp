@@ -6,7 +6,7 @@ data from older Knessets (19, 20) which are stable and won't change.
 Known test data for committee 928 (ועדת העבודה, הרווחה והבריאות, Knesset 20):
   All data:       1084 sessions, 29 members, 212 bills, 2465 documents
   H1 2016:        170 sessions, 20 members, 44 bills, 370 documents
-  (H1 2016 = from_date='2016-01-01', to_date='2016-06-30')
+  (H1 2016 = date='2016-01-01', date_to='2016-06-30')
 """
 
 import sys
@@ -233,12 +233,12 @@ class TestDateFiltering(unittest.TestCase):
 
     def test_sessions_h1_2016(self):
         """Committee 928 had 170 sessions in H1 2016."""
-        c = get_committee(928, from_date="2016-01-01", to_date="2016-06-30",
+        c = get_committee(928, date="2016-01-01", date_to="2016-06-30",
                           include_sessions=True)
         self.assertEqual(c["session_count"], 170)
 
     def test_date_shortcut(self):
-        """The ``date`` param sets both from_date and to_date (single day)."""
+        """The ``date`` param alone filters a single day."""
         c = get_committee(928, date="2016-03-07", include_sessions=True)
         self.assertIsNotNone(c)
         for s in c["sessions"]:
@@ -246,32 +246,34 @@ class TestDateFiltering(unittest.TestCase):
 
     def test_sessions_filtered_are_within_range(self):
         """All returned sessions fall within the requested date range."""
-        c = get_committee(928, from_date="2016-01-01", to_date="2016-06-30",
+        c = get_committee(928, date="2016-01-01", date_to="2016-06-30",
                           include_sessions=True)
         for s in c["sessions"]:
             if s["date"]:
                 self.assertGreaterEqual(s["date"], "2016-01-01")
                 self.assertLessEqual(s["date"], "2016-06-30")
 
-    def test_from_date_only(self):
-        """Using only from_date filters from that date onwards."""
-        c = get_committee(928, from_date="2019-01-01", include_sessions=True)
+    def test_date_only(self):
+        """Using only date (without date_to) filters to that single day."""
+        c = get_committee(928, date="2019-01-01", include_sessions=True)
         self.assertIsNotNone(c)
-        # Committee 928 ran until 2019-01-30, so there should be some sessions
+        # Committee 928 ran until 2019-01-30, so there should be some sessions on this day
         self.assertGreater(c["session_count"], 0)
         self.assertLess(c["session_count"], 1084)
         for s in c["sessions"]:
             if s["date"]:
-                self.assertGreaterEqual(s["date"], "2019-01-01")
+                self.assertEqual(s["date"], "2019-01-01")
 
-    def test_to_date_only(self):
-        """Using only to_date filters up to that date."""
-        c = get_committee(928, to_date="2015-12-31", include_sessions=True)
+    def test_date_range_up_to(self):
+        """Using date + date_to filters up to that date."""
+        c = get_committee(928, date="2015-01-01", date_to="2015-12-31",
+                          include_sessions=True)
         self.assertIsNotNone(c)
         self.assertGreater(c["session_count"], 0)
         self.assertLess(c["session_count"], 1084)
         for s in c["sessions"]:
             if s["date"]:
+                self.assertGreaterEqual(s["date"], "2015-01-01")
                 self.assertLessEqual(s["date"], "2015-12-31")
 
 
@@ -289,7 +291,7 @@ class TestMembers(unittest.TestCase):
 
     def test_member_count_928_h1_2016(self):
         """Committee 928 had 20 overlapping member assignments in H1 2016."""
-        c = get_committee(928, from_date="2016-01-01", to_date="2016-06-30",
+        c = get_committee(928, date="2016-01-01", date_to="2016-06-30",
                           include_members=True)
         self.assertEqual(c["member_count"], 20)
 
@@ -331,7 +333,7 @@ class TestBills(unittest.TestCase):
 
     def test_bill_count_928_h1_2016(self):
         """Committee 928 discussed 44 distinct bills in H1 2016 sessions."""
-        c = get_committee(928, from_date="2016-01-01", to_date="2016-06-30",
+        c = get_committee(928, date="2016-01-01", date_to="2016-06-30",
                           include_bills=True)
         self.assertEqual(c["bill_count"], 44)
 
@@ -363,7 +365,7 @@ class TestDocuments(unittest.TestCase):
 
     def test_document_count_928_h1_2016(self):
         """Committee 928 has 370 documents from H1 2016 sessions."""
-        c = get_committee(928, from_date="2016-01-01", to_date="2016-06-30",
+        c = get_committee(928, date="2016-01-01", date_to="2016-06-30",
                           include_documents=True)
         self.assertEqual(c["document_count"], 370)
 
@@ -403,7 +405,7 @@ class TestCombinedFlagsWithDates(unittest.TestCase):
 
     def test_all_flags_h1_2016(self):
         """All flags with H1 2016 dates return correct counts."""
-        c = get_committee(928, from_date="2016-01-01", to_date="2016-06-30",
+        c = get_committee(928, date="2016-01-01", date_to="2016-06-30",
                           include_sessions=True, include_members=True,
                           include_bills=True, include_documents=True)
         self.assertEqual(c["session_count"], 170)
@@ -413,7 +415,7 @@ class TestCombinedFlagsWithDates(unittest.TestCase):
 
     def test_some_flags_h1_2016(self):
         """Only requested sections appear — unrequested are absent."""
-        c = get_committee(928, from_date="2016-01-01", to_date="2016-06-30",
+        c = get_committee(928, date="2016-01-01", date_to="2016-06-30",
                           include_sessions=True, include_bills=True)
         self.assertIn("sessions", c)
         self.assertIn("bills", c)

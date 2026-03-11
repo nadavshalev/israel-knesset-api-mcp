@@ -45,9 +45,9 @@ def get_knesset_dates(
     """Look up Knesset terms and their plenum periods.
 
     Optionally filter by ``knesset_num`` to get periods for a single term.
-    Returns a list of dicts, one per knesset number, sorted ascending.
-    Each dict contains knesset metadata and a ``periods`` list with
-    assembly/plenum entries sorted by (assembly, plenum).
+    Returns a list of dicts, one per knesset number, sorted descending
+    (newest first).  Each dict contains knesset metadata and a ``periods``
+    list with assembly/plenum entries sorted by (assembly, plenum).
     """
     normalized = normalize_inputs(locals())
     knesset_num = normalized["knesset_num"]
@@ -67,8 +67,7 @@ def get_knesset_dates(
         sql += " AND KnessetNum = %s"
         params.append(knesset_num)
 
-    sql += " ORDER BY KnessetNum, Assembly, Plenum"
-
+    sql += " ORDER BY PlenumStart DESC"
     cursor.execute(sql, params)
     rows = cursor.fetchall()
 
@@ -100,4 +99,9 @@ def get_knesset_dates(
         })
 
     conn.close()
+
+    # Sort periods within each knesset group by (assembly, plenum)
+    for g in grouped.values():
+        g["periods"].sort(key=lambda p: (p["assembly"], p["plenum"]))
+
     return [grouped[k] for k in order]

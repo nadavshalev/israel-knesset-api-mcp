@@ -60,7 +60,7 @@ def _fetch_members_bulk(cursor, *, knesset_num=None, first_name=None,
                         party=None, person_id=None):
     """Fetch all matching members in one query and group in Python.
 
-    Returns a list of summary dicts sorted by (knesset_num, member_id).
+    Returns a list of summary dicts sorted by (knesset_num DESC, member_id).
     Uses a single SQL query instead of per-member round-trips.
     """
     sql = """
@@ -115,7 +115,7 @@ def _fetch_members_bulk(cursor, *, knesset_num=None, first_name=None,
         )"""
         params.append(f"%{party}%")
 
-    sql += " ORDER BY ptp.KnessetNum, p.PersonID, ptp.StartDate ASC"
+    sql += " ORDER BY ptp.KnessetNum DESC, p.PersonID, ptp.StartDate ASC"
 
     cursor.execute(sql, params)
     rows = cursor.fetchall()
@@ -184,7 +184,7 @@ def search_members(
     (free text across roles/ministries/committees), role_type (position
     category), party (party/faction name), person_id.
 
-    Returns a list of summary dicts sorted by (knesset_num, member_id).
+    Returns a list of summary dicts sorted by (knesset_num DESC, member_id).
     Each dict contains general info and a ``role_types`` list.
     For full detail on a single member, use ``member_view.get_member()``.
     """

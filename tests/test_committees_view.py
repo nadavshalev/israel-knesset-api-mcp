@@ -140,18 +140,17 @@ class TestOutputStructure(unittest.TestCase):
 
 
 class TestSorting(unittest.TestCase):
-    """Results are sorted by (knesset_num, name)."""
+    """Results are sorted by start_date DESC."""
 
-    def test_sorted_by_knesset_then_name(self):
-        """Results for multiple Knessets should be sorted."""
+    def test_sorted_by_start_date_desc(self):
+        """Results should be sorted newest first by start_date."""
         results = search_committees(name="כספים")
         self.assertGreater(len(results), 1)
-        for i in range(1, len(results)):
-            prev = results[i - 1]
-            curr = results[i]
-            self.assertTrue(
-                (prev["knesset_num"], prev["name"]) <= (curr["knesset_num"], curr["name"]),
-                f"Not sorted: {prev['knesset_num']}:{prev['name']} > {curr['knesset_num']}:{curr['name']}",
+        dates = [r["start_date"] for r in results if r["start_date"]]
+        for i in range(1, len(dates)):
+            self.assertGreaterEqual(
+                dates[i - 1], dates[i],
+                f"Not sorted DESC: {dates[i-1]} < {dates[i]}",
             )
 
 

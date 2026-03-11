@@ -174,74 +174,9 @@ def _build_instructions() -> str:
     if current_knesset is not None:
         knesset_line = f"\n\n**Current Knesset:** {current_knesset}"
 
-    return f"""\
-Israeli Knesset (parliament) data API — members, committees, bills, \
-plenum sessions, and votes.{sync_line}{knesset_line}
-
-## Getting Started
-1. Use `search_across` for broad discovery — it searches all entity types \
-at once and returns the top matches per type.
-2. Each search tool's description includes the number of records and data \
-freshness date. Parameter schemas include the exact allowed values where \
-applicable — use those values verbatim.
-
-## Search → Detail Workflow
-- **Search tools** (`search_members`, `search_bills`, `search_votes`, \
-`search_committees`, `search_plenums`) return compact summaries. Use them \
-to find IDs.
-- **Detail tools** (`get_member`, `get_bill`, `get_vote`, `get_committee`, \
-`get_plenum`) return the full record for a single entity by ID.
-- **Lookup tools** (`get_knesset_dates`) return reference data grouped by \
-knesset number.
-- Always search first to find the ID, then call the detail tool. \
-Do not guess IDs.
-
-## Always Filter — Responses Are Size-Capped
-Responses that exceed the server limit are rejected with an error. \
-The more filters you provide, the smaller and faster the response.
-- **`knesset_num`** is the single most important filter — always provide it \
-when you know which Knesset term you need.
-- Combine `knesset_num` with name, type, status, or date filters to narrow \
-results further.
-- If you get a "Response too large" error, add more filters — do not retry \
-the same query.
-
-## Date Filtering — Use Ranges, Not Single Days
-Several search tools accept `from_date`, `to_date`, and `date` \
-(all in `YYYY-MM-DD` format).
-- **Use `from_date` + `to_date` for date ranges.** \
-For example, to get all votes in March 2020: \
-`from_date="2020-03-01", to_date="2020-03-31"`. \
-Do NOT send a separate request for each day — a single range query is \
-faster and uses one response.
-- **`date` is a shortcut for a single day** — equivalent to setting both \
-`from_date` and `to_date` to the same value.
-- **Always provide `to_date` when using `from_date`**, otherwise you get \
-everything from that date to the present, which is usually too large.
-- Date-filterable search tools: `search_votes`, `search_bills`, \
-`search_plenums`. The detail tool `get_committee` also accepts date \
-params to scope its sessions, members, bills, and documents.
-
-## Common Patterns
-- **Find a member's activity**: `search_members` by name/party → \
-`get_member` with `knesset_num` for full roles and committees.
-- **Find a bill and its votes**: `search_bills` by name → `get_bill` \
-by ID (includes plenum stages with vote summaries).
-- **Explore a committee**: `search_committees` by name/type → \
-`get_committee` by ID with `include_sessions=True` (and date filters \
-to scope the time window).
-- **Votes on a specific bill**: `search_votes` with `bill_id` filter.
-
-## Parameter Types
-- IDs (`vote_id`, `bill_id`, `member_id`, etc.) are integers.
-- `knesset_num` is an integer.
-- Boolean flags (`accepted`, `is_current`, `include_sessions`, etc.) \
-accept `true`/`false`.
-- All text filters (names, types, statuses) are Hebrew strings \
-with case-insensitive substring matching.
-- Parameters with enum constraints list the exact allowed values in \
-their schema — use those values verbatim (they are in Hebrew).
-"""
+    template_path = ROOT / "mcp_description.md"
+    template = template_path.read_text(encoding="utf-8")
+    return template.format(sync_line=sync_line, knesset_line=knesset_line)
 
 
 _INSTRUCTIONS = _build_instructions()

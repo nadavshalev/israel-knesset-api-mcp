@@ -78,14 +78,15 @@ class TestDateFilter(unittest.TestCase):
 
 
 class TestSortOrder(unittest.TestCase):
-    def test_sorted_by_knesset_and_name(self):
+    def test_sorted_by_publication_date_desc(self):
+        """Results should be sorted by publication_date DESC."""
         results = search_bills(name="חוק-יסוד", knesset_num=20)
-        for i in range(1, len(results)):
-            prev = results[i - 1]
-            curr = results[i]
-            prev_key = (prev["knesset_num"] or 0, prev["name"] or "")
-            curr_key = (curr["knesset_num"] or 0, curr["name"] or "")
-            self.assertLessEqual(prev_key, curr_key)
+        dates = [r["publication_date"] for r in results if r["publication_date"]]
+        for i in range(1, len(dates)):
+            self.assertGreaterEqual(
+                dates[i - 1], dates[i],
+                f"Not sorted DESC: {dates[i-1]} < {dates[i]}",
+            )
 
 
 if __name__ == "__main__":

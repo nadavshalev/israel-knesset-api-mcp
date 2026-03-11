@@ -60,9 +60,8 @@ register_search({
 def search_votes(
     knesset_num: Annotated[int | None, Field(description="Filter by Knesset number (via session join)")] = None,
     name: Annotated[str | None, Field(description="Vote title or subject contains text")] = None,
-    from_date: Annotated[str | None, Field(description="Start of date range (YYYY-MM-DD)")] = None,
-    to_date: Annotated[str | None, Field(description="End of date range (YYYY-MM-DD)")] = None,
-    date: Annotated[str | None, Field(description="Exact date (YYYY-MM-DD)")] = None,
+    date: Annotated[str | None, Field(description="Single date or start of range (YYYY-MM-DD)")] = None,
+    date_to: Annotated[str | None, Field(description="End of date range (YYYY-MM-DD); use with date for a range")] = None,
     accepted: Annotated[bool | None, Field(description="True=accepted only, False=rejected only, null=both")] = None,
     bill_id: Annotated[int | None, Field(description="Filter to votes linked to a specific bill ID")] = None,
 ) -> list:
@@ -71,11 +70,11 @@ def search_votes(
     Filters (all ANDed):
       - knesset_num: Knesset number (derived via session join)
       - name: vote title or subject contains text
-      - from_date / to_date / date: vote date range
+      - date / date_to: vote date filter (single day or range)
       - accepted: True=accepted only, False=rejected only, None=both
       - bill_id: filter to votes linked to a specific bill (via ItemID)
 
-    Returns a list of vote summary dicts sorted by (date, time, vote_id).
+    Returns a list of vote summary dicts sorted by (date DESC, time DESC, vote_id DESC).
     No members or related votes — use ``vote_view.get_vote()`` for that.
 
     When ``IsAccepted`` is NULL (OData-origin votes without stored totals),
@@ -85,9 +84,8 @@ def search_votes(
     normalized = normalize_inputs(locals())
     knesset_num = normalized["knesset_num"]
     name = normalized["name"]
-    from_date = normalized["from_date"]
-    to_date = normalized["to_date"]
     date = normalized["date"]
+    date_to = normalized["date_to"]
     accepted = normalized["accepted"]
     bill_id = normalized["bill_id"]
 
@@ -152,19 +150,18 @@ def search_votes(
                          COALESCE(v.TotalAgainst, r.comp_against)))
             """
 
-    if from_date:
+    if date and date_to:
+        # Date range
         sql += " AND v.VoteDateTime >= %s"
-        params.append(from_date)
-
-    if to_date:
+        params.append(date)
         sql += " AND v.VoteDateTime <= %s"
-        params.append(to_date + "T99")
-
-    if date:
+        params.append(date_to + "T99")
+    elif date:
+        # Single day
         sql += " AND v.VoteDateTime LIKE %s"
         params.append(f"{date}%")
 
-    sql += " ORDER BY v.VoteDateTime ASC, v.Id ASC"
+    sql += " ORDER BY v.VoteDateTime DESC, v.Id DESC"
     cursor.execute(sql, params)
 
     results = []
