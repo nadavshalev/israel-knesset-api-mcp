@@ -71,7 +71,7 @@ MCP endpoint will be available at:
 
 ## MCP Server
 
-The server exposes 12 tools over Streamable HTTP (stateless mode, JSON responses). Any MCP-compatible client can connect to it.
+The server exposes 13 tools over Streamable HTTP (stateless mode, JSON responses). Any MCP-compatible client can connect to it.
 
 ### Connecting
 
@@ -102,6 +102,7 @@ Connect to `http://localhost:8000/mcp` with transport type "Streamable HTTP".
 | `get_bill` | Detail | Full bill detail with plenum stages and votes |
 | `search_votes` | Search | Search votes by name, date, outcome, linked bill |
 | `get_vote` | Detail | Full vote detail with per-member breakdown |
+| `get_knesset_dates` | Lookup | Knesset terms with assembly/plenum periods |
 
 Each search tool's description includes record counts and data freshness. Parameter schemas include enum constraints with exact allowed values where applicable. Use `search_across` to find items across all entity types before drilling down with specific tools.
 
@@ -243,6 +244,17 @@ python local_query.py votes --bill-id 565913
 python local_query.py vote --vote-id 26916
 ```
 
+#### `knesset-dates` -- Knesset terms and plenum periods
+
+```bash
+python local_query.py knesset-dates
+python local_query.py knesset-dates --knesset 25
+```
+
+| Flag | Description |
+|------|-------------|
+| `--knesset` | Knesset number |
+
 ## Fetching Data
 
 Populate the local SQLite database (`data.sqlite`) from remote sources:
@@ -278,12 +290,13 @@ python core/db_cli.py fetch-votes
 | `fetch-committees` | KNS_Committee | `committee_raw` | CSV+OData |
 | `fetch-votes` | KNS_PlenumVote | `plenum_vote_raw` | CSV+OData |
 | `fetch-vote-results` | KNS_PlenumVoteResult | `plenum_vote_result_raw` | OData only |
+| `fetch-knesset-dates` | KNS_KnessetDates | `knesset_dates_raw` | OData only |
 
 ## Architecture
 
 ```
-mcp_server.py             MCP server entry point (12 tools, rate limiting)
-local_query.py            CLI for querying views (12 subcommands, JSON output)
+mcp_server.py             MCP server entry point (13 tools, rate limiting)
+local_query.py            CLI for querying views (13 subcommands, JSON output)
 config.py                 Configuration (loaded from .env)
 core/
   db.py                   SQLite connection (read-only + writable), indexes, metadata
@@ -291,7 +304,7 @@ core/
   rate_limit.py           Per-IP ASGI rate limiting middleware
   odata_client.py         CSV+OData fetching with pagination
   db_cli.py               Fetch CLI (13 subcommands)
-views/                    Query views (12 views, structured search/detail layers)
+views/                    Query views (13 views, structured search/detail layers)
 tables/                   Raw table modules (mirror OData fields exactly)
 tests/                    Integration tests against real data.sqlite
 ```

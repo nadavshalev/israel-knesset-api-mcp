@@ -130,12 +130,25 @@ def _query_startup_metadata() -> dict:
     except Exception:
         logger.warning("last_sync query failed", exc_info=True)
 
+    # --- current_knesset_num ---
+    current_knesset_num = None
+    try:
+        cursor.execute(
+            "SELECT KnessetNum FROM knesset_dates_raw WHERE IsCurrent = 1 LIMIT 1"
+        )
+        row = cursor.fetchone()
+        if row:
+            current_knesset_num = list(row.values())[0]
+    except Exception:
+        logger.warning("current_knesset_num query failed", exc_info=True)
+
     conn.close()
     return {
         "enum_values": enum_values,
         "counts": counts,
         "recent_dates": recent_dates,
         "last_sync": last_sync,
+        "current_knesset_num": current_knesset_num,
     }
 
 
@@ -156,9 +169,14 @@ def _build_instructions() -> str:
     if last_sync:
         sync_line = f"\n\n**Last data sync:** {last_sync}"
 
+    current_knesset = _startup_meta.get("current_knesset_num")
+    knesset_line = ""
+    if current_knesset is not None:
+        knesset_line = f"\n\n**Current Knesset:** {current_knesset}"
+
     return f"""\
 Israeli Knesset (parliament) data API — members, committees, bills, \
-plenum sessions, and votes.{sync_line}
+plenum sessions, and votes.{sync_line}{knesset_line}
 
 ## Getting Started
 1. Use `search_across` for broad discovery — it searches all entity types \
@@ -173,6 +191,8 @@ applicable — use those values verbatim.
 to find IDs.
 - **Detail tools** (`get_member`, `get_bill`, `get_vote`, `get_committee`, \
 `get_plenum`) return the full record for a single entity by ID.
+- **Lookup tools** (`get_knesset_dates`) return reference data grouped by \
+knesset number.
 - Always search first to find the ID, then call the detail tool. \
 Do not guess IDs.
 

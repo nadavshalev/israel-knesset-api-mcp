@@ -21,6 +21,7 @@ from views import bill_view
 from views import votes_view
 from views import vote_view
 from views import search_across_view
+from views import knesset_dates_view
 
 
 # ---------------------------------------------------------------------------
@@ -129,6 +130,10 @@ def parse_args() -> argparse.Namespace:
     sa_p.add_argument("query", type=str, help="Free-text search term")
     sa_p.add_argument("--top-n", dest="top_n", type=int, default=None,
                        help="Max results per entity type (default from config)")
+
+    # --- knesset-dates ---
+    kd_p = sub.add_parser("knesset-dates", help="Look up Knesset terms and plenum periods")
+    kd_p.add_argument("--knesset", type=int, default=None, help="Knesset number")
 
     return parser.parse_args()
 
@@ -253,6 +258,11 @@ def main() -> None:
 
     if args.command == "search-across":
         result = search_across_view.search_across(args.query, top_n=args.top_n)
+        _output(result)
+        return
+
+    if args.command == "knesset-dates":
+        result = knesset_dates_view.get_knesset_dates(knesset_num=args.knesset)
         _output(result)
         return
 
