@@ -18,7 +18,7 @@ from typing import Annotated
 from pydantic import Field
 
 from core.db import connect_readonly
-from core.helpers import simple_date, normalize_inputs
+from core.helpers import simple_date, normalize_inputs, _clean
 from core.mcp_meta import mcp_tool
 from core.search_meta import register_search
 
@@ -144,4 +144,20 @@ def search_committees(
         })
 
     conn.close()
-    return results
+    return _clean(results)
+
+
+search_committees.RESPONSE_SCHEMA = {
+    "_type": "list[dict]",
+    "_description": "List of committee summaries sorted by start_date DESC, committee_id DESC",
+    "committee_id": {"type": "int", "optional": False, "description": "Unique committee identifier"},
+    "name": {"type": "str", "optional": True, "description": "Committee name"},
+    "knesset_num": {"type": "int", "optional": True, "description": "Knesset number"},
+    "type": {"type": "str", "optional": True, "description": "Committee type (main, sub, etc.)"},
+    "category": {"type": "str", "optional": True, "description": "Category description"},
+    "is_current": {"type": "bool", "optional": False, "description": "Whether the committee is currently active"},
+    "start_date": {"type": "str", "optional": True, "description": "Start date (YYYY-MM-DD)"},
+    "end_date": {"type": "str", "optional": True, "description": "End date (YYYY-MM-DD)"},
+    "parent_committee_id": {"type": "int", "optional": True, "description": "Parent committee ID (sub-committees)"},
+    "parent_committee_name": {"type": "str", "optional": True, "description": "Parent committee name"},
+}

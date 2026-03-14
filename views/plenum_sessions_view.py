@@ -17,7 +17,7 @@ from typing import Annotated
 from pydantic import Field
 
 from core.db import connect_readonly
-from core.helpers import simple_date, normalize_inputs
+from core.helpers import simple_date, normalize_inputs, _clean
 from core.mcp_meta import mcp_tool
 from core.search_meta import register_search
 
@@ -150,4 +150,14 @@ def search_sessions(
         })
 
     conn.close()
-    return results
+    return _clean(results)
+
+
+search_sessions.RESPONSE_SCHEMA = {
+    "_type": "list[dict]",
+    "_description": "List of session summaries sorted by date DESC, session_id DESC",
+    "session_id": {"type": "int", "optional": False, "description": "Unique session identifier"},
+    "knesset_num": {"type": "int", "optional": True, "description": "Knesset number"},
+    "name": {"type": "str", "optional": True, "description": "Session name"},
+    "date": {"type": "str", "optional": True, "description": "Session date (YYYY-MM-DD)"},
+}

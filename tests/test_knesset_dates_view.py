@@ -140,10 +140,10 @@ class TestCurrentKnesset(unittest.TestCase):
         self.assertEqual(len(current_periods), 1)
 
     def test_current_period_has_no_finish_date(self):
-        """The current period should have no finish date."""
+        """The current period should have no finish date (key omitted by _clean)."""
         results = get_knesset_dates(knesset_num=25)
         current_period = [p for p in results[0]["periods"] if p["is_current"]][0]
-        self.assertEqual(current_period["finish_date"], "")
+        self.assertNotIn("finish_date", current_period)
 
     def test_past_knesset_not_current(self):
         """Knesset 20 should not be current."""

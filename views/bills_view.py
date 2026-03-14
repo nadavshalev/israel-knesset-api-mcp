@@ -17,7 +17,7 @@ from typing import Annotated
 from pydantic import Field
 
 from core.db import connect_readonly
-from core.helpers import simple_date, normalize_inputs
+from core.helpers import simple_date, normalize_inputs, _clean
 from core.mcp_meta import mcp_tool
 from core.search_meta import register_search
 
@@ -217,4 +217,21 @@ def search_bills(
         results.append(result)
 
     conn.close()
-    return results
+    return _clean(results)
+
+
+search_bills.RESPONSE_SCHEMA = {
+    "_type": "list[dict]",
+    "_description": "List of bill summaries sorted by publication_date DESC, bill_id DESC",
+    "bill_id": {"type": "int", "optional": False, "description": "Unique bill identifier"},
+    "name": {"type": "str", "optional": True, "description": "Bill name"},
+    "knesset_num": {"type": "int", "optional": True, "description": "Knesset number"},
+    "sub_type": {"type": "str", "optional": True, "description": "Bill sub-type (private/government/committee)"},
+    "status": {"type": "str", "optional": True, "description": "Current status description"},
+    "committee": {"type": "str", "optional": True, "description": "Assigned committee name"},
+    "committee_id": {"type": "int", "optional": True, "description": "Assigned committee ID"},
+    "publication_date": {"type": "str", "optional": True, "description": "Publication date (YYYY-MM-DD)"},
+    "publication_series": {"type": "str", "optional": True, "description": "Publication series description"},
+    "summary": {"type": "str", "optional": True, "description": "Summary of the law"},
+    "primary_initiators": {"type": "list[str]", "optional": True, "description": "Primary initiator names with party (only present if initiators exist)"},
+}

@@ -18,7 +18,7 @@ from typing import Annotated
 from pydantic import Field
 
 from core.db import connect_readonly
-from core.helpers import simple_date, format_person_name, normalize_inputs
+from core.helpers import simple_date, format_person_name, normalize_inputs, _clean
 from core.mcp_meta import mcp_tool
 from core.search_meta import register_search
 
@@ -220,4 +220,16 @@ def search_members(
     )
 
     conn.close()
-    return results
+    return _clean(results)
+
+
+search_members.RESPONSE_SCHEMA = {
+    "_type": "list[dict]",
+    "_description": "List of member summaries sorted by knesset_num DESC, member_id",
+    "member_id": {"type": "int", "optional": False, "description": "Member person ID"},
+    "name": {"type": "str", "optional": False, "description": "Full name"},
+    "gender": {"type": "str", "optional": True, "description": "Gender description"},
+    "knesset_num": {"type": "int", "optional": False, "description": "Knesset number"},
+    "faction": {"type": "list[str]", "optional": False, "description": "Faction/party names"},
+    "role_types": {"type": "list[str]", "optional": False, "description": "Distinct position titles held"},
+}

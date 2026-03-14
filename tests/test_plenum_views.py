@@ -109,7 +109,7 @@ class TestGetSession(unittest.TestCase):
             self.assertIn("item_id", item)
             self.assertIn("name", item)
             self.assertIn("type", item)
-            self.assertIn("status", item)
+            # "status" is omitted when null/empty by _clean()
 
     def test_document_structure(self):
         result = get_session(568294)

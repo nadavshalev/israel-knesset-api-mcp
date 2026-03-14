@@ -33,13 +33,12 @@ class TestBasicSearch(unittest.TestCase):
     def test_output_structure(self):
         results = search_bills(knesset_num=20, name="חוק-יסוד")
         self.assertGreater(len(results), 0)
-        expected_keys = {
-            "bill_id", "name", "knesset_num", "sub_type", "status",
-            "committee", "publication_date", "publication_series", "summary",
-        }
+        # Always-present keys; others (summary, committee, publication_date,
+        # publication_series) are omitted when null/empty by _clean().
+        always_keys = {"bill_id", "name", "knesset_num"}
         for b in results:
-            self.assertTrue(expected_keys.issubset(b.keys()),
-                            f"Missing keys: {expected_keys - b.keys()}")
+            self.assertTrue(always_keys.issubset(b.keys()),
+                            f"Missing keys: {always_keys - b.keys()}")
 
     def test_name_no_match(self):
         results = search_bills(name="xxxNOTEXISTxxx", knesset_num=20)
@@ -81,7 +80,7 @@ class TestSortOrder(unittest.TestCase):
     def test_sorted_by_publication_date_desc(self):
         """Results should be sorted by publication_date DESC."""
         results = search_bills(name="חוק-יסוד", knesset_num=20)
-        dates = [r["publication_date"] for r in results if r["publication_date"]]
+        dates = [r["publication_date"] for r in results if r.get("publication_date")]
         for i in range(1, len(dates)):
             self.assertGreaterEqual(
                 dates[i - 1], dates[i],

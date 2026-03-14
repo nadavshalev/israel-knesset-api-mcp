@@ -42,18 +42,19 @@ class TestGetVote(unittest.TestCase):
         self.assertIsNone(result)
 
     def test_output_structure(self):
-        """Verify all expected keys are present in detail view."""
+        """Verify always-present keys are present in detail view."""
         result = get_vote(21825)
         self.assertIsNotNone(result)
-        expected_keys = {
-            "vote_id", "bill_id", "knesset_num", "session_id", "title",
-            "subject", "date", "time", "is_accepted", "total_for",
-            "total_against", "total_abstain", "for_option",
-            "against_option", "vote_method",
-            "members", "related_votes",
+        # Always-present keys; optional keys (bill_id, subject, for_option,
+        # against_option, vote_method) are omitted when null/empty.
+        always_keys = {
+            "vote_id", "knesset_num", "session_id", "title",
+            "date", "time", "is_accepted", "total_for",
+            "total_against", "total_abstain",
+            "members",
         }
-        self.assertTrue(expected_keys.issubset(result.keys()),
-                        f"Missing keys: {expected_keys - result.keys()}")
+        self.assertTrue(always_keys.issubset(result.keys()),
+                        f"Missing keys: {always_keys - result.keys()}")
 
     def test_bill_id_for_bill_vote(self):
         """Vote 26916 links to bill 565913 (Basic Law: Nation State)."""
@@ -62,10 +63,10 @@ class TestGetVote(unittest.TestCase):
         self.assertEqual(result["bill_id"], 565913)
 
     def test_bill_id_null_for_non_bill_vote(self):
-        """Vote 21825 (speaker election) is not a bill vote."""
+        """Vote 21825 (speaker election) is not a bill vote — bill_id is omitted."""
         result = get_vote(21825)
         self.assertIsNotNone(result)
-        self.assertIsNone(result["bill_id"])
+        self.assertNotIn("bill_id", result)
 
 
 # ===================================================================
@@ -139,7 +140,7 @@ class TestRelatedVotes(unittest.TestCase):
         self.assertIsInstance(result["related_votes"], list)
 
     def test_standalone_vote_has_no_related(self):
-        """Vote 21825 (speaker election) has no related votes."""
+        """Vote 21825 (speaker election) has no related votes — empty list."""
         result = get_vote(21825)
         self.assertIsNotNone(result)
         self.assertEqual(len(result["related_votes"]), 0)
@@ -156,13 +157,15 @@ class TestRelatedVotes(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertGreater(len(result["related_votes"]), 0)
         rv = result["related_votes"][0]
-        expected_keys = {
-            "vote_id", "subject", "for_option",
+        # Always-present keys; optional keys (for_option, subject) may be
+        # omitted when null/empty by _clean().
+        always_keys = {
+            "vote_id",
             "date", "time", "is_accepted",
             "total_for", "total_against", "total_abstain",
         }
-        self.assertTrue(expected_keys.issubset(rv.keys()),
-                        f"Missing keys: {expected_keys - rv.keys()}")
+        self.assertTrue(always_keys.issubset(rv.keys()),
+                        f"Missing keys: {always_keys - rv.keys()}")
 
     def test_related_votes_exclude_self(self):
         """The main vote should NOT appear in its own related_votes."""

@@ -105,12 +105,14 @@ class TestMetadataOnlyByDefault(unittest.TestCase):
         """Default call returns only metadata — no sessions/members/bills/documents."""
         c = get_committee(928)
         self.assertIsNotNone(c)
-        expected_keys = {
+        # Always-present keys; optional keys (end_date, parent_committee_id,
+        # parent_committee_name, email) are omitted when null/empty by _clean().
+        always_keys = {
             "committee_id", "name", "knesset_num", "type", "category",
-            "is_current", "start_date", "end_date",
-            "parent_committee_id", "parent_committee_name", "email",
+            "is_current", "start_date",
         }
-        self.assertEqual(set(c.keys()), expected_keys)
+        self.assertTrue(always_keys.issubset(c.keys()),
+                        f"Missing keys: {always_keys - c.keys()}")
 
     def test_no_sessions_by_default(self):
         c = get_committee(928)
@@ -200,11 +202,13 @@ class TestSessions(unittest.TestCase):
         """Each session dict has expected keys."""
         c = get_committee(928, include_sessions=True)
         s = c["sessions"][0]
-        expected_keys = {
-            "session_id", "number", "date", "start_time", "end_time",
-            "type", "status", "location", "url", "broadcast_url",
+        # Always-present keys; optional keys (end_time, status,
+        # location, url, broadcast_url) are omitted when null/empty.
+        always_keys = {
+            "session_id", "number", "date", "start_time", "type",
         }
-        self.assertEqual(set(s.keys()), expected_keys)
+        self.assertTrue(always_keys.issubset(s.keys()),
+                        f"Missing keys: {always_keys - s.keys()}")
 
     def test_sessions_newest_first(self):
         """Sessions are returned newest first."""
@@ -373,11 +377,13 @@ class TestDocuments(unittest.TestCase):
         """Each document dict has expected keys."""
         c = get_committee(928, include_documents=True)
         d = c["documents"][0]
-        expected_keys = {
-            "document_id", "type", "name", "format",
+        # Always-present keys; optional key (name) is omitted when null/empty.
+        always_keys = {
+            "document_id", "type", "format",
             "file_path", "session_id", "session_date",
         }
-        self.assertEqual(set(d.keys()), expected_keys)
+        self.assertTrue(always_keys.issubset(d.keys()),
+                        f"Missing keys: {always_keys - d.keys()}")
 
     def test_document_date_formatting(self):
         """Document session dates should be YYYY-MM-DD."""

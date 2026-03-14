@@ -18,7 +18,7 @@ from typing import Annotated
 from pydantic import Field
 
 from core.db import connect_readonly
-from core.helpers import simple_date, normalize_inputs
+from core.helpers import simple_date, normalize_inputs, _clean
 from core.mcp_meta import mcp_tool
 
 
@@ -109,4 +109,35 @@ def get_session(
     }
 
     conn.close()
-    return obj
+    return _clean(obj)
+
+
+get_session.RESPONSE_SCHEMA = {
+    "_type": "dict | None",
+    "_description": "Full session detail, or null if not found",
+    "session_id": {"type": "int", "optional": False, "description": "Unique session identifier"},
+    "knesset_num": {"type": "int", "optional": True, "description": "Knesset number"},
+    "name": {"type": "str", "optional": True, "description": "Session name"},
+    "date": {"type": "str", "optional": True, "description": "Session start date (YYYY-MM-DD)"},
+    "items": {
+        "type": "list[dict]",
+        "optional": False,
+        "description": "Agenda items in ordinal order",
+        "items": {
+            "item_id": {"type": "int", "optional": True, "description": "Item ID"},
+            "name": {"type": "str", "optional": True, "description": "Item name"},
+            "type": {"type": "str", "optional": True, "description": "Item type description"},
+            "status": {"type": "str", "optional": True, "description": "Item status description"},
+        },
+    },
+    "documents": {
+        "type": "list[dict]",
+        "optional": False,
+        "description": "Session documents",
+        "items": {
+            "group_type": {"type": "str", "optional": True, "description": "Document group type"},
+            "application": {"type": "str", "optional": True, "description": "File format"},
+            "file_path": {"type": "str", "optional": True, "description": "File URL/path"},
+        },
+    },
+}

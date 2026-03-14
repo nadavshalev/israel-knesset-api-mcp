@@ -18,7 +18,7 @@ from typing import Annotated
 from pydantic import Field
 
 from core.db import connect_readonly
-from core.helpers import simple_date, simple_time, normalize_inputs
+from core.helpers import simple_date, simple_time, normalize_inputs, _clean
 from core.mcp_meta import mcp_tool
 
 
@@ -200,4 +200,51 @@ def get_vote(
         obj["related_votes"] = []
 
     conn.close()
-    return obj
+    return _clean(obj)
+
+
+get_vote.RESPONSE_SCHEMA = {
+    "_type": "dict | None",
+    "_description": "Full vote detail, or null if not found",
+    "vote_id": {"type": "int", "optional": False, "description": "Unique vote identifier"},
+    "bill_id": {"type": "int", "optional": True, "description": "Linked bill ID"},
+    "knesset_num": {"type": "int", "optional": True, "description": "Knesset number"},
+    "session_id": {"type": "int", "optional": True, "description": "Plenum session ID"},
+    "title": {"type": "str", "optional": True, "description": "Vote title"},
+    "subject": {"type": "str", "optional": True, "description": "Vote subject/stage"},
+    "date": {"type": "str", "optional": True, "description": "Vote date (YYYY-MM-DD)"},
+    "time": {"type": "str", "optional": True, "description": "Vote time (HH:MM)"},
+    "is_accepted": {"type": "bool", "optional": True, "description": "Whether the vote passed"},
+    "total_for": {"type": "int", "optional": True, "description": "Votes in favour"},
+    "total_against": {"type": "int", "optional": True, "description": "Votes against"},
+    "total_abstain": {"type": "int", "optional": True, "description": "Abstentions"},
+    "for_option": {"type": "str", "optional": True, "description": "Label for the 'for' option"},
+    "against_option": {"type": "str", "optional": True, "description": "Label for the 'against' option"},
+    "vote_method": {"type": "str", "optional": True, "description": "Voting method description"},
+    "members": {
+        "type": "list[dict]",
+        "optional": False,
+        "description": "Per-MK vote breakdown",
+        "items": {
+            "member_id": {"type": "int", "optional": False, "description": "Member person ID"},
+            "name": {"type": "str", "optional": False, "description": "Member full name"},
+            "result": {"type": "str", "optional": False, "description": "Vote result description"},
+        },
+    },
+    "related_votes": {
+        "type": "list[dict]",
+        "optional": False,
+        "description": "Other votes with the same title in the same session",
+        "items": {
+            "vote_id": {"type": "int", "optional": False, "description": "Related vote ID"},
+            "subject": {"type": "str", "optional": True, "description": "Vote subject"},
+            "for_option": {"type": "str", "optional": True, "description": "For-option label"},
+            "date": {"type": "str", "optional": True, "description": "Vote date"},
+            "time": {"type": "str", "optional": True, "description": "Vote time"},
+            "is_accepted": {"type": "bool", "optional": True, "description": "Whether accepted"},
+            "total_for": {"type": "int", "optional": True, "description": "Votes for"},
+            "total_against": {"type": "int", "optional": True, "description": "Votes against"},
+            "total_abstain": {"type": "int", "optional": True, "description": "Abstentions"},
+        },
+    },
+}

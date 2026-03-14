@@ -18,7 +18,7 @@ from typing import Annotated
 from pydantic import Field
 
 from core.db import connect_readonly
-from core.helpers import simple_date, format_person_name, normalize_inputs
+from core.helpers import simple_date, format_person_name, normalize_inputs, _clean
 from core.mcp_meta import mcp_tool
 
 
@@ -182,7 +182,7 @@ def get_member(
     if knesset_num is not None:
         result = _build_member_detail(cursor, member_id, knesset_num)
         conn.close()
-        return result
+        return _clean(result) if result else None
 
     # No knesset_num — return all terms
     cursor.execute(
@@ -208,4 +208,57 @@ def get_member(
             results.append(obj)
 
     conn.close()
-    return results if results else None
+    return _clean(results) if results else None
+
+
+get_member.RESPONSE_SCHEMA = {
+    "_type": "dict | list[dict] | None",
+    "_description": "Single term dict (if knesset_num given), list of term dicts (if omitted), or null",
+    "member_id": {"type": "int", "optional": False, "description": "Member person ID"},
+    "name": {"type": "str", "optional": False, "description": "Full name"},
+    "gender": {"type": "str", "optional": True, "description": "Gender description"},
+    "knesset_num": {"type": "int", "optional": False, "description": "Knesset number for this term"},
+    "faction": {"type": "list[str]", "optional": False, "description": "Faction/party names during this term"},
+    "roles": {
+        "type": "dict",
+        "optional": False,
+        "description": "Roles grouped by category",
+        "schema": {
+            "government": {
+                "type": "list[dict]",
+                "optional": False,
+                "description": "Government/ministerial roles",
+                "items": {
+                    "title": {"type": "str", "optional": True, "description": "Role title"},
+                    "ministry": {"type": "str", "optional": True, "description": "Ministry name"},
+                    "is_transition": {"type": "bool", "optional": False, "description": "Whether from a transition government"},
+                    "start": {"type": "str", "optional": True, "description": "Start date (YYYY-MM-DD)"},
+                    "end": {"type": "str", "optional": True, "description": "End date (YYYY-MM-DD)"},
+                },
+            },
+            "committees": {
+                "type": "list[dict]",
+                "optional": False,
+                "description": "Committee memberships",
+                "items": {
+                    "id": {"type": "int", "optional": True, "description": "Committee ID"},
+                    "name": {"type": "str", "optional": True, "description": "Committee name"},
+                    "role": {"type": "str", "optional": True, "description": "Position title on committee"},
+                    "start": {"type": "str", "optional": True, "description": "Start date"},
+                    "end": {"type": "str", "optional": True, "description": "End date"},
+                },
+            },
+            "parliamentary": {
+                "type": "list[dict]",
+                "optional": False,
+                "description": "Parliamentary roles (e.g. Knesset member, Speaker)",
+                "items": {
+                    "name": {"type": "str", "optional": True, "description": "Role display title"},
+                    "role": {"type": "str", "optional": True, "description": "Official position title"},
+                    "start": {"type": "str", "optional": True, "description": "Start date"},
+                    "end": {"type": "str", "optional": True, "description": "End date"},
+                },
+            },
+        },
+    },
+}

@@ -9,6 +9,8 @@ Israeli Knesset (parliament) data API — members, committees, bills, plenum ses
 3. Use `get_knesset_dates` to find which Knesset term is current or to look up term dates before querying other tools.
 
 ## Notes
+* **Fields with null, empty, or meaningless values are omitted from responses.** Do not assume every field listed in the schema will be present — check for key existence before accessing optional fields. Fields marked `optional: true` in the schema may be absent when the underlying data is empty.
+* Use `get_response_schema(tool_name)` to get the full response schema for any tool — field names, types, optionality, descriptions, and nested structure.
 * There is rate limiting in place to prevent abuse. Don't use the tools too aggressively — if you get rate limited, wait a bit before retrying.
 
 ## Search → Detail Workflow

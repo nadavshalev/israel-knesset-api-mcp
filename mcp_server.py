@@ -41,6 +41,7 @@ from core.rate_limit import RateLimitMiddleware
 import views  # noqa: F401 — triggers views/__init__.py which imports all view modules
 
 from core.mcp_meta import get_all_tools
+from core.helpers import _render_schema_compact
 
 logger = logging.getLogger(__name__)
 
@@ -269,16 +270,36 @@ def _extract_field(annotation) -> Field:
     return Field()
 
 
-def _enrich_description(base: str, tool_name: str) -> str:
-    """Append entity count and most-recent date to a tool description."""
+_OMISSION_NOTE = (
+    "Note: fields with null/empty values are omitted from the response. "
+    "Check for key existence before accessing optional fields."
+)
+
+
+def _enrich_description(base: str, tool_name: str, view_fn) -> str:
+    """Append entity count, most-recent date, schema summary, and omission note."""
+    parts = [base]
     count = _startup_meta["counts"].get(tool_name)
     date = _startup_meta["recent_dates"].get(tool_name)
     if count is not None:
         count_str = f"{count:,}"
         if date:
-            return f"{base}\n\nSearches {count_str} records (data through {date})."
-        return f"{base}\n\nSearches {count_str} records."
-    return base
+            parts.append(f"Searches {count_str} records (data through {date}).")
+        else:
+            parts.append(f"Searches {count_str} records.")
+
+    # Compact schema summary from RESPONSE_SCHEMA
+    schema = getattr(view_fn, "RESPONSE_SCHEMA", None)
+    if schema:
+        ret_type = schema.get("_type", "")
+        compact = _render_schema_compact(schema)
+        if ret_type:
+            parts.append(f"Returns {ret_type}: {compact}")
+        else:
+            parts.append(f"Returns: {compact}")
+
+    parts.append(_OMISSION_NOTE)
+    return "\n\n".join(parts)
 
 
 for _fn in get_all_tools():
@@ -286,11 +307,47 @@ for _fn in get_all_tools():
     _tool_name = _meta["name"]
     _enum_map = _startup_meta["enum_values"].get(_tool_name, {})
     _handler = _make_handler(_fn, _enum_map)
-    _desc = _enrich_description(_meta["description"], _tool_name)
+    _desc = _enrich_description(_meta["description"], _tool_name, _fn)
     mcp.tool(
         name=_tool_name,
         description=_desc,
     )(_handler)
+
+
+# ---------------------------------------------------------------------------
+# Schema lookup tool
+# ---------------------------------------------------------------------------
+
+# Build a mapping of tool_name -> RESPONSE_SCHEMA for the lookup tool.
+_SCHEMA_MAP: dict[str, dict] = {}
+for _fn in get_all_tools():
+    _schema = getattr(_fn, "RESPONSE_SCHEMA", None)
+    if _schema:
+        _SCHEMA_MAP[_fn._mcp_tool["name"]] = _schema
+
+_VALID_TOOL_NAMES = sorted(_SCHEMA_MAP.keys())
+_ToolNameLiteral = Literal[tuple(_VALID_TOOL_NAMES)]  # type: ignore[valid-type]
+
+
+@mcp.tool(
+    name="get_response_schema",
+    description=(
+        "Get the full response schema for any tool. Returns field names, "
+        "types, optionality, descriptions, and nested structure. Use this "
+        "to understand what fields a tool returns before calling it."
+    ),
+)
+async def get_response_schema(
+    tool_name: Annotated[_ToolNameLiteral, Field(description="Name of the tool to get the schema for")],  # type: ignore[valid-type]
+) -> str:
+    """Return the full RESPONSE_SCHEMA dict for the given tool as JSON."""
+    schema = _SCHEMA_MAP.get(tool_name)
+    if schema is None:
+        return json.dumps({
+            "error": f"Unknown tool: {tool_name!r}",
+            "available_tools": _VALID_TOOL_NAMES,
+        }, ensure_ascii=False)
+    return json.dumps(schema, ensure_ascii=False, indent=2)
 
 
 # ---------------------------------------------------------------------------

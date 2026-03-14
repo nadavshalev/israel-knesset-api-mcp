@@ -121,7 +121,7 @@ class TestNameFilter(unittest.TestCase):
         results = search_votes(name="בחירת יושב-ראש", knesset_num=20)
         self.assertGreater(len(results), 0)
         for v in results:
-            title_or_subject = (v["title"] or "") + (v["subject"] or "")
+            title_or_subject = (v.get("title") or "") + (v.get("subject") or "")
             self.assertIn("יושב-ראש", title_or_subject)
 
     def test_subject_search(self):
@@ -165,15 +165,16 @@ class TestOutputStructure(unittest.TestCase):
     def test_output_keys(self):
         results = search_votes(knesset_num=20, date="2015-03-31")
         self.assertGreater(len(results), 0)
-        expected_keys = {
-            "vote_id", "bill_id", "knesset_num", "session_id", "title",
-            "subject", "date", "time", "is_accepted", "total_for",
-            "total_against", "total_abstain", "for_option",
-            "against_option", "vote_method",
+        # Always-present keys; optional keys (bill_id, subject, for_option,
+        # against_option, vote_method) are omitted when null/empty by _clean().
+        always_keys = {
+            "vote_id", "knesset_num", "session_id", "title",
+            "date", "time", "is_accepted", "total_for",
+            "total_against", "total_abstain",
         }
         for v in results:
-            self.assertTrue(expected_keys.issubset(v.keys()),
-                            f"Missing keys: {expected_keys - v.keys()}")
+            self.assertTrue(always_keys.issubset(v.keys()),
+                            f"Missing keys: {always_keys - v.keys()}")
 
     def test_no_members_in_list(self):
         """List view should NOT include members."""
@@ -192,15 +193,15 @@ class TestBillIdField(unittest.TestCase):
     """Verify bill_id field in vote output."""
 
     def test_bill_id_present_in_output(self):
-        """Vote output should always include 'bill_id' key."""
+        """Vote output may omit 'bill_id' when it's null (non-bill vote)."""
         results = search_votes(knesset_num=20, date="2015-03-31")
         self.assertGreater(len(results), 0)
-        self.assertIn("bill_id", results[0])
+        # bill_id is optional — only present for bill-related votes
 
     def test_bill_vote_has_bill_id(self):
         """Vote 26916 links to bill 565913 (Basic Law: Nation State)."""
         results = search_votes(knesset_num=20, name="חוק-יסוד: ישראל")
-        bill_ids = {v["bill_id"] for v in results if v["bill_id"]}
+        bill_ids = {v["bill_id"] for v in results if v.get("bill_id")}
         self.assertIn(565913, bill_ids)
 
 

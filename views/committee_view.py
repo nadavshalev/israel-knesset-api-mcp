@@ -26,7 +26,7 @@ from typing import Annotated
 from pydantic import Field
 
 from core.db import connect_readonly
-from core.helpers import simple_date, simple_time, format_person_name, normalize_inputs
+from core.helpers import simple_date, simple_time, format_person_name, normalize_inputs, _clean
 from core.mcp_meta import mcp_tool
 
 
@@ -316,4 +316,81 @@ def get_committee(
         obj["document_count"] = len(documents)
 
     conn.close()
-    return obj
+    return _clean(obj)
+
+
+get_committee.RESPONSE_SCHEMA = {
+    "_type": "dict | None",
+    "_description": "Full committee detail, or null if not found. Opt-in sections appear only when requested.",
+    "committee_id": {"type": "int", "optional": False, "description": "Unique committee identifier"},
+    "name": {"type": "str", "optional": True, "description": "Committee name"},
+    "knesset_num": {"type": "int", "optional": True, "description": "Knesset number"},
+    "type": {"type": "str", "optional": True, "description": "Committee type"},
+    "category": {"type": "str", "optional": True, "description": "Category description"},
+    "is_current": {"type": "bool", "optional": False, "description": "Whether currently active"},
+    "start_date": {"type": "str", "optional": True, "description": "Start date (YYYY-MM-DD)"},
+    "end_date": {"type": "str", "optional": True, "description": "End date (YYYY-MM-DD)"},
+    "parent_committee_id": {"type": "int", "optional": True, "description": "Parent committee ID"},
+    "parent_committee_name": {"type": "str", "optional": True, "description": "Parent committee name"},
+    "email": {"type": "str", "optional": True, "description": "Committee email"},
+    "sessions": {
+        "type": "list[dict]",
+        "optional": True,
+        "description": "Committee sessions (only when include_sessions=True)",
+        "items": {
+            "session_id": {"type": "int", "optional": False, "description": "Session ID"},
+            "number": {"type": "int", "optional": True, "description": "Session number"},
+            "date": {"type": "str", "optional": True, "description": "Session date"},
+            "start_time": {"type": "str", "optional": True, "description": "Start time (HH:MM)"},
+            "end_time": {"type": "str", "optional": True, "description": "End time (HH:MM)"},
+            "type": {"type": "str", "optional": True, "description": "Session type"},
+            "status": {"type": "str", "optional": True, "description": "Session status"},
+            "location": {"type": "str", "optional": True, "description": "Location"},
+            "url": {"type": "str", "optional": True, "description": "Session URL"},
+            "broadcast_url": {"type": "str", "optional": True, "description": "Broadcast URL"},
+        },
+    },
+    "session_count": {"type": "int", "optional": True, "description": "Number of sessions (when include_sessions=True)"},
+    "members": {
+        "type": "list[dict]",
+        "optional": True,
+        "description": "Committee members (only when include_members=True)",
+        "items": {
+            "member_id": {"type": "int", "optional": False, "description": "Member person ID"},
+            "name": {"type": "str", "optional": False, "description": "Full name"},
+            "knesset_num": {"type": "int", "optional": True, "description": "Knesset number"},
+            "role": {"type": "str", "optional": True, "description": "Position title"},
+            "start": {"type": "str", "optional": True, "description": "Start date"},
+            "end": {"type": "str", "optional": True, "description": "End date"},
+        },
+    },
+    "member_count": {"type": "int", "optional": True, "description": "Number of members (when include_members=True)"},
+    "bills": {
+        "type": "list[dict]",
+        "optional": True,
+        "description": "Bills discussed (only when include_bills=True)",
+        "items": {
+            "bill_id": {"type": "int", "optional": False, "description": "Bill ID"},
+            "name": {"type": "str", "optional": True, "description": "Bill name"},
+            "knesset_num": {"type": "int", "optional": True, "description": "Knesset number"},
+            "sub_type": {"type": "str", "optional": True, "description": "Bill sub-type"},
+            "status": {"type": "str", "optional": True, "description": "Bill status"},
+        },
+    },
+    "bill_count": {"type": "int", "optional": True, "description": "Number of bills (when include_bills=True)"},
+    "documents": {
+        "type": "list[dict]",
+        "optional": True,
+        "description": "Session documents (only when include_documents=True)",
+        "items": {
+            "document_id": {"type": "int", "optional": False, "description": "Document ID"},
+            "type": {"type": "str", "optional": True, "description": "Document group type"},
+            "name": {"type": "str", "optional": True, "description": "Document name"},
+            "format": {"type": "str", "optional": True, "description": "File format"},
+            "file_path": {"type": "str", "optional": True, "description": "File URL/path"},
+            "session_id": {"type": "int", "optional": False, "description": "Session ID"},
+            "session_date": {"type": "str", "optional": True, "description": "Session date"},
+        },
+    },
+    "document_count": {"type": "int", "optional": True, "description": "Number of documents (when include_documents=True)"},
+}

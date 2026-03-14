@@ -109,13 +109,15 @@ class TestOutputStructure(unittest.TestCase):
         """Each committee summary has expected keys."""
         results = search_committees(knesset_num=20, committee_type="ועדה ראשית")
         self.assertGreater(len(results), 0)
-        expected_keys = {
+        # Always-present keys; optional keys (end_date, parent_committee_id,
+        # parent_committee_name) are omitted when null/empty by _clean().
+        always_keys = {
             "committee_id", "name", "knesset_num", "type", "category",
-            "is_current", "start_date", "end_date",
-            "parent_committee_id", "parent_committee_name",
+            "is_current", "start_date",
         }
         for r in results:
-            self.assertEqual(set(r.keys()), expected_keys)
+            self.assertTrue(always_keys.issubset(r.keys()),
+                            f"Missing keys: {always_keys - r.keys()}")
 
     def test_no_detail_fields(self):
         """Summary view should not include sessions, members, bills, documents."""

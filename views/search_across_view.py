@@ -27,7 +27,7 @@ from pydantic import Field
 
 from config import SEARCH_ACROSS_TOP_N
 from core.db import connect_readonly
-from core.helpers import normalize_inputs
+from core.helpers import normalize_inputs, _clean
 from core.mcp_meta import mcp_tool
 
 
@@ -118,4 +118,22 @@ def search_across(
 
     conn.close()
 
-    return {"query": query, "results": results}
+    return _clean({"query": query, "results": results})
+
+
+search_across.RESPONSE_SCHEMA = {
+    "query": {"type": "str", "optional": False, "description": "The search term that was used"},
+    "results": {
+        "type": "dict",
+        "optional": False,
+        "description": "Keyed by entity type (members, bills, committees, votes, plenums)",
+        "value_schema": {
+            "count": {"type": "int", "optional": False, "description": "Total matches for this entity type"},
+            "top": {
+                "type": "list[dict]",
+                "optional": False,
+                "description": "Top N results (fields vary by entity type)",
+            },
+        },
+    },
+}

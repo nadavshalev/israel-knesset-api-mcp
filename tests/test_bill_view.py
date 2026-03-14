@@ -35,13 +35,16 @@ class TestGetBill(unittest.TestCase):
     def test_output_structure(self):
         b = get_bill(565913)
         self.assertIsNotNone(b)
-        expected_keys = {
-            "bill_id", "name", "knesset_num", "sub_type", "status",
-            "committee", "publication_date", "publication_series",
-            "summary", "stages",
+        # Always-present keys (optional keys like summary, committee,
+        # publication_date, publication_series may be omitted when empty/null)
+        always_keys = {
+            "bill_id", "name", "knesset_num", "stages",
         }
-        self.assertTrue(expected_keys.issubset(b.keys()),
-                        f"Missing keys: {expected_keys - b.keys()}")
+        self.assertTrue(always_keys.issubset(b.keys()),
+                        f"Missing keys: {always_keys - b.keys()}")
+        # These specific bill does have these keys populated
+        self.assertIn("sub_type", b)
+        self.assertIn("status", b)
 
 
 class TestStages(unittest.TestCase):

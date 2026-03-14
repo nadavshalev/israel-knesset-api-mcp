@@ -18,7 +18,7 @@ from typing import Annotated
 from pydantic import Field
 
 from core.db import connect_readonly
-from core.helpers import simple_date, normalize_inputs
+from core.helpers import simple_date, normalize_inputs, _clean
 from core.mcp_meta import mcp_tool
 
 
@@ -104,4 +104,26 @@ def get_knesset_dates(
     for g in grouped.values():
         g["periods"].sort(key=lambda p: (p["assembly"], p["plenum"]))
 
-    return [grouped[k] for k in order]
+    return _clean([grouped[k] for k in order])
+
+
+get_knesset_dates.RESPONSE_SCHEMA = {
+    "_type": "list[dict]",
+    "_description": "Knesset terms sorted by newest first, each with nested periods",
+    "knesset_num": {"type": "int", "optional": False, "description": "Knesset number"},
+    "name": {"type": "str", "optional": True, "description": "Knesset term name"},
+    "is_current": {"type": "bool", "optional": False, "description": "Whether this is the current Knesset"},
+    "periods": {
+        "type": "list[dict]",
+        "optional": False,
+        "description": "Assembly/plenum periods sorted by (assembly, plenum)",
+        "items": {
+            "id": {"type": "int", "optional": False, "description": "Period row ID"},
+            "assembly": {"type": "int", "optional": True, "description": "Assembly number"},
+            "plenum": {"type": "int", "optional": True, "description": "Plenum number"},
+            "start_date": {"type": "str", "optional": True, "description": "Period start (YYYY-MM-DD)"},
+            "finish_date": {"type": "str", "optional": True, "description": "Period end (YYYY-MM-DD)"},
+            "is_current": {"type": "bool", "optional": False, "description": "Whether this period is current"},
+        },
+    },
+}

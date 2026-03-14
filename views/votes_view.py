@@ -17,7 +17,7 @@ from typing import Annotated
 from pydantic import Field
 
 from core.db import connect_readonly
-from core.helpers import simple_date, simple_time, normalize_inputs
+from core.helpers import simple_date, simple_time, normalize_inputs, _clean
 from core.mcp_meta import mcp_tool
 from core.search_meta import register_search
 
@@ -192,4 +192,25 @@ def search_votes(
         })
 
     conn.close()
-    return results
+    return _clean(results)
+
+
+search_votes.RESPONSE_SCHEMA = {
+    "_type": "list[dict]",
+    "_description": "List of vote summaries sorted by date DESC, vote_id DESC",
+    "vote_id": {"type": "int", "optional": False, "description": "Unique vote identifier"},
+    "bill_id": {"type": "int", "optional": True, "description": "Linked bill ID (if vote is on a bill)"},
+    "knesset_num": {"type": "int", "optional": True, "description": "Knesset number (via session)"},
+    "session_id": {"type": "int", "optional": True, "description": "Plenum session ID"},
+    "title": {"type": "str", "optional": True, "description": "Vote title"},
+    "subject": {"type": "str", "optional": True, "description": "Vote subject/stage"},
+    "date": {"type": "str", "optional": True, "description": "Vote date (YYYY-MM-DD)"},
+    "time": {"type": "str", "optional": True, "description": "Vote time (HH:MM)"},
+    "is_accepted": {"type": "bool", "optional": True, "description": "Whether the vote passed"},
+    "total_for": {"type": "int", "optional": True, "description": "Votes in favour"},
+    "total_against": {"type": "int", "optional": True, "description": "Votes against"},
+    "total_abstain": {"type": "int", "optional": True, "description": "Abstentions"},
+    "for_option": {"type": "str", "optional": True, "description": "Label for the 'for' option"},
+    "against_option": {"type": "str", "optional": True, "description": "Label for the 'against' option"},
+    "vote_method": {"type": "str", "optional": True, "description": "Voting method description"},
+}

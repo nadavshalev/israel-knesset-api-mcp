@@ -17,7 +17,7 @@ from typing import Annotated
 from pydantic import Field
 
 from core.db import connect_readonly
-from core.helpers import simple_date, normalize_inputs
+from core.helpers import simple_date, normalize_inputs, _clean
 from core.mcp_meta import mcp_tool
 
 
@@ -363,4 +363,120 @@ def get_bill(
         obj["merged_bills"] = merged_bills
 
     conn.close()
-    return obj
+    return _clean(obj)
+
+
+get_bill.RESPONSE_SCHEMA = {
+    "_type": "dict | None",
+    "_description": "Full bill detail, or null if not found",
+    "bill_id": {"type": "int", "optional": False, "description": "Unique bill identifier"},
+    "name": {"type": "str", "optional": True, "description": "Bill name"},
+    "knesset_num": {"type": "int", "optional": True, "description": "Knesset number"},
+    "sub_type": {"type": "str", "optional": True, "description": "Bill sub-type"},
+    "status": {"type": "str", "optional": True, "description": "Current status description"},
+    "committee": {"type": "str", "optional": True, "description": "Assigned committee name"},
+    "committee_id": {"type": "int", "optional": True, "description": "Assigned committee ID"},
+    "publication_date": {"type": "str", "optional": True, "description": "Publication date (YYYY-MM-DD)"},
+    "publication_series": {"type": "str", "optional": True, "description": "Publication series description"},
+    "summary": {"type": "str", "optional": True, "description": "Summary of the law"},
+    "stages": {
+        "type": "list[dict]",
+        "optional": False,
+        "description": "Plenum stages (readings) in chronological order",
+        "items": {
+            "date": {"type": "str", "optional": True, "description": "Stage date (YYYY-MM-DD)"},
+            "status": {"type": "str", "optional": True, "description": "Stage status description"},
+            "session_id": {"type": "int", "optional": False, "description": "Plenum session ID"},
+            "vote": {
+                "type": "dict",
+                "optional": True,
+                "description": "Final (decisive) vote for this stage (only on last sub-stage per session)",
+                "schema": {
+                    "vote_id": {"type": "int", "optional": False, "description": "Vote ID"},
+                    "title": {"type": "str", "optional": True, "description": "Vote title"},
+                    "date": {"type": "str", "optional": True, "description": "Vote date"},
+                    "is_accepted": {"type": "bool", "optional": True, "description": "Whether accepted"},
+                    "total_for": {"type": "int", "optional": True, "description": "Votes for"},
+                    "total_against": {"type": "int", "optional": True, "description": "Votes against"},
+                    "total_abstain": {"type": "int", "optional": True, "description": "Abstentions"},
+                },
+            },
+        },
+    },
+    "initiators": {
+        "type": "dict",
+        "optional": True,
+        "description": "Bill initiators (only present if any exist)",
+        "schema": {
+            "primary": {
+                "type": "list[dict]",
+                "optional": True,
+                "description": "Primary initiators",
+                "items": {
+                    "person_id": {"type": "int", "optional": False, "description": "Person ID"},
+                    "name": {"type": "str", "optional": False, "description": "Full name"},
+                    "party": {"type": "str", "optional": True, "description": "Faction/party name"},
+                },
+            },
+            "added": {
+                "type": "list[dict]",
+                "optional": True,
+                "description": "Added (co-)initiators",
+                "items": {
+                    "person_id": {"type": "int", "optional": False, "description": "Person ID"},
+                    "name": {"type": "str", "optional": False, "description": "Full name"},
+                    "party": {"type": "str", "optional": True, "description": "Faction/party name"},
+                },
+            },
+            "removed": {
+                "type": "list[dict]",
+                "optional": True,
+                "description": "Removed initiators (historical)",
+                "items": {
+                    "person_id": {"type": "int", "optional": False, "description": "Person ID"},
+                    "name": {"type": "str", "optional": False, "description": "Full name"},
+                    "party": {"type": "str", "optional": True, "description": "Faction/party name"},
+                    "reason": {"type": "str", "optional": True, "description": "Reason for removal"},
+                },
+            },
+        },
+    },
+    "name_history": {
+        "type": "list[dict]",
+        "optional": True,
+        "description": "Bill name changes over time (only present if any exist)",
+        "items": {
+            "name": {"type": "str", "optional": True, "description": "Historical name"},
+            "stage_type": {"type": "str", "optional": True, "description": "Stage at which name was used"},
+        },
+    },
+    "documents": {
+        "type": "list[dict]",
+        "optional": True,
+        "description": "Bill documents (only present if any exist)",
+        "items": {
+            "type": {"type": "str", "optional": True, "description": "Document group type"},
+            "format": {"type": "str", "optional": True, "description": "File format"},
+            "url": {"type": "str", "optional": True, "description": "File URL/path"},
+        },
+    },
+    "split_bills": {
+        "type": "list[dict]",
+        "optional": True,
+        "description": "Related bills from splits (only present if any exist)",
+        "items": {
+            "direction": {"type": "str", "optional": False, "description": "'child' or 'parent'"},
+            "bill_id": {"type": "int", "optional": False, "description": "Related bill ID"},
+            "name": {"type": "str", "optional": True, "description": "Bill name"},
+        },
+    },
+    "merged_bills": {
+        "type": "list[dict]",
+        "optional": True,
+        "description": "Bills merged with this one (only present if any exist)",
+        "items": {
+            "bill_id": {"type": "int", "optional": False, "description": "Related bill ID"},
+            "name": {"type": "str", "optional": True, "description": "Bill name"},
+        },
+    },
+}
