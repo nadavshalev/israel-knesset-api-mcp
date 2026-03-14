@@ -18,11 +18,10 @@ def parse_args() -> argparse.Namespace:
     sub.add_parser("init-db", help="Create database schema if missing")
     fetch = sub.add_parser("fetch", help="Fetch one or more tables")
     fetch.add_argument(
-        "--table",
-        action="append",
-        dest="tables",
+        "--tables",
+        nargs="+",
         default=None,
-        help="Fetch only specific table label(s). Can be repeated. "
+        help="Fetch only specific table label(s). "
              "Valid names: " + ", ".join(spec.label for spec in get_table_specs()),
     )
     fetch.add_argument("--since", type=str, default=None, help="ISO datetime for LastUpdatedDate filter (UTC)")
@@ -54,6 +53,9 @@ def main() -> None:
             print(f"ERROR: {exc.args[0]}")
             sys.exit(1)
         for spec in selected:
+            print()
+            print(f"=== {spec.label} ===")
+            print(f"Fetching {spec.label}...")
             spec.module.fetch_rows(conn, since=args.since)
         return
 

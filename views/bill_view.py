@@ -169,6 +169,164 @@ def get_bill(
                 stage["vote"] = vote
         stages.append(stage)
 
+    # ----- Initiators (primary + added) from KNS_BillInitiator -----
+    cursor.execute(
+        """
+        SELECT bi.PersonID, bi.IsInitiator, bi.Ordinal,
+               p.FirstName || ' ' || p.LastName AS full_name,
+               ptp.FactionName
+        FROM bill_initiator_raw bi
+        JOIN person_raw p ON bi.PersonID = p.PersonID
+        LEFT JOIN LATERAL (
+            SELECT ptp2.FactionName
+            FROM person_to_position_raw ptp2
+            WHERE ptp2.PersonID = bi.PersonID
+              AND ptp2.KnessetNum = %s
+              AND ptp2.FactionName IS NOT NULL
+              AND ptp2.FactionName != ''
+            ORDER BY ptp2.IsCurrent DESC, ptp2.PersonToPositionID DESC
+            LIMIT 1
+        ) ptp ON true
+        WHERE bi.BillID = %s
+        ORDER BY bi.Ordinal ASC
+        """,
+        (bill["knessetnum"], bill_id),
+    )
+    init_rows = cursor.fetchall()
+    primary_initiators = []
+    added_initiators = []
+    for irow in init_rows:
+        entry = {
+            "person_id": irow["personid"],
+            "name": irow["full_name"],
+        }
+        if irow["factionname"]:
+            entry["party"] = irow["factionname"]
+        if irow["isinitiator"]:
+            primary_initiators.append(entry)
+        else:
+            added_initiators.append(entry)
+
+    # ----- Removed initiators from KNS_BillHistoryInitiator -----
+    cursor.execute(
+        """
+        SELECT bhi.PersonID, bhi.ReasonDesc,
+               p.FirstName || ' ' || p.LastName AS full_name,
+               ptp.FactionName
+        FROM bill_history_initiator_raw bhi
+        JOIN person_raw p ON bhi.PersonID = p.PersonID
+        LEFT JOIN LATERAL (
+            SELECT ptp2.FactionName
+            FROM person_to_position_raw ptp2
+            WHERE ptp2.PersonID = bhi.PersonID
+              AND ptp2.KnessetNum = %s
+              AND ptp2.FactionName IS NOT NULL
+              AND ptp2.FactionName != ''
+            ORDER BY ptp2.IsCurrent DESC, ptp2.PersonToPositionID DESC
+            LIMIT 1
+        ) ptp ON true
+        WHERE bhi.BillID = %s
+        ORDER BY bhi.Id ASC
+        """,
+        (bill["knessetnum"], bill_id),
+    )
+    removed_initiators = []
+    for hrow in cursor.fetchall():
+        entry = {
+            "person_id": hrow["personid"],
+            "name": hrow["full_name"],
+        }
+        if hrow["factionname"]:
+            entry["party"] = hrow["factionname"]
+        if hrow["reasondesc"]:
+            entry["reason"] = hrow["reasondesc"]
+        removed_initiators.append(entry)
+
+    # ----- Name history from KNS_BillName -----
+    cursor.execute(
+        """
+        SELECT Name, NameHistoryTypeDesc
+        FROM bill_name_raw
+        WHERE BillID = %s
+        ORDER BY Id ASC
+        """,
+        (bill_id,),
+    )
+    name_history = [
+        {"name": nr["name"], "stage_type": nr["namehistorytypedesc"]}
+        for nr in cursor.fetchall()
+    ]
+
+    # ----- Documents from KNS_DocumentBill -----
+    cursor.execute(
+        """
+        SELECT GroupTypeDesc, ApplicationDesc, FilePath
+        FROM document_bill_raw
+        WHERE BillID = %s
+        ORDER BY Id ASC
+        """,
+        (bill_id,),
+    )
+    documents = [
+        {
+            "type": dr["grouptypedesc"],
+            "format": dr["applicationdesc"],
+            "url": dr["filepath"],
+        }
+        for dr in cursor.fetchall()
+    ]
+
+    # ----- Bill splits (both directions) from KNS_BillSplit -----
+    cursor.execute(
+        """
+        SELECT 'child' AS direction, bs.SplitBillID AS related_bill_id,
+               bs.Name AS split_name, b2.Name AS bill_name
+        FROM bill_split_raw bs
+        LEFT JOIN bill_raw b2 ON bs.SplitBillID = b2.Id
+        WHERE bs.MainBillID = %s
+        UNION ALL
+        SELECT 'parent' AS direction, bs.MainBillID AS related_bill_id,
+               bs.Name AS split_name, b2.Name AS bill_name
+        FROM bill_split_raw bs
+        LEFT JOIN bill_raw b2 ON bs.MainBillID = b2.Id
+        WHERE bs.SplitBillID = %s
+        ORDER BY related_bill_id
+        """,
+        (bill_id, bill_id),
+    )
+    split_rows = cursor.fetchall()
+    split_bills = [
+        {
+            "direction": sr["direction"],
+            "bill_id": sr["related_bill_id"],
+            "name": sr["bill_name"] or sr["split_name"],
+        }
+        for sr in split_rows
+    ]
+
+    # ----- Merged bills from KNS_BillUnion -----
+    cursor.execute(
+        """
+        SELECT bu.UnionBillID AS related_bill_id, b2.Name AS bill_name
+        FROM bill_union_raw bu
+        LEFT JOIN bill_raw b2 ON bu.UnionBillID = b2.Id
+        WHERE bu.MainBillID = %s
+        UNION ALL
+        SELECT bu.MainBillID AS related_bill_id, b2.Name AS bill_name
+        FROM bill_union_raw bu
+        LEFT JOIN bill_raw b2 ON bu.MainBillID = b2.Id
+        WHERE bu.UnionBillID = %s
+        ORDER BY related_bill_id
+        """,
+        (bill_id, bill_id),
+    )
+    union_rows = cursor.fetchall()
+    merged_bills = [
+        {"bill_id": ur["related_bill_id"], "name": ur["bill_name"]}
+        for ur in union_rows
+    ]
+
+    # ----- Build result -----
     obj = {
         "bill_id": bill["id"],
         "name": bill["name"],
@@ -182,6 +340,27 @@ def get_bill(
         "summary": bill["summarylaw"],
         "stages": stages,
     }
+
+    # Only include initiators dict if there is data, and only sub-lists
+    # that are non-empty.
+    initiators = {}
+    if primary_initiators:
+        initiators["primary"] = primary_initiators
+    if added_initiators:
+        initiators["added"] = added_initiators
+    if removed_initiators:
+        initiators["removed"] = removed_initiators
+    if initiators:
+        obj["initiators"] = initiators
+
+    if name_history:
+        obj["name_history"] = name_history
+    if documents:
+        obj["documents"] = documents
+    if split_bills:
+        obj["split_bills"] = split_bills
+    if merged_bills:
+        obj["merged_bills"] = merged_bills
 
     conn.close()
     return obj

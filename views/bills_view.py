@@ -66,6 +66,7 @@ def search_bills(
     name: Annotated[str | None, Field(description="Bill name contains text")] = None,
     status: Annotated[str | None, Field(description="Bill status")] = None,
     sub_type: Annotated[str | None, Field(description="Bill sub-type")] = None,
+    initiator_id: Annotated[int | None, Field(description="Filter by initiator's member/person ID")] = None,
     date: Annotated[str | None, Field(description="Single date or start of range (YYYY-MM-DD) for plenum appearance")] = None,
     date_to: Annotated[str | None, Field(description="End of date range (YYYY-MM-DD) for plenum appearance; use with date for a range")] = None,
 ) -> list:
@@ -76,6 +77,7 @@ def search_bills(
       - name: bill name contains text
       - status: bill's current status description contains text
       - sub_type: bill sub-type (פרטית/ממשלתית/ועדה)
+      - initiator_id: member/person ID who initiated the bill
       - date / date_to: appeared in a plenum session in date range
 
     Returns a list of bill summary dicts sorted by (publication_date DESC, bill_id DESC).
@@ -85,6 +87,7 @@ def search_bills(
     name = normalized["name"]
     status = normalized["status"]
     sub_type = normalized["sub_type"]
+    initiator_id = normalized["initiator_id"]
     date = normalized["date"]
     date_to = normalized["date_to"]
 
@@ -118,6 +121,14 @@ def search_bills(
         sql += " AND st.\"Desc\" LIKE %s"
         params.append(f"%{status}%")
 
+    if initiator_id is not None:
+        sql += """
+        AND EXISTS (
+            SELECT 1 FROM bill_initiator_raw bi
+            WHERE bi.BillID = b.Id AND bi.PersonID = %s AND bi.IsInitiator = 1
+        )"""
+        params.append(initiator_id)
+
     # Plenum-stage date filters
     stage_conditions = []
     stage_params = []
@@ -149,9 +160,46 @@ def search_bills(
     cursor.execute(sql, params)
     rows = cursor.fetchall()
 
+    # Collect bill IDs and fetch primary initiators in batch
+    bill_ids = [row["id"] for row in rows]
+    # Map knesset_num per bill for faction lookup
+    knesset_by_bill = {row["id"]: row["knessetnum"] for row in rows}
+    initiators_by_bill: dict = {}
+    if bill_ids:
+        placeholders = ",".join(["%s"] * len(bill_ids))
+        cursor.execute(
+            f"""
+            SELECT bi.BillID, bi.PersonID,
+                   p.FirstName || ' ' || p.LastName AS full_name,
+                   b.KnessetNum,
+                   ptp.FactionName
+            FROM bill_initiator_raw bi
+            JOIN person_raw p ON bi.PersonID = p.PersonID
+            JOIN bill_raw b ON bi.BillID = b.Id
+            LEFT JOIN LATERAL (
+                SELECT ptp2.FactionName
+                FROM person_to_position_raw ptp2
+                WHERE ptp2.PersonID = bi.PersonID
+                  AND ptp2.KnessetNum = b.KnessetNum
+                  AND ptp2.FactionName IS NOT NULL
+                  AND ptp2.FactionName != ''
+                ORDER BY ptp2.IsCurrent DESC, ptp2.PersonToPositionID DESC
+                LIMIT 1
+            ) ptp ON true
+            WHERE bi.IsInitiator = 1 AND bi.BillID IN ({placeholders})
+            ORDER BY bi.Ordinal ASC
+            """,
+            bill_ids,
+        )
+        for irow in cursor.fetchall():
+            name = irow["full_name"]
+            if irow["factionname"]:
+                name = f"{name} ({irow['factionname']})"
+            initiators_by_bill.setdefault(irow["billid"], []).append(name)
+
     results = []
     for row in rows:
-        results.append({
+        result = {
             "bill_id": row["id"],
             "name": row["name"],
             "knesset_num": row["knessetnum"],
@@ -162,7 +210,11 @@ def search_bills(
             "publication_date": simple_date(row["publicationdate"]),
             "publication_series": row["publicationseriesdesc"],
             "summary": row["summarylaw"],
-        })
+        }
+        initiators = initiators_by_bill.get(row["id"], [])
+        if initiators:
+            result["primary_initiators"] = initiators
+        results.append(result)
 
     conn.close()
     return results

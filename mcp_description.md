@@ -8,6 +8,9 @@ Israeli Knesset (parliament) data API — members, committees, bills, plenum ses
 2. Each search tool's description includes the number of records and data freshness date. Parameter schemas include the exact allowed values where applicable — use those values verbatim.
 3. Use `get_knesset_dates` to find which Knesset term is current or to look up term dates before querying other tools.
 
+## Notes
+* There is rate limiting in place to prevent abuse. Don't use the tools too aggressively — if you get rate limited, wait a bit before retrying.
+
 ## Search → Detail Workflow
 
 - **Search tools** (`search_members`, `search_bills`, `search_votes`, `search_committees`, `search_plenums`) return compact summaries. Use them to find IDs.
@@ -169,3 +172,9 @@ get_knesset_dates(knesset_num=25)
 **"What happened in the Finance Committee last month?"**
 1. `search_committees(knesset_num=25, name="כספים")` → get `committee_id`
 2. `get_committee(committee_id=..., include_sessions=True, include_bills=True, date="2026-02-01", date_to="2026-02-28")` → sessions and bills from February
+
+**"What how is the last vote on Bill Y devided by party?"**
+1. `search_bills(name="Y")` → get `bill_id`
+2. `search_votes(bill_id=..., accepted=true)` → get the decisive vote for the bill
+3. `get_vote(vote_id=...)` → see the per-member votes
+4. `search_members(knesset_num=25)` → get current members with their parties
