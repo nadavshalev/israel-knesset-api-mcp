@@ -23,22 +23,67 @@ from core.mcp_meta import mcp_tool
 from core.search_meta import register_search
 from origins.members.search_members_models import MemberSummary, MemberSearchResults
 
+def _build_members_search(*, query, knesset_num, date, date_to, top_n):
+    """Build SQL for cross-entity member search.
+
+    Supports: query (name LIKE), knesset_num (via person_to_position),
+    date/date_to (members whose position overlaps the date range).
+    """
+    conditions = []
+    params = []
+
+    if query:
+        conditions.append("(p.FirstName LIKE %s OR p.LastName LIKE %s)")
+        params.extend([f"%{query}%", f"%{query}%"])
+
+    if knesset_num is not None:
+        conditions.append("""EXISTS (
+            SELECT 1 FROM person_to_position_raw ptp
+            WHERE ptp.PersonID = p.PersonID AND ptp.KnessetNum = %s
+        )""")
+        params.append(knesset_num)
+
+    if date and date_to:
+        # Position overlaps the range: started before range end AND
+        # not finished before range start (NULL/empty FinishDate = still active)
+        conditions.append("""EXISTS (
+            SELECT 1 FROM person_to_position_raw ptp
+            WHERE ptp.PersonID = p.PersonID
+            AND ptp.StartDate <= %s
+            AND (ptp.FinishDate IS NULL OR ptp.FinishDate = '' OR ptp.FinishDate >= %s)
+        )""")
+        params.extend([date_to + "T99", date])
+    elif date:
+        # Position active on this date
+        conditions.append("""EXISTS (
+            SELECT 1 FROM person_to_position_raw ptp
+            WHERE ptp.PersonID = p.PersonID
+            AND ptp.StartDate <= %s
+            AND (ptp.FinishDate IS NULL OR ptp.FinishDate = '' OR ptp.FinishDate >= %s)
+        )""")
+        params.extend([date + "T99", date])
+
+    where = " AND ".join(conditions) if conditions else "1=1"
+
+    count_sql = f"""
+        SELECT COUNT(DISTINCT p.PersonID) FROM person_raw p
+        WHERE {where}
+    """
+    search_sql = f"""
+        SELECT DISTINCT p.PersonID AS id,
+               p.FirstName || ' ' || p.LastName AS name,
+               p.LastName, p.FirstName
+        FROM person_raw p
+        WHERE {where}
+        ORDER BY p.LastName, p.FirstName
+        LIMIT %s
+    """
+    return count_sql, list(params), search_sql, list(params) + [top_n]
+
+
 register_search({
     "entity_key": "members",
-    "count_sql": """
-        SELECT COUNT(DISTINCT PersonID) FROM person_raw
-        WHERE FirstName LIKE %s OR LastName LIKE %s
-    """,
-    "search_sql": """
-        SELECT DISTINCT PersonID AS id,
-               FirstName || ' ' || LastName AS name,
-               LastName, FirstName
-        FROM person_raw
-        WHERE FirstName LIKE %s OR LastName LIKE %s
-        ORDER BY LastName, FirstName
-        LIMIT %s
-    """,
-    "param_count": 2,
+    "builder": _build_members_search,
 })
 
 

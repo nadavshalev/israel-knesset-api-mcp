@@ -22,23 +22,55 @@ from core.mcp_meta import mcp_tool
 from core.search_meta import register_search
 from origins.votes.search_votes_models import VoteSummary, VoteSearchResults
 
-register_search({
-    "entity_key": "votes",
-    "count_sql": """
-        SELECT COUNT(*) FROM plenum_vote_raw
-        WHERE VoteTitle LIKE %s OR VoteSubject LIKE %s
-    """,
-    "search_sql": """
+def _build_votes_search(*, query, knesset_num, date, date_to, top_n):
+    """Build SQL for cross-entity vote search.
+
+    Supports: query (title/subject LIKE), knesset_num (via session),
+    date/date_to (VoteDateTime).
+    """
+    conditions = []
+    params = []
+
+    if query:
+        conditions.append("(v.VoteTitle LIKE %s OR v.VoteSubject LIKE %s)")
+        params.extend([f"%{query}%", f"%{query}%"])
+
+    if knesset_num is not None:
+        conditions.append("s.KnessetNum = %s")
+        params.append(knesset_num)
+
+    if date and date_to:
+        conditions.append("v.VoteDateTime >= %s")
+        params.append(date)
+        conditions.append("v.VoteDateTime <= %s")
+        params.append(date_to + "T99")
+    elif date:
+        conditions.append("v.VoteDateTime LIKE %s")
+        params.append(f"{date}%")
+
+    where = " AND ".join(conditions) if conditions else "1=1"
+
+    count_sql = f"""
+        SELECT COUNT(*) FROM plenum_vote_raw v
+        LEFT JOIN plenum_session_raw s ON v.SessionID = s.Id
+        WHERE {where}
+    """
+    search_sql = f"""
         SELECT v.Id AS id, v.VoteTitle AS name,
                s.KnessetNum AS knesset_num,
                v.VoteDateTime AS date
         FROM plenum_vote_raw v
         LEFT JOIN plenum_session_raw s ON v.SessionID = s.Id
-        WHERE v.VoteTitle LIKE %s OR v.VoteSubject LIKE %s
+        WHERE {where}
         ORDER BY v.Id DESC
         LIMIT %s
-    """,
-    "param_count": 2,
+    """
+    return count_sql, list(params), search_sql, list(params) + [top_n]
+
+
+register_search({
+    "entity_key": "votes",
+    "builder": _build_votes_search,
 })
 
 

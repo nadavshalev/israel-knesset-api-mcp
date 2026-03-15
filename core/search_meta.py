@@ -2,23 +2,29 @@
 
 Each view module that participates in ``search_across`` calls
 ``register_search()`` at module level with a dict containing the SQL
-needed to count and retrieve matching rows.
+builder needed to count and retrieve matching rows.
 
 ``search_across_view.py`` calls ``get_search_entries()`` to discover all
 registered entries — no explicit imports of individual views required
-(as long as ``views/__init__.py`` has already been imported to trigger
+(as long as ``origins/__init__.py`` has already been imported to trigger
 module-level registration).
 
 Usage in a view module::
 
     from core.search_meta import register_search
 
-    register_search({
-        "entity_key": "members",
-        "count_sql": "SELECT COUNT(...) FROM ... WHERE ... LIKE ?",
-        "search_sql": "SELECT ... FROM ... WHERE ... LIKE ? LIMIT ?",
-        "param_count": 2,
-    })
+    def _build_bills_search(*, query, knesset_num, date, date_to, top_n):
+        conditions, params = [], []
+        if query:
+            conditions.append("Name LIKE %s")
+            params.append(f"%{query}%")
+        ...
+        where = " AND ".join(conditions) if conditions else "1=1"
+        count_sql = f"SELECT COUNT(*) FROM bill_raw WHERE {where}"
+        search_sql = f"SELECT ... FROM bill_raw WHERE {where} LIMIT %s"
+        return count_sql, params, search_sql, params + [top_n]
+
+    register_search({"entity_key": "bills", "builder": _build_bills_search})
 """
 
 from __future__ import annotations
@@ -35,8 +41,11 @@ def register_search(entry: dict[str, Any]) -> None:
     Parameters
     ----------
     entry : dict
-        Must contain keys: ``entity_key``, ``count_sql``, ``search_sql``,
-        ``param_count``.
+        Must contain keys: ``entity_key`` and ``builder``.
+        The ``builder`` is a callable with signature::
+
+            (*, query, knesset_num, date, date_to, top_n)
+            -> (count_sql, count_params, search_sql, search_params)
     """
     _SEARCH_ENTRIES.append(entry)
 

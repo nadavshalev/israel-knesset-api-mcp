@@ -22,23 +22,56 @@ from core.mcp_meta import mcp_tool
 from core.search_meta import register_search
 from origins.bills.search_bills_models import BillSummary, BillSearchResults
 
-register_search({
-    "entity_key": "bills",
-    "count_sql": """
-        SELECT COUNT(*) FROM bill_raw
-        WHERE Name LIKE %s
-    """,
-    "search_sql": """
+def _build_bills_search(*, query, knesset_num, date, date_to, top_n):
+    """Build SQL for cross-entity bill search.
+
+    Supports: query (name LIKE), knesset_num,
+    date/date_to (bills active/updated in the date range via LastUpdatedDate).
+    """
+    conditions = []
+    params = []
+
+    if query:
+        conditions.append("b.Name LIKE %s")
+        params.append(f"%{query}%")
+
+    if knesset_num is not None:
+        conditions.append("b.KnessetNum = %s")
+        params.append(knesset_num)
+
+    if date and date_to:
+        conditions.append("b.LastUpdatedDate >= %s")
+        params.append(date)
+        conditions.append("b.LastUpdatedDate <= %s")
+        params.append(date_to + "T99")
+    elif date:
+        conditions.append("b.LastUpdatedDate >= %s")
+        params.append(date)
+        conditions.append("b.LastUpdatedDate <= %s")
+        params.append(date + "T99")
+
+    where = " AND ".join(conditions) if conditions else "1=1"
+
+    count_sql = f"""
+        SELECT COUNT(*) FROM bill_raw b
+        WHERE {where}
+    """
+    search_sql = f"""
         SELECT b.Id AS id, b.Name AS name, b.KnessetNum AS knesset_num,
                b.SubTypeDesc AS sub_type,
                st."Desc" AS status
         FROM bill_raw b
         LEFT JOIN status_raw st ON b.StatusID = st.Id
-        WHERE b.Name LIKE %s
+        WHERE {where}
         ORDER BY b.Id DESC
         LIMIT %s
-    """,
-    "param_count": 1,
+    """
+    return count_sql, list(params), search_sql, list(params) + [top_n]
+
+
+register_search({
+    "entity_key": "bills",
+    "builder": _build_bills_search,
 })
 
 

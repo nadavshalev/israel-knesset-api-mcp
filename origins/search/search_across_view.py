@@ -51,42 +51,59 @@ def _get_entity_queries() -> list[dict]:
     name="search_across",
     description=(
         "Search across all entity types (members, bills, committees, votes, "
-        "plenums) with a single query. Returns match counts and top results "
-        "per entity type. Use this as a triage tool to find which entity "
-        "type has relevant data, then drill down with specific search tools."
+        "plenums). Returns match counts and top results per entity type. "
+        "Use this as a triage tool to find which entity type has relevant "
+        "data, then drill down with specific search tools.\n\n"
+        "At least one filter must be provided (query, knesset_num, or date)."
     ),
     entity="Cross-Entity Search",
 )
 def search_across(
-    query: Annotated[str, Field(description="Free-text search term")],
+    query: Annotated[str | None, Field(description="Free-text search term (optional if other filters given)")] = None,
+    knesset_num: Annotated[int | None, Field(description="Filter by Knesset number (e.g. 25)")] = None,
+    date: Annotated[str | None, Field(description="Filter by date (YYYY-MM-DD). Exact date, or range start if date_to given")] = None,
+    date_to: Annotated[str | None, Field(description="End date for range filter (YYYY-MM-DD). Requires date")] = None,
     top_n: Annotated[int | None, Field(description="Max results per entity type (default from server config)")] = None,
 ) -> SearchAcrossResults:
-    """Search across all entity types for *query*.
+    """Search across all entity types.
 
     Parameters
     ----------
-    query : str
+    query : str, optional
         Free-text search term.
+    knesset_num : int, optional
+        Filter by Knesset number.
+    date : str, optional
+        Filter by date (YYYY-MM-DD).  Exact match, or range start when
+        combined with *date_to*.
+    date_to : str, optional
+        End of date range (YYYY-MM-DD).  Requires *date*.
     top_n : int, optional
         Max results per entity type.  Defaults to ``SEARCH_ACROSS_TOP_N``
         from config.
 
     Returns
     -------
-    dict
-        ``{"query": ..., "results": {entity: {"count": N, "top": [...]}}}``
+    SearchAcrossResults
     """
     normalized = normalize_inputs(locals())
     query = normalized["query"]
+    knesset_num = normalized["knesset_num"]
+    date = normalized["date"]
+    date_to = normalized["date_to"]
     top_n = normalized["top_n"]
 
-    if not query or not query.strip():
-        return SearchAcrossResults(query=query or "", results={})
+    # Normalize query: treat whitespace-only as None
+    if query and not query.strip():
+        query = None
+
+    # Must have at least one filter
+    if not query and knesset_num is None and not date:
+        return SearchAcrossResults(query=query, results={})
 
     if top_n is None:
         top_n = SEARCH_ACROSS_TOP_N
 
-    pattern = f"%{query.strip()}%"
     conn = connect_readonly()
     cursor = conn.cursor()
 
@@ -95,11 +112,16 @@ def search_across(
     results = {}
     for eq in entity_queries:
         entity = eq["entity_key"]
-        n_params = eq["param_count"]
+        builder = eq["builder"]
+
+        count_sql, count_params, search_sql, search_params = builder(
+            query=query, knesset_num=knesset_num, date=date,
+            date_to=date_to, top_n=top_n,
+        )
 
         # Count
         try:
-            cursor.execute(eq["count_sql"], [pattern] * n_params)
+            cursor.execute(count_sql, count_params)
             row = cursor.fetchone()
             count = list(row.values())[0] if row else 0
         except Exception:
@@ -108,7 +130,7 @@ def search_across(
 
         # Top N results
         try:
-            cursor.execute(eq["search_sql"], [pattern] * n_params + [top_n])
+            cursor.execute(search_sql, search_params)
             rows = cursor.fetchall()
             top = [dict(row) for row in rows]
         except Exception:
@@ -119,7 +141,10 @@ def search_across(
 
     conn.close()
 
-    return SearchAcrossResults(query=query, results=results)
+    return SearchAcrossResults(
+        query=query, knesset_num=knesset_num, date=date,
+        date_to=date_to, results=results,
+    )
 
 
 search_across.OUTPUT_MODEL = SearchAcrossResults

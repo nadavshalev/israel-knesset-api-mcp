@@ -17,5 +17,8 @@ class EntityResult(KNSBaseModel):
 
 class SearchAcrossResults(KNSBaseModel):
     """Results from search_across."""
-    query: str = Field(description="The search term that was used")
+    query: str | None = Field(default=None, description="The search term that was used")
+    knesset_num: int | None = Field(default=None, description="Knesset number filter applied")
+    date: str | None = Field(default=None, description="Date filter applied (YYYY-MM-DD)")
+    date_to: str | None = Field(default=None, description="End date filter applied (YYYY-MM-DD)")
     results: dict[str, EntityResult] = Field(default_factory=dict, description="Keyed by entity type (members, bills, committees, votes, plenums)")

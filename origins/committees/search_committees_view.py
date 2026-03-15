@@ -23,21 +23,58 @@ from core.mcp_meta import mcp_tool
 from core.search_meta import register_search
 from origins.committees.search_committees_models import CommitteeSummary, CommitteeSearchResults
 
+def _build_committees_search(*, query, knesset_num, date, date_to, top_n):
+    """Build SQL for cross-entity committee search.
+
+    Supports: query (name LIKE), knesset_num,
+    date/date_to (committees that had sessions in the date range).
+    """
+    conditions = []
+    params = []
+
+    if query:
+        conditions.append("c.Name LIKE %s")
+        params.append(f"%{query}%")
+
+    if knesset_num is not None:
+        conditions.append("c.KnessetNum = %s")
+        params.append(knesset_num)
+
+    if date and date_to:
+        conditions.append("""EXISTS (
+            SELECT 1 FROM committee_session_raw cs
+            WHERE cs.CommitteeID = c.Id
+            AND cs.StartDate >= %s AND cs.StartDate <= %s
+        )""")
+        params.extend([date, date_to + "T99"])
+    elif date:
+        conditions.append("""EXISTS (
+            SELECT 1 FROM committee_session_raw cs
+            WHERE cs.CommitteeID = c.Id
+            AND cs.StartDate >= %s AND cs.StartDate <= %s
+        )""")
+        params.extend([date, date + "T99"])
+
+    where = " AND ".join(conditions) if conditions else "1=1"
+
+    count_sql = f"""
+        SELECT COUNT(*) FROM committee_raw c
+        WHERE {where}
+    """
+    search_sql = f"""
+        SELECT c.Id AS id, c.Name AS name, c.KnessetNum AS knesset_num,
+               c.CategoryDesc AS category
+        FROM committee_raw c
+        WHERE {where}
+        ORDER BY c.Id DESC
+        LIMIT %s
+    """
+    return count_sql, list(params), search_sql, list(params) + [top_n]
+
+
 register_search({
     "entity_key": "committees",
-    "count_sql": """
-        SELECT COUNT(*) FROM committee_raw
-        WHERE Name LIKE %s
-    """,
-    "search_sql": """
-        SELECT Id AS id, Name AS name, KnessetNum AS knesset_num,
-               CategoryDesc AS category
-        FROM committee_raw
-        WHERE Name LIKE %s
-        ORDER BY Id DESC
-        LIMIT %s
-    """,
-    "param_count": 1,
+    "builder": _build_committees_search,
 })
 
 

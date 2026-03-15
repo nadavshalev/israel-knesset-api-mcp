@@ -22,28 +22,63 @@ from core.mcp_meta import mcp_tool
 from core.search_meta import register_search
 from origins.plenums.search_plenums_models import SessionSummary, SessionSearchResults
 
-register_search({
-    "entity_key": "plenums",
-    "count_sql": """
-        SELECT COUNT(DISTINCT ps.Id)
-        FROM plenum_session_raw ps
+def _build_plenums_search(*, query, knesset_num, date, date_to, top_n):
+    """Build SQL for cross-entity plenum session search.
+
+    Supports: query (session/item name LIKE), knesset_num, date/date_to
+    (StartDate).
+    """
+    conditions = []
+    params = []
+    need_item_join = False
+
+    if query:
+        conditions.append("(ps.Name LIKE %s OR psi.Name LIKE %s)")
+        params.extend([f"%{query}%", f"%{query}%"])
+        need_item_join = True
+
+    if knesset_num is not None:
+        conditions.append("ps.KnessetNum = %s")
+        params.append(knesset_num)
+
+    if date and date_to:
+        conditions.append("ps.StartDate >= %s")
+        params.append(date)
+        conditions.append("ps.StartDate <= %s")
+        params.append(date_to + "T99")
+    elif date:
+        conditions.append("ps.StartDate LIKE %s")
+        params.append(f"{date}%")
+
+    where = " AND ".join(conditions) if conditions else "1=1"
+    item_join = """
         LEFT JOIN plm_session_item_raw psi
                ON ps.Id = psi.PlenumSessionID
-        WHERE ps.Name LIKE %s OR psi.Name LIKE %s
-    """,
-    "search_sql": """
+    """ if need_item_join else ""
+
+    count_sql = f"""
+        SELECT COUNT(DISTINCT ps.Id)
+        FROM plenum_session_raw ps
+        {item_join}
+        WHERE {where}
+    """
+    search_sql = f"""
         SELECT DISTINCT ps.Id AS id,
                ps.Name AS name,
                ps.KnessetNum AS knesset_num,
                ps.StartDate AS date
         FROM plenum_session_raw ps
-        LEFT JOIN plm_session_item_raw psi
-               ON ps.Id = psi.PlenumSessionID
-        WHERE ps.Name LIKE %s OR psi.Name LIKE %s
+        {item_join}
+        WHERE {where}
         ORDER BY ps.Id DESC
         LIMIT %s
-    """,
-    "param_count": 2,
+    """
+    return count_sql, list(params), search_sql, list(params) + [top_n]
+
+
+register_search({
+    "entity_key": "plenums",
+    "builder": _build_plenums_search,
 })
 
 
