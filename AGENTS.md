@@ -29,8 +29,8 @@
 ## Conventions
 
 - Every view function has a `.RESPONSE_SCHEMA` dict attribute documenting its return shape.
-- All Pydantic models inherit from `KNSBaseModel` (in `core/models.py`), which uses a `@model_serializer` to apply `clean()` on every `model_dump()` call — stripping `None`, `""`, `-1`, and `[]` from serialized output. This ensures clean output even when FastMCP re-serializes models internally. Views do **not** call `clean()` themselves.
-- `clean()` from `core/helpers.py` is applied centrally in `mcp_server.py`'s handler (inside `_make_handler`) to strip `None`, `""`, `-1`, and `[]` from all MCP tool responses. It preserves `False`, `0`, and `{}`. Views do **not** call `clean()` themselves.
+- All Pydantic models inherit from `KNSBaseModel` (in `core/models.py`), which uses a `@model_serializer` to apply `clean()` on every `model_dump()` call — stripping `None`, `""`, and `-1` from serialized output. This ensures clean output even when FastMCP re-serializes models internally. Views do **not** call `clean()` themselves.
+- `clean()` from `core/helpers.py` is applied centrally in `mcp_server.py`'s handler (inside `_make_handler`) to strip `None`, `""`, and `-1` from all MCP tool responses. It preserves `False`, `0`, `[]`, and `{}`. Views do **not** call `clean()` themselves.
 - Helper functions `simple_date()`, `simple_time()`, and `format_person_name()` return `None` (not `""`) for empty/missing inputs, so `clean()` will strip them automatically.
 - The `@mcp_tool` decorator (in `core/mcp_meta.py`) attaches `._mcp_tool` metadata and appends to `_ALL_TOOLS`.
 - LSP warnings about `_mcp_tool`, `__signature__`, `RESPONSE_SCHEMA` on function objects are false positives — Python allows arbitrary attributes on functions.

@@ -214,21 +214,19 @@ def _validate_size(result) -> str:
     return text
 
 
-def _validate_size_dict(result_dict: dict) -> dict:
-    """Check a dict result against MAX_OUTPUT_TOKENS.
+def _check_size_dict(result_dict: dict) -> None:
+    """Raise ValueError if a dict result exceeds MAX_OUTPUT_TOKENS.
 
-    Returns the dict unchanged if within the limit, or an error dict
-    instructing the client to use better filters.
+    Unlike _validate_size (which returns a JSON string), this raises so
+    that Pydantic-model handlers never return a dict that violates the
+    output schema.
     """
     text = json.dumps(result_dict, ensure_ascii=False, default=str)
     if len(text) > MAX_OUTPUT_TOKENS:
-        return {
-            "error": "Response too large",
-            "size": len(text),
-            "limit": MAX_OUTPUT_TOKENS,
-            "hint": "Add more filters to narrow results.",
-        }
-    return result_dict
+        raise ValueError(
+            f"Response too large ({len(text)} chars, limit {MAX_OUTPUT_TOKENS}). "
+            "Add more filters to narrow results."
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -273,7 +271,8 @@ def _make_handler(view_fn, enum_map: dict[str, list[str]]):
             if result is None:
                 return _validate_size(None)
             result_dict = result.model_dump()
-            return _validate_size_dict(result_dict)
+            _check_size_dict(result_dict)
+            return result_dict
 
         handler.__signature__ = inspect.Signature(
             new_params, return_annotation=output_model

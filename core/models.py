@@ -1,7 +1,7 @@
 """Base Pydantic model for all Knesset data models.
 
 Provides ``KNSBaseModel`` which automatically strips empty/sentinel values
-(``None``, ``""``, ``-1``, ``[]``) from serialized output via a custom
+(``None``, ``""``, ``-1``) from serialized output via a custom
 ``@model_serializer``.  This ensures that no matter *who* calls
 ``model_dump()`` — our handler, FastMCP's ``convert_result``, etc. — the
 output is always clean.

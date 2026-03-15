@@ -306,10 +306,12 @@ def clean(obj):
     """Recursively strip empty/sentinel values from a dict or list.
 
     Removes dict keys whose values are ``None``, ``""`` (empty string),
-    ``-1`` (common DB sentinel), or ``[]`` (empty list).
+    or ``-1`` (common DB sentinel).
 
-    Preserves ``False``, ``0``, and ``{}`` (empty dict — used as a
-    namespace marker, e.g. ``roles: {}``).
+    Preserves ``False``, ``0``, ``[]`` (empty list), and ``{}``
+    (empty dict).  Empty lists are valid data (e.g. "zero results")
+    and must not be stripped — required Pydantic fields would lose
+    their key, causing validation errors downstream.
 
     Recurses into nested dicts and lists so that nested models are
     cleaned too.
@@ -318,8 +320,6 @@ def clean(obj):
         cleaned = {}
         for key, value in obj.items():
             if _is_empty(value):
-                continue
-            if isinstance(value, list) and len(value) == 0:
                 continue
             cleaned[key] = clean(value)
         return cleaned
