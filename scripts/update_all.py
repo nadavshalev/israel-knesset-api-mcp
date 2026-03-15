@@ -25,6 +25,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from core.db import connect_db, ensure_indexes
+from core.vpn import vpn_connection
 
 from origins import TableSpec, get_table_spec, get_table_specs
 
@@ -278,8 +279,10 @@ def main():
     from core.db_cli import ensure_tables
     ensure_tables(conn)
 
-    update_tables(conn, table_filter=args.tables, full=args.full,
-                  dry_run=args.dry_run)
+    # All OData fetches require the Knesset VPN
+    with vpn_connection():
+        update_tables(conn, table_filter=args.tables, full=args.full,
+                      dry_run=args.dry_run)
     conn.close()
 
 

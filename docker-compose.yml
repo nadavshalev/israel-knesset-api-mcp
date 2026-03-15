@@ -1,6 +1,8 @@
 services:
   mcp:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.mcp
     container_name: open-knesset-mcp
     restart: unless-stopped
     env_file:
@@ -16,7 +18,9 @@ services:
       start_period: 20s
 
   updater:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.update
     container_name: open-knesset-updater
     restart: unless-stopped
     env_file:
