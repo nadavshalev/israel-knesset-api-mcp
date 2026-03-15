@@ -8,7 +8,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from core.db import connect_db
-from tables import get_table_spec, get_table_specs
+from origins import get_table_spec, get_table_specs
 
 
 def parse_args() -> argparse.Namespace:

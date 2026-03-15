@@ -12,8 +12,8 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from views.plenum_sessions_view import search_sessions
-from views.plenum_session_view import get_session
+from origins.plenums.search_plenums_view import search_sessions
+from origins.plenums.get_plenum_view import get_session
 
 
 # ===================================================================
@@ -25,31 +25,31 @@ class TestSearchSessions(unittest.TestCase):
 
     def test_knesset_20_sessions(self):
         results = search_sessions(knesset_num=20, date="2015-03-31")
-        self.assertGreater(len(results), 0)
-        for s in results:
-            self.assertEqual(s["knesset_num"], 20)
+        self.assertGreater(len(results.items), 0)
+        for s in results.items:
+            self.assertEqual(s.knesset_num, 20)
 
     def test_no_items_or_docs_in_list(self):
-        """List view should NOT include items or documents."""
+        """List view returns SessionSummary objects which lack items/documents."""
         results = search_sessions(knesset_num=20, date="2015-03-31")
-        for s in results:
-            self.assertNotIn("items", s)
-            self.assertNotIn("documents", s)
+        for s in results.items:
+            self.assertFalse(hasattr(s, "documents"))
+            # SessionSummary has no 'items' or 'documents' attributes
 
     def test_output_structure(self):
         results = search_sessions(knesset_num=20, date="2015-03-31")
-        self.assertGreater(len(results), 0)
-        expected_keys = {"session_id", "knesset_num", "name", "date"}
-        for s in results:
-            self.assertEqual(set(s.keys()), expected_keys)
+        self.assertGreater(len(results.items), 0)
+        expected_fields = {"session_id", "knesset_num", "name", "date"}
+        from origins.plenums.search_plenums_models import SessionSummary
+        self.assertEqual(set(SessionSummary.model_fields.keys()), expected_fields)
 
     def test_name_filter(self):
         results = search_sessions(knesset_num=20, name="חוק-יסוד")
-        self.assertGreater(len(results), 0)
+        self.assertGreater(len(results.items), 0)
 
     def test_no_match(self):
         results = search_sessions(knesset_num=20, name="xxxNOTEXISTxxx")
-        self.assertEqual(len(results), 0)
+        self.assertEqual(len(results.items), 0)
 
     def test_date_range(self):
         results = search_sessions(
@@ -57,17 +57,17 @@ class TestSearchSessions(unittest.TestCase):
             date="2015-03-31",
             date_to="2015-04-01",
         )
-        self.assertGreater(len(results), 0)
-        for s in results:
-            self.assertGreaterEqual(s["date"], "2015-03-31")
-            self.assertLessEqual(s["date"], "2015-04-01")
+        self.assertGreater(len(results.items), 0)
+        for s in results.items:
+            self.assertGreaterEqual(s.date, "2015-03-31")
+            self.assertLessEqual(s.date, "2015-04-01")
 
     def test_sort_order(self):
         """Results should be sorted by date DESC."""
         results = search_sessions(knesset_num=20, date="2015-03-31", date_to="2015-05-10")
-        for i in range(1, len(results)):
+        for i in range(1, len(results.items)):
             self.assertGreaterEqual(
-                results[i - 1]["date"], results[i]["date"],
+                results.items[i - 1].date, results.items[i].date,
                 "Sessions should be sorted newest first",
             )
 
@@ -82,7 +82,7 @@ class TestGetSession(unittest.TestCase):
     def test_session_exists(self):
         result = get_session(568294)
         self.assertIsNotNone(result)
-        self.assertEqual(result["session_id"], 568294)
+        self.assertEqual(result.session_id, 568294)
 
     def test_nonexistent_session_returns_none(self):
         result = get_session(999999999)
@@ -90,33 +90,34 @@ class TestGetSession(unittest.TestCase):
 
     def test_output_has_items(self):
         result = get_session(568294)
-        self.assertIn("items", result)
-        self.assertGreater(len(result["items"]), 0)
+        self.assertTrue(hasattr(result, "items"))
+        self.assertGreater(len(result.items), 0)
 
     def test_output_has_documents(self):
         result = get_session(568294)
-        self.assertIn("documents", result)
-        self.assertGreater(len(result["documents"]), 0)
+        self.assertTrue(hasattr(result, "documents"))
+        self.assertGreater(len(result.documents), 0)
 
     def test_output_structure(self):
         result = get_session(568294)
-        expected_keys = {"session_id", "knesset_num", "name", "date", "items", "documents"}
-        self.assertTrue(expected_keys.issubset(result.keys()))
+        expected_fields = {"session_id", "knesset_num", "name", "date", "items", "documents"}
+        from origins.plenums.get_plenum_models import SessionDetail
+        self.assertTrue(expected_fields.issubset(SessionDetail.model_fields.keys()))
 
     def test_item_structure(self):
         result = get_session(568294)
-        for item in result["items"]:
-            self.assertIn("item_id", item)
-            self.assertIn("name", item)
-            self.assertIn("type", item)
-            # "status" is omitted when null/empty by _clean()
+        for item in result.items:
+            self.assertIsNotNone(item.item_id)
+            self.assertIsNotNone(item.name)
+            self.assertIsNotNone(item.type)
+            # "status" may be None for some items
 
     def test_document_structure(self):
         result = get_session(568294)
-        for doc in result["documents"]:
-            self.assertIn("group_type", doc)
-            self.assertIn("application", doc)
-            self.assertIn("file_path", doc)
+        for doc in result.documents:
+            self.assertIsNotNone(doc.group_type)
+            self.assertIsNotNone(doc.application)
+            self.assertIsNotNone(doc.file_path)
 
 
 if __name__ == "__main__":

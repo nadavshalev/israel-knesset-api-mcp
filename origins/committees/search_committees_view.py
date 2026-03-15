@@ -18,9 +18,10 @@ from typing import Annotated
 from pydantic import Field
 
 from core.db import connect_readonly
-from core.helpers import simple_date, normalize_inputs, _clean
+from core.helpers import simple_date, normalize_inputs
 from core.mcp_meta import mcp_tool
 from core.search_meta import register_search
+from origins.committees.search_committees_models import CommitteeSummary, CommitteeSearchResults
 
 register_search({
     "entity_key": "committees",
@@ -66,7 +67,7 @@ def search_committees(
     category: Annotated[str | None, Field(description="Category description contains text")] = None,
     is_current: Annotated[bool | None, Field(description="True for current committees, False for inactive")] = None,
     parent_committee_id: Annotated[int | None, Field(description="Parent committee ID (for sub-committees)")] = None,
-) -> list:
+) -> CommitteeSearchResults:
     """Search for committees and return summary metadata.
 
     Filters (all ANDed):
@@ -130,34 +131,21 @@ def search_committees(
 
     results = []
     for row in rows:
-        results.append({
-            "committee_id": row["id"],
-            "name": row["name"],
-            "knesset_num": row["knessetnum"],
-            "type": row["committeetypedesc"],
-            "category": row["categorydesc"],
-            "is_current": bool(row["iscurrent"]),
-            "start_date": simple_date(row["startdate"]),
-            "end_date": simple_date(row["finishdate"]),
-            "parent_committee_id": row["parentcommitteeid"],
-            "parent_committee_name": row["committeeparentname"],
-        })
+        results.append(CommitteeSummary(
+            committee_id=row["id"],
+            name=row["name"],
+            knesset_num=row["knessetnum"],
+            type=row["committeetypedesc"],
+            category=row["categorydesc"],
+            is_current=bool(row["iscurrent"]),
+            start_date=simple_date(row["startdate"]) or None,
+            end_date=simple_date(row["finishdate"]) or None,
+            parent_committee_id=row["parentcommitteeid"],
+            parent_committee_name=row["committeeparentname"],
+        ))
 
     conn.close()
-    return _clean(results)
+    return CommitteeSearchResults(items=results)
 
 
-search_committees.RESPONSE_SCHEMA = {
-    "_type": "list[dict]",
-    "_description": "List of committee summaries sorted by start_date DESC, committee_id DESC",
-    "committee_id": {"type": "int", "optional": False, "description": "Unique committee identifier"},
-    "name": {"type": "str", "optional": True, "description": "Committee name"},
-    "knesset_num": {"type": "int", "optional": True, "description": "Knesset number"},
-    "type": {"type": "str", "optional": True, "description": "Committee type (main, sub, etc.)"},
-    "category": {"type": "str", "optional": True, "description": "Category description"},
-    "is_current": {"type": "bool", "optional": False, "description": "Whether the committee is currently active"},
-    "start_date": {"type": "str", "optional": True, "description": "Start date (YYYY-MM-DD)"},
-    "end_date": {"type": "str", "optional": True, "description": "End date (YYYY-MM-DD)"},
-    "parent_committee_id": {"type": "int", "optional": True, "description": "Parent committee ID (sub-committees)"},
-    "parent_committee_name": {"type": "str", "optional": True, "description": "Parent committee name"},
-}
+search_committees.OUTPUT_MODEL = CommitteeSearchResults

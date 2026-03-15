@@ -26,7 +26,7 @@ if str(ROOT) not in sys.path:
 
 from core.db import connect_db, ensure_indexes
 
-from tables import TableSpec, get_table_spec, get_table_specs
+from origins import TableSpec, get_table_spec, get_table_specs
 
 
 # ---------------------------------------------------------------------------

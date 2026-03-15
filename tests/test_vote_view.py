@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from views.vote_view import get_vote
+from origins.votes.get_vote_view import get_vote
 
 
 # ===================================================================
@@ -27,15 +27,15 @@ class TestGetVote(unittest.TestCase):
         """Vote 21825: בחירת יושב-ראש הכנסת (Knesset 20 opening day)."""
         result = get_vote(21825)
         self.assertIsNotNone(result)
-        self.assertEqual(result["vote_id"], 21825)
-        self.assertEqual(result["knesset_num"], 20)
-        self.assertEqual(result["date"], "2015-03-31")
-        self.assertEqual(result["time"], "18:36")
-        self.assertTrue(result["is_accepted"])
-        self.assertEqual(result["total_for"], 103)
-        self.assertEqual(result["total_against"], 1)
-        self.assertEqual(result["total_abstain"], 7)
-        self.assertIn("יושב-ראש", result["title"])
+        self.assertEqual(result.vote_id, 21825)
+        self.assertEqual(result.knesset_num, 20)
+        self.assertEqual(result.date, "2015-03-31")
+        self.assertEqual(result.time, "18:36")
+        self.assertTrue(result.is_accepted)
+        self.assertEqual(result.total_for, 103)
+        self.assertEqual(result.total_against, 1)
+        self.assertEqual(result.total_abstain, 7)
+        self.assertIn("יושב-ראש", result.title)
 
     def test_nonexistent_vote_returns_none(self):
         result = get_vote(999999999)
@@ -47,26 +47,26 @@ class TestGetVote(unittest.TestCase):
         self.assertIsNotNone(result)
         # Always-present keys; optional keys (bill_id, subject, for_option,
         # against_option, vote_method) are omitted when null/empty.
-        always_keys = {
+        always_attrs = [
             "vote_id", "knesset_num", "session_id", "title",
             "date", "time", "is_accepted", "total_for",
             "total_against", "total_abstain",
             "members",
-        }
-        self.assertTrue(always_keys.issubset(result.keys()),
-                        f"Missing keys: {always_keys - result.keys()}")
+        ]
+        missing = [a for a in always_attrs if not hasattr(result, a)]
+        self.assertEqual(missing, [], f"Missing attributes: {missing}")
 
     def test_bill_id_for_bill_vote(self):
         """Vote 26916 links to bill 565913 (Basic Law: Nation State)."""
         result = get_vote(26916)
         self.assertIsNotNone(result)
-        self.assertEqual(result["bill_id"], 565913)
+        self.assertEqual(result.bill_id, 565913)
 
     def test_bill_id_null_for_non_bill_vote(self):
         """Vote 21825 (speaker election) is not a bill vote — bill_id is omitted."""
         result = get_vote(21825)
         self.assertIsNotNone(result)
-        self.assertNotIn("bill_id", result)
+        self.assertIsNone(result.bill_id)
 
 
 # ===================================================================
@@ -81,33 +81,33 @@ class TestMembers(unittest.TestCase):
         """Detail view always includes 'members' as a list."""
         result = get_vote(21825)
         self.assertIsNotNone(result)
-        self.assertIn("members", result)
-        self.assertIsInstance(result["members"], list)
+        self.assertTrue(hasattr(result, "members"))
+        self.assertIsInstance(result.members, list)
 
     def test_members_populated_for_known_vote(self):
         """Vote 21825 should have 111 member results."""
         result = get_vote(21825)
         self.assertIsNotNone(result)
-        self.assertEqual(len(result["members"]), 111)
+        self.assertEqual(len(result.members), 111)
 
     def test_member_structure(self):
         """Each member should have member_id, name, and result."""
         result = get_vote(21825)
         self.assertIsNotNone(result)
-        self.assertGreater(len(result["members"]), 0)
-        m = result["members"][0]
-        self.assertIn("member_id", m)
-        self.assertIn("name", m)
-        self.assertIn("result", m)
+        self.assertGreater(len(result.members), 0)
+        m = result.members[0]
+        self.assertTrue(hasattr(m, "member_id"))
+        self.assertTrue(hasattr(m, "name"))
+        self.assertTrue(hasattr(m, "result"))
 
     def test_member_results_are_hebrew(self):
         """Result descriptions should be in Hebrew (בעד, נגד, נמנע, etc.)."""
         result = get_vote(21825)
         self.assertIsNotNone(result)
         valid_results = {"בעד", "נגד", "נמנע", "נוכח", "לא נכח/ אינו נוכח", "הצביע"}
-        for m in result["members"]:
-            self.assertIn(m["result"], valid_results,
-                          f"Unexpected result: {m['result']}")
+        for m in result.members:
+            self.assertIn(m.result, valid_results,
+                          f"Unexpected result: {m.result}")
 
     def test_members_sorted_by_last_name(self):
         """Members should be sorted by last name, first name."""
@@ -118,10 +118,10 @@ class TestMembers(unittest.TestCase):
         # (= last name) yields a non-decreasing sequence.  Because Hebrew
         # names can have >2 words, just verify via the raw query order
         # being stable — check the first member starts with an early letter.
-        self.assertGreater(len(result["members"]), 0)
+        self.assertGreater(len(result.members), 0)
         # Just verify the list is non-empty and deterministic
-        first_member = result["members"][0]
-        self.assertIn("member_id", first_member)
+        first_member = result.members[0]
+        self.assertTrue(hasattr(first_member, "member_id"))
 
 
 # ===================================================================
@@ -136,49 +136,49 @@ class TestRelatedVotes(unittest.TestCase):
         """Detail view always includes 'related_votes' as a list."""
         result = get_vote(21825)
         self.assertIsNotNone(result)
-        self.assertIn("related_votes", result)
-        self.assertIsInstance(result["related_votes"], list)
+        self.assertTrue(hasattr(result, "related_votes"))
+        self.assertIsInstance(result.related_votes, list)
 
     def test_standalone_vote_has_no_related(self):
         """Vote 21825 (speaker election) has no related votes — empty list."""
         result = get_vote(21825)
         self.assertIsNotNone(result)
-        self.assertEqual(len(result["related_votes"]), 0)
+        self.assertEqual(len(result.related_votes), 0)
 
     def test_terror_law_has_related_votes(self):
         """Vote 29054 (terror law approval) has 2 related votes in same session."""
         result = get_vote(29054)
         self.assertIsNotNone(result)
-        self.assertEqual(len(result["related_votes"]), 2)
+        self.assertEqual(len(result.related_votes), 2)
 
     def test_related_vote_structure(self):
-        """Each related vote should have expected keys."""
+        """Each related vote should have expected attributes."""
         result = get_vote(29054)
         self.assertIsNotNone(result)
-        self.assertGreater(len(result["related_votes"]), 0)
-        rv = result["related_votes"][0]
-        # Always-present keys; optional keys (for_option, subject) may be
-        # omitted when null/empty by _clean().
-        always_keys = {
+        self.assertGreater(len(result.related_votes), 0)
+        rv = result.related_votes[0]
+        # Always-present attributes; optional attrs (for_option, subject) may
+        # be None for some votes.
+        always_attrs = [
             "vote_id",
             "date", "time", "is_accepted",
             "total_for", "total_against", "total_abstain",
-        }
-        self.assertTrue(always_keys.issubset(rv.keys()),
-                        f"Missing keys: {always_keys - rv.keys()}")
+        ]
+        missing = [a for a in always_attrs if not hasattr(rv, a)]
+        self.assertEqual(missing, [], f"Missing attributes: {missing}")
 
     def test_related_votes_exclude_self(self):
         """The main vote should NOT appear in its own related_votes."""
         result = get_vote(29054)
         self.assertIsNotNone(result)
-        related_ids = {rv["vote_id"] for rv in result["related_votes"]}
+        related_ids = {rv.vote_id for rv in result.related_votes}
         self.assertNotIn(29054, related_ids)
 
     def test_related_votes_have_distinct_subjects(self):
         """Terror law votes 29036/29053/29054 have distinct subjects."""
         result = get_vote(29054)
         self.assertIsNotNone(result)
-        subjects = {rv["subject"] for rv in result["related_votes"]}
+        subjects = {rv.subject for rv in result.related_votes}
         # The other two votes have subjects 'הצעת ועדה' and 'קריאה שנייה'
         self.assertIn("הצעת ועדה", subjects)
         self.assertIn("קריאה שנייה", subjects)
@@ -188,7 +188,7 @@ class TestRelatedVotes(unittest.TestCase):
         result = get_vote(29054)
         self.assertIsNotNone(result)
         # 29036 (ord 3) should come before 29053 (ord 20)
-        ids = [rv["vote_id"] for rv in result["related_votes"]]
+        ids = [rv.vote_id for rv in result.related_votes]
         self.assertEqual(ids, [29036, 29053])
 
 
@@ -199,13 +199,13 @@ class TestRelatedVotesOData(unittest.TestCase):
         """Vote 45274 (3rd reading) has 9 related votes in same session."""
         result = get_vote(45274)
         self.assertIsNotNone(result)
-        self.assertEqual(len(result["related_votes"]), 9)
+        self.assertEqual(len(result.related_votes), 9)
 
     def test_odata_related_subjects(self):
         """Related votes include section votes and reservation votes."""
         result = get_vote(45274)
         self.assertIsNotNone(result)
-        subjects = [rv["subject"] for rv in result["related_votes"]]
+        subjects = [rv.subject for rv in result.related_votes]
         # Should have section votes (סעיפים) and reservation votes (הסתייגות)
         has_sections = any("סעיפ" in (s or "") for s in subjects)
         has_reservations = any("הסתייגות" in (s or "") for s in subjects)
@@ -216,7 +216,7 @@ class TestRelatedVotesOData(unittest.TestCase):
         """Related votes should have for_option labels."""
         result = get_vote(45274)
         self.assertIsNotNone(result)
-        for_options = {rv["for_option"] for rv in result["related_votes"]}
+        for_options = {rv.for_option for rv in result.related_votes}
         self.assertIn("לקבל בקריאה שנייה", for_options)
         self.assertIn("לקבל את ההסתייגות", for_options)
 
@@ -234,7 +234,7 @@ class TestIsAcceptedInference(unittest.TestCase):
         result = get_vote(45274)
         self.assertIsNotNone(result)
         # 14 for, 1 against -> should be accepted
-        self.assertTrue(result["is_accepted"])
+        self.assertTrue(result.is_accepted)
 
 
 if __name__ == "__main__":

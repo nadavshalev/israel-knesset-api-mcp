@@ -12,7 +12,8 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from views.bills_view import search_bills
+from origins.bills.search_bills_view import search_bills
+from origins.bills.search_bills_models import BillSearchResults, BillSummary
 
 
 class TestBasicSearch(unittest.TestCase):
@@ -20,67 +21,68 @@ class TestBasicSearch(unittest.TestCase):
 
     def test_knesset_20_basic_laws(self):
         results = search_bills(knesset_num=20, name="חוק-יסוד")
-        self.assertGreater(len(results), 0)
-        for b in results:
-            self.assertEqual(b["knesset_num"], 20)
+        self.assertIsInstance(results, BillSearchResults)
+        self.assertGreater(len(results.items), 0)
+        for b in results.items:
+            self.assertIsInstance(b, BillSummary)
+            self.assertEqual(b.knesset_num, 20)
 
     def test_no_stages_in_output(self):
         """List view should NOT include stages."""
         results = search_bills(knesset_num=20, name="חוק-יסוד")
-        for b in results:
-            self.assertNotIn("stages", b)
+        for b in results.items:
+            self.assertFalse(hasattr(b, "stages"))
 
     def test_output_structure(self):
         results = search_bills(knesset_num=20, name="חוק-יסוד")
-        self.assertGreater(len(results), 0)
-        # Always-present keys; others (summary, committee, publication_date,
-        # publication_series) are omitted when null/empty by _clean().
-        always_keys = {"bill_id", "name", "knesset_num"}
-        for b in results:
-            self.assertTrue(always_keys.issubset(b.keys()),
-                            f"Missing keys: {always_keys - b.keys()}")
+        self.assertGreater(len(results.items), 0)
+        for b in results.items:
+            self.assertIsInstance(b, BillSummary)
+            self.assertIsNotNone(b.bill_id)
+            self.assertIsNotNone(b.name)
+            self.assertIsNotNone(b.knesset_num)
 
     def test_name_no_match(self):
         results = search_bills(name="xxxNOTEXISTxxx", knesset_num=20)
-        self.assertEqual(len(results), 0)
+        self.assertEqual(len(results.items), 0)
 
 
 class TestNameFilter(unittest.TestCase):
     def test_name_search(self):
         results = search_bills(name="מדינת הלאום", knesset_num=20)
-        self.assertGreater(len(results), 0)
-        for b in results:
-            self.assertIn("לאום", b["name"])
+        self.assertGreater(len(results.items), 0)
+        for b in results.items:
+            self.assertIn("לאום", b.name)
 
 
 class TestSubTypeFilter(unittest.TestCase):
     def test_government_bills(self):
         results = search_bills(sub_type="ממשלתית", knesset_num=20)
-        self.assertGreater(len(results), 0)
-        for b in results:
-            self.assertIn("ממשלתית", b["sub_type"])
+        self.assertGreater(len(results.items), 0)
+        for b in results.items:
+            self.assertIn("ממשלתית", b.sub_type)
 
 
 class TestStatusFilter(unittest.TestCase):
     def test_passed_third_reading(self):
         results = search_bills(status="קריאה שלישית", knesset_num=20)
-        self.assertGreater(len(results), 0)
-        for b in results:
-            self.assertIn("קריאה שלישית", b["status"])
+        self.assertGreater(len(results.items), 0)
+        for b in results.items:
+            self.assertIn("קריאה שלישית", b.status)
 
 
 class TestDateFilter(unittest.TestCase):
     def test_date_filter_returns_bills(self):
         """Bills that appeared in plenum on a specific date."""
         results = search_bills(date="2015-05-04", knesset_num=20)
-        self.assertGreater(len(results), 0)
+        self.assertGreater(len(results.items), 0)
 
 
 class TestSortOrder(unittest.TestCase):
     def test_sorted_by_publication_date_desc(self):
         """Results should be sorted by publication_date DESC."""
         results = search_bills(name="חוק-יסוד", knesset_num=20)
-        dates = [r["publication_date"] for r in results if r.get("publication_date")]
+        dates = [b.publication_date for b in results.items if b.publication_date]
         for i in range(1, len(dates)):
             self.assertGreaterEqual(
                 dates[i - 1], dates[i],

@@ -18,8 +18,9 @@ from typing import Annotated
 from pydantic import Field
 
 from core.db import connect_readonly
-from core.helpers import simple_date, normalize_inputs, _clean
+from core.helpers import simple_date, normalize_inputs
 from core.mcp_meta import mcp_tool
+from origins.plenums.get_plenum_models import SessionDetail, SessionItem, SessionDocument
 
 
 # ---------------------------------------------------------------------------
@@ -37,7 +38,7 @@ from core.mcp_meta import mcp_tool
 )
 def get_session(
     session_id: Annotated[int, Field(description="The plenum session ID (required)")],
-) -> dict | None:
+) -> SessionDetail | None:
     """Return full detail for a single plenum session, or None if not found.
 
     Includes session metadata, all items, and documents.
@@ -84,60 +85,32 @@ def get_session(
     )
     doc_rows = cursor.fetchall()
 
-    obj = {
-        "session_id": session["id"],
-        "knesset_num": session["knessetnum"],
-        "name": session["name"],
-        "date": simple_date(session["startdate"]),
-        "items": [
-            {
-                "item_id": item["itemid"],
-                "name": item["name"],
-                "type": item["itemtypedesc"],
-                "status": item["statusdesc"],
-            }
+    result = SessionDetail(
+        session_id=session["id"],
+        knesset_num=session["knessetnum"],
+        name=session["name"],
+        date=simple_date(session["startdate"]) or None,
+        items=[
+            SessionItem(
+                item_id=item["itemid"],
+                name=item["name"],
+                type=item["itemtypedesc"],
+                status=item["statusdesc"],
+            )
             for item in item_rows
         ],
-        "documents": [
-            {
-                "group_type": doc["grouptypedesc"],
-                "application": doc["applicationdesc"],
-                "file_path": doc["filepath"],
-            }
+        documents=[
+            SessionDocument(
+                group_type=doc["grouptypedesc"],
+                application=doc["applicationdesc"],
+                file_path=doc["filepath"],
+            )
             for doc in doc_rows
         ],
-    }
+    )
 
     conn.close()
-    return _clean(obj)
+    return result
 
 
-get_session.RESPONSE_SCHEMA = {
-    "_type": "dict | None",
-    "_description": "Full session detail, or null if not found",
-    "session_id": {"type": "int", "optional": False, "description": "Unique session identifier"},
-    "knesset_num": {"type": "int", "optional": True, "description": "Knesset number"},
-    "name": {"type": "str", "optional": True, "description": "Session name"},
-    "date": {"type": "str", "optional": True, "description": "Session start date (YYYY-MM-DD)"},
-    "items": {
-        "type": "list[dict]",
-        "optional": False,
-        "description": "Agenda items in ordinal order",
-        "items": {
-            "item_id": {"type": "int", "optional": True, "description": "Item ID"},
-            "name": {"type": "str", "optional": True, "description": "Item name"},
-            "type": {"type": "str", "optional": True, "description": "Item type description"},
-            "status": {"type": "str", "optional": True, "description": "Item status description"},
-        },
-    },
-    "documents": {
-        "type": "list[dict]",
-        "optional": False,
-        "description": "Session documents",
-        "items": {
-            "group_type": {"type": "str", "optional": True, "description": "Document group type"},
-            "application": {"type": "str", "optional": True, "description": "File format"},
-            "file_path": {"type": "str", "optional": True, "description": "File URL/path"},
-        },
-    },
-}
+get_session.OUTPUT_MODEL = SessionDetail

@@ -13,9 +13,10 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from core.helpers import simple_date, simple_time
-from views.votes_view import (
+from origins.votes.search_votes_view import (
     search_votes,
 )
+from origins.votes.search_votes_models import VoteSearchResults, VoteSummary
 
 
 # ===================================================================
@@ -34,10 +35,10 @@ class TestSimpleDate(unittest.TestCase):
         self.assertEqual(simple_date("2015-03-31"), "2015-03-31")
 
     def test_empty(self):
-        self.assertEqual(simple_date(""), "")
+        self.assertIsNone(simple_date(""))
 
     def test_none(self):
-        self.assertEqual(simple_date(None), "")
+        self.assertIsNone(simple_date(None))
 
 
 class TestSimpleTime(unittest.TestCase):
@@ -48,13 +49,13 @@ class TestSimpleTime(unittest.TestCase):
         self.assertEqual(simple_time("2021-07-13T03:40:21+03:00"), "03:40")
 
     def test_no_t(self):
-        self.assertEqual(simple_time("2015-03-31"), "")
+        self.assertIsNone(simple_time("2015-03-31"))
 
     def test_empty(self):
-        self.assertEqual(simple_time(""), "")
+        self.assertIsNone(simple_time(""))
 
     def test_none(self):
-        self.assertEqual(simple_time(None), "")
+        self.assertIsNone(simple_time(None))
 
 
 # ===================================================================
@@ -68,18 +69,20 @@ class TestKnessetFilter(unittest.TestCase):
     def test_knesset_20_vote_count(self):
         """Knesset 20 had 7690 votes."""
         results = search_votes(knesset_num=20)
-        self.assertEqual(len(results), 7690)
+        self.assertIsInstance(results, VoteSearchResults)
+        self.assertEqual(len(results.items), 7690)
 
     def test_knesset_19_vote_count(self):
         """Knesset 19 had 2630 votes."""
         results = search_votes(knesset_num=19)
-        self.assertEqual(len(results), 2630)
+        self.assertEqual(len(results.items), 2630)
 
     def test_all_knesset_20_have_knesset_num(self):
         """All results for knesset=20 should have knesset_num=20."""
         results = search_votes(knesset_num=20, date="2015-03-31")
-        for v in results:
-            self.assertEqual(v["knesset_num"], 20)
+        for v in results.items:
+            self.assertIsInstance(v, VoteSummary)
+            self.assertEqual(v.knesset_num, 20)
 
 
 class TestDateFilters(unittest.TestCase):
@@ -88,9 +91,9 @@ class TestDateFilters(unittest.TestCase):
     def test_exact_date(self):
         """Knesset 20 opening day: 2015-03-31."""
         results = search_votes(date="2015-03-31", knesset_num=20)
-        self.assertEqual(len(results), 2)
-        for v in results:
-            self.assertEqual(v["date"], "2015-03-31")
+        self.assertEqual(len(results.items), 2)
+        for v in results.items:
+            self.assertEqual(v.date, "2015-03-31")
 
     def test_date_range_open_end(self):
         """Votes from 2015-03-31 onward in Knesset 20 (date without date_to).
@@ -99,19 +102,19 @@ class TestDateFilters(unittest.TestCase):
         so we use a range instead to test "from X onward".
         """
         results = search_votes(date="2015-03-31", date_to="2018-12-31", knesset_num=20)
-        self.assertGreater(len(results), 0)
-        for v in results:
-            self.assertGreaterEqual(v["date"], "2015-03-31")
+        self.assertGreater(len(results.items), 0)
+        for v in results.items:
+            self.assertGreaterEqual(v.date, "2015-03-31")
 
     def test_date_range(self):
         """Votes in first week of Knesset 20."""
         results = search_votes(
             date="2015-03-31", date_to="2015-04-07", knesset_num=20
         )
-        self.assertGreater(len(results), 0)
-        for v in results:
-            self.assertGreaterEqual(v["date"], "2015-03-31")
-            self.assertLessEqual(v["date"], "2015-04-07")
+        self.assertGreater(len(results.items), 0)
+        for v in results.items:
+            self.assertGreaterEqual(v.date, "2015-03-31")
+            self.assertLessEqual(v.date, "2015-04-07")
 
 
 class TestNameFilter(unittest.TestCase):
@@ -119,15 +122,15 @@ class TestNameFilter(unittest.TestCase):
 
     def test_title_search(self):
         results = search_votes(name="בחירת יושב-ראש", knesset_num=20)
-        self.assertGreater(len(results), 0)
-        for v in results:
-            title_or_subject = (v.get("title") or "") + (v.get("subject") or "")
+        self.assertGreater(len(results.items), 0)
+        for v in results.items:
+            title_or_subject = (v.title or "") + (v.subject or "")
             self.assertIn("יושב-ראש", title_or_subject)
 
     def test_subject_search(self):
         """Search by VoteSubject (e.g. 'הסתייגות')."""
         results = search_votes(name="הסתייגות", knesset_num=20)
-        self.assertGreater(len(results), 0)
+        self.assertGreater(len(results.items), 0)
 
 
 class TestAcceptedFilter(unittest.TestCase):
@@ -135,15 +138,15 @@ class TestAcceptedFilter(unittest.TestCase):
 
     def test_accepted_only(self):
         results = search_votes(knesset_num=20, date="2015-03-31", accepted=True)
-        for v in results:
-            self.assertTrue(v["is_accepted"])
+        for v in results.items:
+            self.assertTrue(v.is_accepted)
 
     def test_rejected_only(self):
         """Find rejected votes in a range with known rejections."""
         results = search_votes(knesset_num=20, accepted=False)
-        self.assertGreater(len(results), 0)
-        for v in results:
-            self.assertFalse(v["is_accepted"])
+        self.assertGreater(len(results.items), 0)
+        for v in results.items:
+            self.assertFalse(v.is_accepted)
 
 
 class TestSortOrder(unittest.TestCase):
@@ -151,57 +154,66 @@ class TestSortOrder(unittest.TestCase):
 
     def test_sorted_by_date_time_desc(self):
         results = search_votes(knesset_num=20, date="2015-03-31")
-        for i in range(1, len(results)):
-            prev = results[i - 1]
-            curr = results[i]
-            prev_key = (prev["date"], prev["time"], prev["vote_id"])
-            curr_key = (curr["date"], curr["time"], curr["vote_id"])
+        for i in range(1, len(results.items)):
+            prev = results.items[i - 1]
+            curr = results.items[i]
+            prev_key = (prev.date, prev.time, prev.vote_id)
+            curr_key = (curr.date, curr.time, curr.vote_id)
             self.assertGreaterEqual(prev_key, curr_key)
 
 
 class TestOutputStructure(unittest.TestCase):
-    """Verify list output has expected keys and no detail keys."""
+    """Verify output uses Pydantic models and has expected fields."""
 
-    def test_output_keys(self):
+    def test_output_is_pydantic_model(self):
         results = search_votes(knesset_num=20, date="2015-03-31")
-        self.assertGreater(len(results), 0)
-        # Always-present keys; optional keys (bill_id, subject, for_option,
-        # against_option, vote_method) are omitted when null/empty by _clean().
-        always_keys = {
-            "vote_id", "knesset_num", "session_id", "title",
-            "date", "time", "is_accepted", "total_for",
-            "total_against", "total_abstain",
-        }
-        for v in results:
-            self.assertTrue(always_keys.issubset(v.keys()),
-                            f"Missing keys: {always_keys - v.keys()}")
+        self.assertIsInstance(results, VoteSearchResults)
+        self.assertGreater(len(results.items), 0)
+        for v in results.items:
+            self.assertIsInstance(v, VoteSummary)
+
+    def test_output_fields(self):
+        results = search_votes(knesset_num=20, date="2015-03-31")
+        self.assertGreater(len(results.items), 0)
+        # Always-present fields should not be None
+        for v in results.items:
+            self.assertIsNotNone(v.vote_id)
+            self.assertIsNotNone(v.knesset_num)
+            self.assertIsNotNone(v.session_id)
+            self.assertIsNotNone(v.title)
+            self.assertIsNotNone(v.date)
+            self.assertIsNotNone(v.time)
+            self.assertIsNotNone(v.is_accepted)
+            self.assertIsNotNone(v.total_for)
+            self.assertIsNotNone(v.total_against)
+            self.assertIsNotNone(v.total_abstain)
 
     def test_no_members_in_list(self):
         """List view should NOT include members."""
         results = search_votes(knesset_num=20, date="2015-03-31")
-        for v in results:
-            self.assertNotIn("members", v)
+        for v in results.items:
+            self.assertFalse(hasattr(v, "members"))
 
     def test_no_related_votes_in_list(self):
         """List view should NOT include related_votes."""
         results = search_votes(knesset_num=20, date="2015-03-31")
-        for v in results:
-            self.assertNotIn("related_votes", v)
+        for v in results.items:
+            self.assertFalse(hasattr(v, "related_votes"))
 
 
 class TestBillIdField(unittest.TestCase):
     """Verify bill_id field in vote output."""
 
     def test_bill_id_present_in_output(self):
-        """Vote output may omit 'bill_id' when it's null (non-bill vote)."""
+        """Vote output has bill_id field (None for non-bill votes)."""
         results = search_votes(knesset_num=20, date="2015-03-31")
-        self.assertGreater(len(results), 0)
-        # bill_id is optional — only present for bill-related votes
+        self.assertGreater(len(results.items), 0)
+        # bill_id is optional — None for non-bill votes
 
     def test_bill_vote_has_bill_id(self):
         """Vote 26916 links to bill 565913 (Basic Law: Nation State)."""
         results = search_votes(knesset_num=20, name="חוק-יסוד: ישראל")
-        bill_ids = {v["bill_id"] for v in results if v.get("bill_id")}
+        bill_ids = {v.bill_id for v in results.items if v.bill_id}
         self.assertIn(565913, bill_ids)
 
 
@@ -211,32 +223,32 @@ class TestBillIdFilter(unittest.TestCase):
     def test_filter_by_bill_id(self):
         """Bill 565913 (Nation State) had 202 votes."""
         results = search_votes(bill_id=565913)
-        self.assertEqual(len(results), 202)
-        for v in results:
-            self.assertEqual(v["bill_id"], 565913)
+        self.assertEqual(len(results.items), 202)
+        for v in results.items:
+            self.assertEqual(v.bill_id, 565913)
 
     def test_filter_by_bill_id_with_accepted(self):
         """Combine bill_id with accepted filter."""
         all_votes = search_votes(bill_id=565913)
         accepted = search_votes(bill_id=565913, accepted=True)
         rejected = search_votes(bill_id=565913, accepted=False)
-        self.assertEqual(len(accepted) + len(rejected), len(all_votes))
-        for v in accepted:
-            self.assertTrue(v["is_accepted"])
-        for v in rejected:
-            self.assertFalse(v["is_accepted"])
+        self.assertEqual(len(accepted.items) + len(rejected.items), len(all_votes.items))
+        for v in accepted.items:
+            self.assertTrue(v.is_accepted)
+        for v in rejected.items:
+            self.assertFalse(v.is_accepted)
 
     def test_filter_by_nonexistent_bill_id(self):
         """Bill that doesn't exist should return empty."""
         results = search_votes(bill_id=999999999)
-        self.assertEqual(len(results), 0)
+        self.assertEqual(len(results.items), 0)
 
     def test_filter_by_bill_id_and_knesset(self):
         """Bill 565913 is from Knesset 20."""
         results = search_votes(bill_id=565913, knesset_num=20)
-        self.assertEqual(len(results), 202)
+        self.assertEqual(len(results.items), 202)
         results = search_votes(bill_id=565913, knesset_num=19)
-        self.assertEqual(len(results), 0)
+        self.assertEqual(len(results.items), 0)
 
 
 class TestCSVTotals(unittest.TestCase):
@@ -245,12 +257,12 @@ class TestCSVTotals(unittest.TestCase):
     def test_first_knesset_20_vote_totals(self):
         results = search_votes(knesset_num=20, date="2015-03-31")
         # Vote 21824 should be in results
-        v = [r for r in results if r["vote_id"] == 21824]
+        v = [r for r in results.items if r.vote_id == 21824]
         self.assertEqual(len(v), 1)
-        self.assertEqual(v[0]["total_for"], 107)
-        self.assertEqual(v[0]["total_against"], 0)
-        self.assertEqual(v[0]["total_abstain"], 0)
-        self.assertTrue(v[0]["is_accepted"])
+        self.assertEqual(v[0].total_for, 107)
+        self.assertEqual(v[0].total_against, 0)
+        self.assertEqual(v[0].total_abstain, 0)
+        self.assertTrue(v[0].is_accepted)
 
 
 class TestNullIsAccepted(unittest.TestCase):
@@ -264,40 +276,40 @@ class TestNullIsAccepted(unittest.TestCase):
     def test_odata_votes_have_inferred_is_accepted(self):
         """is_accepted must never be None when per-MK results exist."""
         results = search_votes(knesset_num=25, date="2022-12-19")
-        self.assertGreater(len(results), 0)
-        for v in results:
+        self.assertGreater(len(results.items), 0)
+        for v in results.items:
             self.assertIsNotNone(
-                v["is_accepted"],
-                f"vote {v['vote_id']} has is_accepted=None",
+                v.is_accepted,
+                f"vote {v.vote_id} has is_accepted=None",
             )
 
     def test_odata_votes_have_computed_totals(self):
         """Totals must be populated from per-MK results for OData votes."""
         results = search_votes(knesset_num=25, date="2022-12-19")
-        self.assertGreater(len(results), 0)
-        for v in results:
+        self.assertGreater(len(results.items), 0)
+        for v in results.items:
             self.assertIsNotNone(
-                v["total_for"],
-                f"vote {v['vote_id']} has total_for=None",
+                v.total_for,
+                f"vote {v.vote_id} has total_for=None",
             )
             self.assertIsNotNone(
-                v["total_against"],
-                f"vote {v['vote_id']} has total_against=None",
+                v.total_against,
+                f"vote {v.vote_id} has total_against=None",
             )
 
     def test_accepted_filter_includes_odata_votes(self):
         """accepted=True must find OData-origin accepted votes."""
         results = search_votes(knesset_num=25, date="2022-12-19", accepted=True)
-        self.assertGreater(len(results), 0, "No accepted votes found")
-        for v in results:
-            self.assertTrue(v["is_accepted"])
+        self.assertGreater(len(results.items), 0, "No accepted votes found")
+        for v in results.items:
+            self.assertTrue(v.is_accepted)
 
     def test_rejected_filter_includes_odata_votes(self):
         """accepted=False must find OData-origin rejected votes."""
         results = search_votes(knesset_num=25, date="2022-12-19", accepted=False)
-        self.assertGreater(len(results), 0, "No rejected votes found")
-        for v in results:
-            self.assertFalse(v["is_accepted"])
+        self.assertGreater(len(results.items), 0, "No rejected votes found")
+        for v in results.items:
+            self.assertFalse(v.is_accepted)
 
     def test_accepted_plus_rejected_equals_total(self):
         """Accepted + rejected must equal total for the same date."""
@@ -305,29 +317,29 @@ class TestNullIsAccepted(unittest.TestCase):
         accepted = search_votes(knesset_num=25, date="2022-12-19", accepted=True)
         rejected = search_votes(knesset_num=25, date="2022-12-19", accepted=False)
         self.assertEqual(
-            len(accepted) + len(rejected), len(all_votes),
-            f"accepted({len(accepted)}) + rejected({len(rejected)}) != total({len(all_votes)})",
+            len(accepted.items) + len(rejected.items), len(all_votes.items),
+            f"accepted({len(accepted.items)}) + rejected({len(rejected.items)}) != total({len(all_votes.items)})",
         )
 
     def test_specific_odata_accepted_vote(self):
         """Vote 37683 (Basic Law amendment, Knesset 25) passed 61-51."""
         results = search_votes(knesset_num=25, date="2022-12-13", accepted=True)
-        ids = {v["vote_id"] for v in results}
+        ids = {v.vote_id for v in results.items}
         self.assertIn(37683, ids)
-        v = [r for r in results if r["vote_id"] == 37683][0]
-        self.assertEqual(v["total_for"], 61)
-        self.assertEqual(v["total_against"], 51)
-        self.assertTrue(v["is_accepted"])
+        v = [r for r in results.items if r.vote_id == 37683][0]
+        self.assertEqual(v.total_for, 61)
+        self.assertEqual(v.total_against, 51)
+        self.assertTrue(v.is_accepted)
 
     def test_specific_odata_rejected_vote(self):
         """Vote 37692 (Knesset Law amendment) rejected 51-62."""
         results = search_votes(knesset_num=25, date="2022-12-19", accepted=False)
-        ids = {v["vote_id"] for v in results}
+        ids = {v.vote_id for v in results.items}
         self.assertIn(37692, ids)
-        v = [r for r in results if r["vote_id"] == 37692][0]
-        self.assertEqual(v["total_for"], 51)
-        self.assertEqual(v["total_against"], 62)
-        self.assertFalse(v["is_accepted"])
+        v = [r for r in results.items if r.vote_id == 37692][0]
+        self.assertEqual(v.total_for, 51)
+        self.assertEqual(v.total_against, 62)
+        self.assertFalse(v.is_accepted)
 
 
 if __name__ == "__main__":

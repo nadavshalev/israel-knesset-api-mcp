@@ -17,8 +17,13 @@ from typing import Annotated
 from pydantic import Field
 
 from core.db import connect_readonly
-from core.helpers import simple_date, normalize_inputs, _clean
+from core.helpers import simple_date, normalize_inputs
 from core.mcp_meta import mcp_tool
+from origins.bills.get_bill_models import (
+    BillDetail, BillStage, StageVote, BillInitiators,
+    Initiator, RemovedInitiator, BillNameHistory,
+    BillDocument, SplitBill, MergedBill,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -77,15 +82,15 @@ def _get_stage_vote(cursor, bill_id, session_id):
     if is_accepted is None and total_for is not None and total_against is not None:
         is_accepted = 1 if total_for > total_against else 0
 
-    return {
-        "vote_id": row["id"],
-        "title": row["votetitle"] or "",
-        "date": simple_date(row["votedatetime"]),
-        "is_accepted": bool(is_accepted) if is_accepted is not None else None,
-        "total_for": total_for,
-        "total_against": total_against,
-        "total_abstain": total_abstain,
-    }
+    return StageVote(
+        vote_id=row["id"],
+        title=row["votetitle"] or None,
+        date=simple_date(row["votedatetime"]) or None,
+        is_accepted=bool(is_accepted) if is_accepted is not None else None,
+        total_for=total_for,
+        total_against=total_against,
+        total_abstain=total_abstain,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -103,7 +108,7 @@ def _get_stage_vote(cursor, bill_id, session_id):
 )
 def get_bill(
     bill_id: Annotated[int, Field(description="The bill ID (required)")],
-) -> dict | None:
+) -> BillDetail | None:
     """Return full detail for a single bill, or None if not found.
 
     Includes metadata from KNS_Bill, plenum stages from
@@ -157,16 +162,16 @@ def get_bill(
 
     stages = []
     for row in stage_rows:
-        stage = {
-            "date": simple_date(row["startdate"]),
-            "status": row["stagestatusdesc"],
-            "session_id": row["session_id"],
-        }
+        stage = BillStage(
+            date=simple_date(row["startdate"]) or None,
+            status=row["stagestatusdesc"],
+            session_id=row["session_id"],
+        )
         # Attach the final (decisive) vote only to the last sub-stage
         if row["item_id"] == last_item_per_session[row["session_id"]]:
             vote = _get_stage_vote(cursor, bill_id, row["session_id"])
             if vote:
-                stage["vote"] = vote
+                stage.vote = vote
         stages.append(stage)
 
     # ----- Initiators (primary + added) from KNS_BillInitiator -----
@@ -196,12 +201,11 @@ def get_bill(
     primary_initiators = []
     added_initiators = []
     for irow in init_rows:
-        entry = {
-            "person_id": irow["personid"],
-            "name": irow["full_name"],
-        }
-        if irow["factionname"]:
-            entry["party"] = irow["factionname"]
+        entry = Initiator(
+            person_id=irow["personid"],
+            name=irow["full_name"],
+            party=irow["factionname"] or None,
+        )
         if irow["isinitiator"]:
             primary_initiators.append(entry)
         else:
@@ -232,14 +236,12 @@ def get_bill(
     )
     removed_initiators = []
     for hrow in cursor.fetchall():
-        entry = {
-            "person_id": hrow["personid"],
-            "name": hrow["full_name"],
-        }
-        if hrow["factionname"]:
-            entry["party"] = hrow["factionname"]
-        if hrow["reasondesc"]:
-            entry["reason"] = hrow["reasondesc"]
+        entry = RemovedInitiator(
+            person_id=hrow["personid"],
+            name=hrow["full_name"],
+            party=hrow["factionname"] or None,
+            reason=hrow["reasondesc"] or None,
+        )
         removed_initiators.append(entry)
 
     # ----- Name history from KNS_BillName -----
@@ -253,7 +255,7 @@ def get_bill(
         (bill_id,),
     )
     name_history = [
-        {"name": nr["name"], "stage_type": nr["namehistorytypedesc"]}
+        BillNameHistory(name=nr["name"], stage_type=nr["namehistorytypedesc"])
         for nr in cursor.fetchall()
     ]
 
@@ -268,11 +270,11 @@ def get_bill(
         (bill_id,),
     )
     documents = [
-        {
-            "type": dr["grouptypedesc"],
-            "format": dr["applicationdesc"],
-            "url": dr["filepath"],
-        }
+        BillDocument(
+            type=dr["grouptypedesc"],
+            format=dr["applicationdesc"],
+            url=dr["filepath"],
+        )
         for dr in cursor.fetchall()
     ]
 
@@ -296,11 +298,11 @@ def get_bill(
     )
     split_rows = cursor.fetchall()
     split_bills = [
-        {
-            "direction": sr["direction"],
-            "bill_id": sr["related_bill_id"],
-            "name": sr["bill_name"] or sr["split_name"],
-        }
+        SplitBill(
+            direction=sr["direction"],
+            bill_id=sr["related_bill_id"],
+            name=sr["bill_name"] or sr["split_name"],
+        )
         for sr in split_rows
     ]
 
@@ -322,161 +324,38 @@ def get_bill(
     )
     union_rows = cursor.fetchall()
     merged_bills = [
-        {"bill_id": ur["related_bill_id"], "name": ur["bill_name"]}
+        MergedBill(bill_id=ur["related_bill_id"], name=ur["bill_name"])
         for ur in union_rows
     ]
 
     # ----- Build result -----
-    obj = {
-        "bill_id": bill["id"],
-        "name": bill["name"],
-        "knesset_num": bill["knessetnum"],
-        "sub_type": bill["subtypedesc"],
-        "status": bill["statusdesc"],
-        "committee": bill["committeename"],
-        "committee_id": bill["committeeid"],
-        "publication_date": simple_date(bill["publicationdate"]),
-        "publication_series": bill["publicationseriesdesc"],
-        "summary": bill["summarylaw"],
-        "stages": stages,
-    }
-
-    # Only include initiators dict if there is data, and only sub-lists
-    # that are non-empty.
-    initiators = {}
-    if primary_initiators:
-        initiators["primary"] = primary_initiators
-    if added_initiators:
-        initiators["added"] = added_initiators
-    if removed_initiators:
-        initiators["removed"] = removed_initiators
-    if initiators:
-        obj["initiators"] = initiators
-
-    if name_history:
-        obj["name_history"] = name_history
-    if documents:
-        obj["documents"] = documents
-    if split_bills:
-        obj["split_bills"] = split_bills
-    if merged_bills:
-        obj["merged_bills"] = merged_bills
+    initiators = None
+    if primary_initiators or added_initiators or removed_initiators:
+        initiators = BillInitiators(
+            primary=primary_initiators or None,
+            added=added_initiators or None,
+            removed=removed_initiators or None,
+        )
 
     conn.close()
-    return _clean(obj)
+    return BillDetail(
+        bill_id=bill["id"],
+        name=bill["name"],
+        knesset_num=bill["knessetnum"],
+        sub_type=bill["subtypedesc"],
+        status=bill["statusdesc"],
+        committee=bill["committeename"],
+        committee_id=bill["committeeid"],
+        publication_date=simple_date(bill["publicationdate"]) or None,
+        publication_series=bill["publicationseriesdesc"],
+        summary=bill["summarylaw"],
+        stages=stages,
+        initiators=initiators,
+        name_history=name_history or None,
+        documents=documents or None,
+        split_bills=split_bills or None,
+        merged_bills=merged_bills or None,
+    )
 
 
-get_bill.RESPONSE_SCHEMA = {
-    "_type": "dict | None",
-    "_description": "Full bill detail, or null if not found",
-    "bill_id": {"type": "int", "optional": False, "description": "Unique bill identifier"},
-    "name": {"type": "str", "optional": True, "description": "Bill name"},
-    "knesset_num": {"type": "int", "optional": True, "description": "Knesset number"},
-    "sub_type": {"type": "str", "optional": True, "description": "Bill sub-type"},
-    "status": {"type": "str", "optional": True, "description": "Current status description"},
-    "committee": {"type": "str", "optional": True, "description": "Assigned committee name"},
-    "committee_id": {"type": "int", "optional": True, "description": "Assigned committee ID"},
-    "publication_date": {"type": "str", "optional": True, "description": "Publication date (YYYY-MM-DD)"},
-    "publication_series": {"type": "str", "optional": True, "description": "Publication series description"},
-    "summary": {"type": "str", "optional": True, "description": "Summary of the law"},
-    "stages": {
-        "type": "list[dict]",
-        "optional": False,
-        "description": "Plenum stages (readings) in chronological order",
-        "items": {
-            "date": {"type": "str", "optional": True, "description": "Stage date (YYYY-MM-DD)"},
-            "status": {"type": "str", "optional": True, "description": "Stage status description"},
-            "session_id": {"type": "int", "optional": False, "description": "Plenum session ID"},
-            "vote": {
-                "type": "dict",
-                "optional": True,
-                "description": "Final (decisive) vote for this stage (only on last sub-stage per session)",
-                "schema": {
-                    "vote_id": {"type": "int", "optional": False, "description": "Vote ID"},
-                    "title": {"type": "str", "optional": True, "description": "Vote title"},
-                    "date": {"type": "str", "optional": True, "description": "Vote date"},
-                    "is_accepted": {"type": "bool", "optional": True, "description": "Whether accepted"},
-                    "total_for": {"type": "int", "optional": True, "description": "Votes for"},
-                    "total_against": {"type": "int", "optional": True, "description": "Votes against"},
-                    "total_abstain": {"type": "int", "optional": True, "description": "Abstentions"},
-                },
-            },
-        },
-    },
-    "initiators": {
-        "type": "dict",
-        "optional": True,
-        "description": "Bill initiators (only present if any exist)",
-        "schema": {
-            "primary": {
-                "type": "list[dict]",
-                "optional": True,
-                "description": "Primary initiators",
-                "items": {
-                    "person_id": {"type": "int", "optional": False, "description": "Person ID"},
-                    "name": {"type": "str", "optional": False, "description": "Full name"},
-                    "party": {"type": "str", "optional": True, "description": "Faction/party name"},
-                },
-            },
-            "added": {
-                "type": "list[dict]",
-                "optional": True,
-                "description": "Added (co-)initiators",
-                "items": {
-                    "person_id": {"type": "int", "optional": False, "description": "Person ID"},
-                    "name": {"type": "str", "optional": False, "description": "Full name"},
-                    "party": {"type": "str", "optional": True, "description": "Faction/party name"},
-                },
-            },
-            "removed": {
-                "type": "list[dict]",
-                "optional": True,
-                "description": "Removed initiators (historical)",
-                "items": {
-                    "person_id": {"type": "int", "optional": False, "description": "Person ID"},
-                    "name": {"type": "str", "optional": False, "description": "Full name"},
-                    "party": {"type": "str", "optional": True, "description": "Faction/party name"},
-                    "reason": {"type": "str", "optional": True, "description": "Reason for removal"},
-                },
-            },
-        },
-    },
-    "name_history": {
-        "type": "list[dict]",
-        "optional": True,
-        "description": "Bill name changes over time (only present if any exist)",
-        "items": {
-            "name": {"type": "str", "optional": True, "description": "Historical name"},
-            "stage_type": {"type": "str", "optional": True, "description": "Stage at which name was used"},
-        },
-    },
-    "documents": {
-        "type": "list[dict]",
-        "optional": True,
-        "description": "Bill documents (only present if any exist)",
-        "items": {
-            "type": {"type": "str", "optional": True, "description": "Document group type"},
-            "format": {"type": "str", "optional": True, "description": "File format"},
-            "url": {"type": "str", "optional": True, "description": "File URL/path"},
-        },
-    },
-    "split_bills": {
-        "type": "list[dict]",
-        "optional": True,
-        "description": "Related bills from splits (only present if any exist)",
-        "items": {
-            "direction": {"type": "str", "optional": False, "description": "'child' or 'parent'"},
-            "bill_id": {"type": "int", "optional": False, "description": "Related bill ID"},
-            "name": {"type": "str", "optional": True, "description": "Bill name"},
-        },
-    },
-    "merged_bills": {
-        "type": "list[dict]",
-        "optional": True,
-        "description": "Bills merged with this one (only present if any exist)",
-        "items": {
-            "bill_id": {"type": "int", "optional": False, "description": "Related bill ID"},
-            "name": {"type": "str", "optional": True, "description": "Bill name"},
-        },
-    },
-}
+get_bill.OUTPUT_MODEL = BillDetail

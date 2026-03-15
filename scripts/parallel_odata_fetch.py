@@ -28,7 +28,7 @@ if str(ROOT) not in sys.path:
 from config import BASE_URL
 from core.db import connect_db, update_metadata
 from core.odata_client import _utc_now_iso, fetch_odata_max_id
-from tables import get_table_spec
+from origins import get_table_spec
 
 DEFAULT_WORKERS = 5
 DEFAULT_CHUNK_SIZE = 50_000

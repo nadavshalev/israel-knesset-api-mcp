@@ -27,8 +27,9 @@ from pydantic import Field
 
 from config import SEARCH_ACROSS_TOP_N
 from core.db import connect_readonly
-from core.helpers import normalize_inputs, _clean
+from core.helpers import normalize_inputs
 from core.mcp_meta import mcp_tool
+from origins.search.search_across_models import EntityResult, SearchAcrossResults
 
 
 def _get_entity_queries() -> list[dict]:
@@ -59,7 +60,7 @@ def _get_entity_queries() -> list[dict]:
 def search_across(
     query: Annotated[str, Field(description="Free-text search term")],
     top_n: Annotated[int | None, Field(description="Max results per entity type (default from server config)")] = None,
-) -> dict:
+) -> SearchAcrossResults:
     """Search across all entity types for *query*.
 
     Parameters
@@ -80,7 +81,7 @@ def search_across(
     top_n = normalized["top_n"]
 
     if not query or not query.strip():
-        return {"query": query, "results": {}}
+        return SearchAcrossResults(query=query or "", results={})
 
     if top_n is None:
         top_n = SEARCH_ACROSS_TOP_N
@@ -114,26 +115,11 @@ def search_across(
             conn.rollback()
             top = []
 
-        results[entity] = {"count": count, "top": top}
+        results[entity] = EntityResult(count=count, top=top)
 
     conn.close()
 
-    return _clean({"query": query, "results": results})
+    return SearchAcrossResults(query=query, results=results)
 
 
-search_across.RESPONSE_SCHEMA = {
-    "query": {"type": "str", "optional": False, "description": "The search term that was used"},
-    "results": {
-        "type": "dict",
-        "optional": False,
-        "description": "Keyed by entity type (members, bills, committees, votes, plenums)",
-        "value_schema": {
-            "count": {"type": "int", "optional": False, "description": "Total matches for this entity type"},
-            "top": {
-                "type": "list[dict]",
-                "optional": False,
-                "description": "Top N results (fields vary by entity type)",
-            },
-        },
-    },
-}
+search_across.OUTPUT_MODEL = SearchAcrossResults

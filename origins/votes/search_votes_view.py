@@ -17,9 +17,10 @@ from typing import Annotated
 from pydantic import Field
 
 from core.db import connect_readonly
-from core.helpers import simple_date, simple_time, normalize_inputs, _clean
+from core.helpers import simple_date, simple_time, normalize_inputs
 from core.mcp_meta import mcp_tool
 from core.search_meta import register_search
+from origins.votes.search_votes_models import VoteSummary, VoteSearchResults
 
 register_search({
     "entity_key": "votes",
@@ -64,7 +65,7 @@ def search_votes(
     date_to: Annotated[str | None, Field(description="End of date range (YYYY-MM-DD); use with date for a range")] = None,
     accepted: Annotated[bool | None, Field(description="True=accepted only, False=rejected only, null=both")] = None,
     bill_id: Annotated[int | None, Field(description="Filter to votes linked to a specific bill ID")] = None,
-) -> list:
+) -> VoteSearchResults:
     """Search for plenum votes and return summary results.
 
     Filters (all ANDed):
@@ -173,44 +174,26 @@ def search_votes(
         if is_accepted is None and total_for is not None and total_against is not None:
             is_accepted = 1 if total_for > total_against else 0
 
-        results.append({
-            "vote_id": vote["id"],
-            "bill_id": vote["_bill_id"],
-            "knesset_num": vote["knessetnum"],
-            "session_id": vote["sessionid"],
-            "title": vote["votetitle"],
-            "subject": vote["votesubject"],
-            "date": simple_date(vote["votedatetime"]),
-            "time": simple_time(vote["votedatetime"]),
-            "is_accepted": bool(is_accepted) if is_accepted is not None else None,
-            "total_for": total_for,
-            "total_against": vote["totalagainst"],
-            "total_abstain": vote["totalabstain"],
-            "for_option": vote["foroptiondesc"],
-            "against_option": vote["againstoptiondesc"],
-            "vote_method": vote["votemethoddesc"],
-        })
+        results.append(VoteSummary(
+            vote_id=vote["id"],
+            bill_id=vote["_bill_id"],
+            knesset_num=vote["knessetnum"],
+            session_id=vote["sessionid"],
+            title=vote["votetitle"],
+            subject=vote["votesubject"],
+            date=simple_date(vote["votedatetime"]) or None,
+            time=simple_time(vote["votedatetime"]) or None,
+            is_accepted=bool(is_accepted) if is_accepted is not None else None,
+            total_for=total_for,
+            total_against=vote["totalagainst"],
+            total_abstain=vote["totalabstain"],
+            for_option=vote["foroptiondesc"],
+            against_option=vote["againstoptiondesc"],
+            vote_method=vote["votemethoddesc"],
+        ))
 
     conn.close()
-    return _clean(results)
+    return VoteSearchResults(items=results)
 
 
-search_votes.RESPONSE_SCHEMA = {
-    "_type": "list[dict]",
-    "_description": "List of vote summaries sorted by date DESC, vote_id DESC",
-    "vote_id": {"type": "int", "optional": False, "description": "Unique vote identifier"},
-    "bill_id": {"type": "int", "optional": True, "description": "Linked bill ID (if vote is on a bill)"},
-    "knesset_num": {"type": "int", "optional": True, "description": "Knesset number (via session)"},
-    "session_id": {"type": "int", "optional": True, "description": "Plenum session ID"},
-    "title": {"type": "str", "optional": True, "description": "Vote title"},
-    "subject": {"type": "str", "optional": True, "description": "Vote subject/stage"},
-    "date": {"type": "str", "optional": True, "description": "Vote date (YYYY-MM-DD)"},
-    "time": {"type": "str", "optional": True, "description": "Vote time (HH:MM)"},
-    "is_accepted": {"type": "bool", "optional": True, "description": "Whether the vote passed"},
-    "total_for": {"type": "int", "optional": True, "description": "Votes in favour"},
-    "total_against": {"type": "int", "optional": True, "description": "Votes against"},
-    "total_abstain": {"type": "int", "optional": True, "description": "Abstentions"},
-    "for_option": {"type": "str", "optional": True, "description": "Label for the 'for' option"},
-    "against_option": {"type": "str", "optional": True, "description": "Label for the 'against' option"},
-    "vote_method": {"type": "str", "optional": True, "description": "Voting method description"},
-}
+search_votes.OUTPUT_MODEL = VoteSearchResults

@@ -10,20 +10,20 @@ import inspect
 import logging
 import re
 import types
-from typing import Annotated, get_args, get_origin, overload, Union
+from typing import Annotated, get_args, get_origin, Union
 
 logger = logging.getLogger(__name__)
 
 
-def simple_date(date_str) -> str:
+def simple_date(date_str) -> str | None:
     """Strip time component from an ISO datetime string.
 
     Handles both ``T``-separated (``2019-01-30T10:00:00``) and
     space-separated (``2019-01-30 10:00:00``) formats.  Returns
-    an empty string for falsy input.
+    ``None`` for falsy input.
     """
     if not date_str:
-        return ""
+        return None
     s = str(date_str)
     if "T" in s:
         return s.split("T")[0]
@@ -32,15 +32,15 @@ def simple_date(date_str) -> str:
     return s
 
 
-def simple_time(datetime_str) -> str:
+def simple_time(datetime_str) -> str | None:
     """Extract ``HH:MM`` time from an ISO datetime string.
 
     Handles both ``T``-separated and space-separated formats,
-    and strips timezone offsets (``+03:00``).  Returns an empty
-    string for falsy input or if no time part is found.
+    and strips timezone offsets (``+03:00``).  Returns ``None``
+    for falsy input or if no time part is found.
     """
     if not datetime_str:
-        return ""
+        return None
     s = str(datetime_str)
     if "T" in s:
         time_part = s.split("T")[1]
@@ -50,123 +50,18 @@ def simple_time(datetime_str) -> str:
     if " " in s:
         time_part = s.split(" ")[1]
         return time_part[:5]
-    return ""
+    return None
 
 
-def format_person_name(first_name, last_name) -> str:
+def format_person_name(first_name, last_name) -> str | None:
     """Format a full person name from first and last name fields.
 
-    Handles None values gracefully.
+    Returns ``None`` when both names are missing.
     """
     first = first_name or ""
     last = last_name or ""
-    return f"{first} {last}".strip()
-
-
-# ---------------------------------------------------------------------------
-# Output cleanup
-# ---------------------------------------------------------------------------
-
-def _is_empty(value) -> bool:
-    """Return True if *value* is considered empty/meaningless for output.
-
-    Strips: ``None``, ``""``, sentinel ``-1``.
-    Keeps: ``False``, ``0`` (these carry meaning, e.g. vote totals, booleans).
-    Keeps: ``[]``, ``{}`` (structural empty containers are part of the API
-    contract — e.g. ``roles.committees: []``, ``search results.top: []``).
-    """
-    if value is None:
-        return True
-    if value == "":
-        return True
-    if value == -1:
-        return True
-    return False
-
-
-@overload
-def _clean(obj: dict) -> dict: ...
-@overload
-def _clean(obj: list) -> list: ...
-@overload
-def _clean(obj: None) -> None: ...
-
-def _clean(obj):
-    """Recursively strip empty/null/meaningless values from a view result.
-
-    Works on dicts, lists, and passes through scalars unchanged.
-
-    - Dict keys whose value is ``None``, ``""``, or ``-1`` are dropped.
-    - Nested dicts and dicts inside lists are cleaned recursively.
-    - Empty lists ``[]`` and empty dicts ``{}`` are **kept** — they are
-      structural containers that are part of the API contract.
-    - Scalars ``False`` and ``0`` are **kept** — they carry meaning.
-
-    Typical usage::
-
-        return _clean({"bill_id": 123, "name": None, "summary": ""})
-        # -> {"bill_id": 123}
-    """
-    if isinstance(obj, dict):
-        cleaned = {}
-        for k, v in obj.items():
-            v = _clean(v)
-            if not _is_empty(v):
-                cleaned[k] = v
-        return cleaned
-    if isinstance(obj, list):
-        return [_clean(item) for item in obj]
-    return obj
-
-
-# ---------------------------------------------------------------------------
-# RESPONSE_SCHEMA rendering
-# ---------------------------------------------------------------------------
-
-def _render_schema_compact(schema: dict, *, _depth: int = 0) -> str:
-    """Render a RESPONSE_SCHEMA dict as a compact one-line string.
-
-    Produces output like::
-
-        {bill_id: int, name?: str, stages: [{date?: str, vote?: {...}}]}
-
-    Nested ``items`` and ``schema`` sub-schemas are rendered recursively.
-    Keys starting with ``_`` (meta-keys like ``_type``, ``_description``)
-    are skipped.  Recursion is capped at depth 2 to keep output short;
-    deeper nesting is rendered as ``{...}``.
-    """
-    parts: list[str] = []
-    for key, spec in schema.items():
-        if key.startswith("_"):
-            continue
-        if not isinstance(spec, dict) or "type" not in spec:
-            continue
-
-        optional = spec.get("optional", False)
-        suffix = "?" if optional else ""
-        type_str = spec["type"]
-
-        # Nested list[dict] — render items sub-schema
-        if "items" in spec and isinstance(spec["items"], dict) and _depth < 2:
-            inner = _render_schema_compact(spec["items"], _depth=_depth + 1)
-            parts.append(f"{key}{suffix}: [{inner}]")
-        # Nested dict — render schema sub-schema
-        elif "schema" in spec and isinstance(spec["schema"], dict) and _depth < 2:
-            inner = _render_schema_compact(spec["schema"], _depth=_depth + 1)
-            parts.append(f"{key}{suffix}: {inner}")
-        # Nested list[dict] or dict with sub-schema at depth limit
-        elif type_str.startswith("list[dict]") or (type_str == "dict" and ("items" in spec or "schema" in spec)):
-            parts.append(f"{key}{suffix}: [{'{...}'}]" if "list" in type_str else f"{key}{suffix}: " + "{...}")
-        # Nested dict with value_schema (e.g. search_across results)
-        elif "value_schema" in spec and isinstance(spec["value_schema"], dict) and _depth < 2:
-            inner = _render_schema_compact(spec["value_schema"], _depth=_depth + 1)
-            parts.append(f"{key}{suffix}: {{{inner}}}")
-        else:
-            # Simple type
-            short_type = type_str.replace("list[str]", "[str]").replace("list[dict]", "[dict]")
-            parts.append(f"{key}{suffix}: {short_type}")
-
-    return "{" + ", ".join(parts) + "}"
+    result = f"{first} {last}".strip()
+    return result or None
 
 
 # ---------------------------------------------------------------------------
@@ -386,3 +281,48 @@ def _caller_param_annotations() -> dict[str, object]:
         return {name: p.annotation for name, p in sig.parameters.items()}
     finally:
         del frame
+
+
+# ---------------------------------------------------------------------------
+# Output cleaning
+# ---------------------------------------------------------------------------
+
+def _is_empty(value) -> bool:
+    """Return True for values that should be stripped from output.
+
+    Stripped: ``None``, ``""`` (empty string), ``-1`` (sentinel int).
+    Preserved: ``False``, ``0``, non-empty strings, non-empty collections.
+    """
+    if value is None:
+        return True
+    if value == "":
+        return True
+    if value == -1:
+        return True
+    return False
+
+
+def clean(obj):
+    """Recursively strip empty/sentinel values from a dict or list.
+
+    Removes dict keys whose values are ``None``, ``""`` (empty string),
+    ``-1`` (common DB sentinel), or ``[]`` (empty list).
+
+    Preserves ``False``, ``0``, and ``{}`` (empty dict — used as a
+    namespace marker, e.g. ``roles: {}``).
+
+    Recurses into nested dicts and lists so that nested models are
+    cleaned too.
+    """
+    if isinstance(obj, dict):
+        cleaned = {}
+        for key, value in obj.items():
+            if _is_empty(value):
+                continue
+            if isinstance(value, list) and len(value) == 0:
+                continue
+            cleaned[key] = clean(value)
+        return cleaned
+    if isinstance(obj, list):
+        return [clean(item) for item in obj]
+    return obj

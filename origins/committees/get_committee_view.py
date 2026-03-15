@@ -26,8 +26,12 @@ from typing import Annotated
 from pydantic import Field
 
 from core.db import connect_readonly
-from core.helpers import simple_date, simple_time, format_person_name, normalize_inputs, _clean
+from core.helpers import simple_date, simple_time, format_person_name, normalize_inputs
 from core.mcp_meta import mcp_tool
+from origins.committees.get_committee_models import (
+    CommitteeSession, CommitteeMember, CommitteeBill,
+    CommitteeDocument, CommitteeDetail,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -71,18 +75,18 @@ def _get_sessions(cursor, committee_id, from_date=None, to_date=None):
     cursor.execute(sql, [committee_id] + date_params)
     rows = cursor.fetchall()
     return [
-        {
-            "session_id": row["id"],
-            "number": row["number"],
-            "date": simple_date(row["startdate"]),
-            "start_time": simple_time(row["startdate"]),
-            "end_time": simple_time(row["finishdate"]),
-            "type": row["typedesc"],
-            "status": row["statusdesc"],
-            "location": row["location"],
-            "url": row["sessionurl"],
-            "broadcast_url": row["broadcasturl"],
-        }
+        CommitteeSession(
+            session_id=row["id"],
+            number=row["number"],
+            date=simple_date(row["startdate"]) or None,
+            start_time=simple_time(row["startdate"]) or None,
+            end_time=simple_time(row["finishdate"]) or None,
+            type=row["typedesc"] or None,
+            status=row["statusdesc"] or None,
+            location=row["location"] or None,
+            url=row["sessionurl"] or None,
+            broadcast_url=row["broadcasturl"] or None,
+        )
         for row in rows
     ]
 
@@ -125,14 +129,14 @@ def _get_members(cursor, committee_id, from_date=None, to_date=None):
     cursor.execute(sql, [committee_id] + overlap_params)
     rows = cursor.fetchall()
     return [
-        {
-            "member_id": row["personid"],
-            "name": format_person_name(row['firstname'], row['lastname']),
-            "knesset_num": row["knessetnum"],
-            "role": row["positiontitle"],
-            "start": simple_date(row["startdate"]),
-            "end": simple_date(row["finishdate"]),
-        }
+        CommitteeMember(
+            member_id=row["personid"],
+            name=format_person_name(row['firstname'], row['lastname']),
+            knesset_num=row["knessetnum"],
+            role=row["positiontitle"] or None,
+            start=simple_date(row["startdate"]) or None,
+            end=simple_date(row["finishdate"]) or None,
+        )
         for row in rows
     ]
 
@@ -159,13 +163,13 @@ def _get_bills(cursor, committee_id, from_date=None, to_date=None):
     cursor.execute(sql, [committee_id] + date_params)
     rows = cursor.fetchall()
     return [
-        {
-            "bill_id": row["id"],
-            "name": row["name"],
-            "knesset_num": row["knessetnum"],
-            "sub_type": row["subtypedesc"],
-            "status": row["statusdesc"],
-        }
+        CommitteeBill(
+            bill_id=row["id"],
+            name=row["name"] or None,
+            knesset_num=row["knessetnum"],
+            sub_type=row["subtypedesc"] or None,
+            status=row["statusdesc"] or None,
+        )
         for row in rows
     ]
 
@@ -189,15 +193,15 @@ def _get_documents(cursor, committee_id, from_date=None, to_date=None):
     cursor.execute(sql, [committee_id] + date_params)
     rows = cursor.fetchall()
     return [
-        {
-            "document_id": row["id"],
-            "type": row["grouptypedesc"],
-            "name": row["documentname"],
-            "format": row["applicationdesc"],
-            "file_path": row["filepath"],
-            "session_id": row["session_id"],
-            "session_date": simple_date(row["sessiondate"]),
-        }
+        CommitteeDocument(
+            document_id=row["id"],
+            type=row["grouptypedesc"] or None,
+            name=row["documentname"] or None,
+            format=row["applicationdesc"] or None,
+            file_path=row["filepath"] or None,
+            session_id=row["session_id"],
+            session_date=simple_date(row["sessiondate"]) or None,
+        )
         for row in rows
     ]
 
@@ -226,7 +230,7 @@ def get_committee(
     include_members: Annotated[bool, Field(description="Include members who served on the committee")] = False,
     include_bills: Annotated[bool, Field(description="Include bills discussed in committee sessions")] = False,
     include_documents: Annotated[bool, Field(description="Include documents from committee sessions")] = False,
-) -> dict | None:
+) -> CommitteeDetail | None:
     """Return detail for a single committee, or ``None`` if not found.
 
     Always returns committee metadata.  Related data is opt-in:
@@ -281,116 +285,42 @@ def get_committee(
         conn.close()
         return None
 
-    obj: dict = {
-        "committee_id": committee["id"],
-        "name": committee["name"],
-        "knesset_num": committee["knessetnum"],
-        "type": committee["committeetypedesc"],
-        "category": committee["categorydesc"],
-        "is_current": bool(committee["iscurrent"]),
-        "start_date": simple_date(committee["startdate"]),
-        "end_date": simple_date(committee["finishdate"]),
-        "parent_committee_id": committee["parentcommitteeid"],
-        "parent_committee_name": committee["committeeparentname"],
-        "email": committee["email"],
-    }
+    obj = CommitteeDetail(
+        committee_id=committee["id"],
+        name=committee["name"] or None,
+        knesset_num=committee["knessetnum"],
+        type=committee["committeetypedesc"] or None,
+        category=committee["categorydesc"] or None,
+        is_current=bool(committee["iscurrent"]),
+        start_date=simple_date(committee["startdate"]) or None,
+        end_date=simple_date(committee["finishdate"]) or None,
+        parent_committee_id=committee["parentcommitteeid"],
+        parent_committee_name=committee["committeeparentname"] or None,
+        email=committee["email"] or None,
+    )
 
     if include_sessions:
         sessions = _get_sessions(cursor, committee_id, eff_from, eff_to)
-        obj["sessions"] = sessions
-        obj["session_count"] = len(sessions)
+        obj.sessions = sessions
+        obj.session_count = len(sessions)
 
     if include_members:
         members = _get_members(cursor, committee_id, eff_from, eff_to)
-        obj["members"] = members
-        obj["member_count"] = len(members)
+        obj.members = members
+        obj.member_count = len(members)
 
     if include_bills:
         bills = _get_bills(cursor, committee_id, eff_from, eff_to)
-        obj["bills"] = bills
-        obj["bill_count"] = len(bills)
+        obj.bills = bills
+        obj.bill_count = len(bills)
 
     if include_documents:
         documents = _get_documents(cursor, committee_id, eff_from, eff_to)
-        obj["documents"] = documents
-        obj["document_count"] = len(documents)
+        obj.documents = documents
+        obj.document_count = len(documents)
 
     conn.close()
-    return _clean(obj)
+    return obj
 
 
-get_committee.RESPONSE_SCHEMA = {
-    "_type": "dict | None",
-    "_description": "Full committee detail, or null if not found. Opt-in sections appear only when requested.",
-    "committee_id": {"type": "int", "optional": False, "description": "Unique committee identifier"},
-    "name": {"type": "str", "optional": True, "description": "Committee name"},
-    "knesset_num": {"type": "int", "optional": True, "description": "Knesset number"},
-    "type": {"type": "str", "optional": True, "description": "Committee type"},
-    "category": {"type": "str", "optional": True, "description": "Category description"},
-    "is_current": {"type": "bool", "optional": False, "description": "Whether currently active"},
-    "start_date": {"type": "str", "optional": True, "description": "Start date (YYYY-MM-DD)"},
-    "end_date": {"type": "str", "optional": True, "description": "End date (YYYY-MM-DD)"},
-    "parent_committee_id": {"type": "int", "optional": True, "description": "Parent committee ID"},
-    "parent_committee_name": {"type": "str", "optional": True, "description": "Parent committee name"},
-    "email": {"type": "str", "optional": True, "description": "Committee email"},
-    "sessions": {
-        "type": "list[dict]",
-        "optional": True,
-        "description": "Committee sessions (only when include_sessions=True)",
-        "items": {
-            "session_id": {"type": "int", "optional": False, "description": "Session ID"},
-            "number": {"type": "int", "optional": True, "description": "Session number"},
-            "date": {"type": "str", "optional": True, "description": "Session date"},
-            "start_time": {"type": "str", "optional": True, "description": "Start time (HH:MM)"},
-            "end_time": {"type": "str", "optional": True, "description": "End time (HH:MM)"},
-            "type": {"type": "str", "optional": True, "description": "Session type"},
-            "status": {"type": "str", "optional": True, "description": "Session status"},
-            "location": {"type": "str", "optional": True, "description": "Location"},
-            "url": {"type": "str", "optional": True, "description": "Session URL"},
-            "broadcast_url": {"type": "str", "optional": True, "description": "Broadcast URL"},
-        },
-    },
-    "session_count": {"type": "int", "optional": True, "description": "Number of sessions (when include_sessions=True)"},
-    "members": {
-        "type": "list[dict]",
-        "optional": True,
-        "description": "Committee members (only when include_members=True)",
-        "items": {
-            "member_id": {"type": "int", "optional": False, "description": "Member person ID"},
-            "name": {"type": "str", "optional": False, "description": "Full name"},
-            "knesset_num": {"type": "int", "optional": True, "description": "Knesset number"},
-            "role": {"type": "str", "optional": True, "description": "Position title"},
-            "start": {"type": "str", "optional": True, "description": "Start date"},
-            "end": {"type": "str", "optional": True, "description": "End date"},
-        },
-    },
-    "member_count": {"type": "int", "optional": True, "description": "Number of members (when include_members=True)"},
-    "bills": {
-        "type": "list[dict]",
-        "optional": True,
-        "description": "Bills discussed (only when include_bills=True)",
-        "items": {
-            "bill_id": {"type": "int", "optional": False, "description": "Bill ID"},
-            "name": {"type": "str", "optional": True, "description": "Bill name"},
-            "knesset_num": {"type": "int", "optional": True, "description": "Knesset number"},
-            "sub_type": {"type": "str", "optional": True, "description": "Bill sub-type"},
-            "status": {"type": "str", "optional": True, "description": "Bill status"},
-        },
-    },
-    "bill_count": {"type": "int", "optional": True, "description": "Number of bills (when include_bills=True)"},
-    "documents": {
-        "type": "list[dict]",
-        "optional": True,
-        "description": "Session documents (only when include_documents=True)",
-        "items": {
-            "document_id": {"type": "int", "optional": False, "description": "Document ID"},
-            "type": {"type": "str", "optional": True, "description": "Document group type"},
-            "name": {"type": "str", "optional": True, "description": "Document name"},
-            "format": {"type": "str", "optional": True, "description": "File format"},
-            "file_path": {"type": "str", "optional": True, "description": "File URL/path"},
-            "session_id": {"type": "int", "optional": False, "description": "Session ID"},
-            "session_date": {"type": "str", "optional": True, "description": "Session date"},
-        },
-    },
-    "document_count": {"type": "int", "optional": True, "description": "Number of documents (when include_documents=True)"},
-}
+get_committee.OUTPUT_MODEL = CommitteeDetail

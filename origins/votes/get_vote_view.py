@@ -18,8 +18,9 @@ from typing import Annotated
 from pydantic import Field
 
 from core.db import connect_readonly
-from core.helpers import simple_date, simple_time, normalize_inputs, _clean
+from core.helpers import simple_date, simple_time, normalize_inputs
 from core.mcp_meta import mcp_tool
+from origins.votes.get_vote_models import VoteMember, RelatedVote, VoteDetail
 
 
 # ---------------------------------------------------------------------------
@@ -38,7 +39,7 @@ from core.mcp_meta import mcp_tool
 )
 def get_vote(
     vote_id: Annotated[int, Field(description="The vote ID (required)")],
-) -> dict | None:
+) -> VoteDetail | None:
     """Return full detail for a single vote, or None if not found.
 
     Includes:
@@ -99,23 +100,23 @@ def get_vote(
     if is_accepted is None and total_for is not None and total_against is not None:
         is_accepted = 1 if total_for > total_against else 0
 
-    obj = {
-        "vote_id": vote["id"],
-        "bill_id": vote["_bill_id"],
-        "knesset_num": vote["knessetnum"],
-        "session_id": vote["sessionid"],
-        "title": vote["votetitle"],
-        "subject": vote["votesubject"],
-        "date": simple_date(vote["votedatetime"]),
-        "time": simple_time(vote["votedatetime"]),
-        "is_accepted": bool(is_accepted) if is_accepted is not None else None,
-        "total_for": total_for,
-        "total_against": total_against,
-        "total_abstain": total_abstain,
-        "for_option": vote["foroptiondesc"],
-        "against_option": vote["againstoptiondesc"],
-        "vote_method": vote["votemethoddesc"],
-    }
+    obj = VoteDetail(
+        vote_id=vote["id"],
+        bill_id=vote["_bill_id"],
+        knesset_num=vote["knessetnum"],
+        session_id=vote["sessionid"],
+        title=vote["votetitle"],
+        subject=vote["votesubject"],
+        date=simple_date(vote["votedatetime"]) or None,
+        time=simple_time(vote["votedatetime"]) or None,
+        is_accepted=bool(is_accepted) if is_accepted is not None else None,
+        total_for=total_for,
+        total_against=total_against,
+        total_abstain=total_abstain,
+        for_option=vote["foroptiondesc"],
+        against_option=vote["againstoptiondesc"],
+        vote_method=vote["votemethoddesc"],
+    )
 
     # --- Members: per-MK breakdown ---
     cursor.execute(
@@ -132,12 +133,12 @@ def get_vote(
         first = row["firstname"] or ""
         last = row["lastname"] or ""
         name = f"{first} {last}".strip() or f"MK {row['mkid']}"
-        members.append({
-            "member_id": row["mkid"],
-            "name": name,
-            "result": row["resultdesc"] or str(row["resultcode"]),
-        })
-    obj["members"] = members
+        members.append(VoteMember(
+            member_id=row["mkid"],
+            name=name,
+            result=row["resultdesc"] or str(row["resultcode"]),
+        ))
+    obj.members = members
 
     # --- Related votes: same VoteTitle + SessionID, different vote IDs ---
     vote_title = vote["votetitle"]
@@ -184,67 +185,23 @@ def get_vote(
             if r_accepted is None and r_total_for is not None and r_total_against is not None:
                 r_accepted = 1 if r_total_for > r_total_against else 0
 
-            related.append({
-                "vote_id": r["id"],
-                "subject": r["votesubject"],
-                "for_option": r["foroptiondesc"],
-                "date": simple_date(r["votedatetime"]),
-                "time": simple_time(r["votedatetime"]),
-                "is_accepted": bool(r_accepted) if r_accepted is not None else None,
-                "total_for": r_total_for,
-                "total_against": r_total_against,
-                "total_abstain": r_total_abstain,
-            })
-        obj["related_votes"] = related
+            related.append(RelatedVote(
+                vote_id=r["id"],
+                subject=r["votesubject"],
+                for_option=r["foroptiondesc"],
+                date=simple_date(r["votedatetime"]) or None,
+                time=simple_time(r["votedatetime"]) or None,
+                is_accepted=bool(r_accepted) if r_accepted is not None else None,
+                total_for=r_total_for,
+                total_against=r_total_against,
+                total_abstain=r_total_abstain,
+            ))
+        obj.related_votes = related
     else:
-        obj["related_votes"] = []
+        obj.related_votes = []
 
     conn.close()
-    return _clean(obj)
+    return obj
 
 
-get_vote.RESPONSE_SCHEMA = {
-    "_type": "dict | None",
-    "_description": "Full vote detail, or null if not found",
-    "vote_id": {"type": "int", "optional": False, "description": "Unique vote identifier"},
-    "bill_id": {"type": "int", "optional": True, "description": "Linked bill ID"},
-    "knesset_num": {"type": "int", "optional": True, "description": "Knesset number"},
-    "session_id": {"type": "int", "optional": True, "description": "Plenum session ID"},
-    "title": {"type": "str", "optional": True, "description": "Vote title"},
-    "subject": {"type": "str", "optional": True, "description": "Vote subject/stage"},
-    "date": {"type": "str", "optional": True, "description": "Vote date (YYYY-MM-DD)"},
-    "time": {"type": "str", "optional": True, "description": "Vote time (HH:MM)"},
-    "is_accepted": {"type": "bool", "optional": True, "description": "Whether the vote passed"},
-    "total_for": {"type": "int", "optional": True, "description": "Votes in favour"},
-    "total_against": {"type": "int", "optional": True, "description": "Votes against"},
-    "total_abstain": {"type": "int", "optional": True, "description": "Abstentions"},
-    "for_option": {"type": "str", "optional": True, "description": "Label for the 'for' option"},
-    "against_option": {"type": "str", "optional": True, "description": "Label for the 'against' option"},
-    "vote_method": {"type": "str", "optional": True, "description": "Voting method description"},
-    "members": {
-        "type": "list[dict]",
-        "optional": False,
-        "description": "Per-MK vote breakdown",
-        "items": {
-            "member_id": {"type": "int", "optional": False, "description": "Member person ID"},
-            "name": {"type": "str", "optional": False, "description": "Member full name"},
-            "result": {"type": "str", "optional": False, "description": "Vote result description"},
-        },
-    },
-    "related_votes": {
-        "type": "list[dict]",
-        "optional": False,
-        "description": "Other votes with the same title in the same session",
-        "items": {
-            "vote_id": {"type": "int", "optional": False, "description": "Related vote ID"},
-            "subject": {"type": "str", "optional": True, "description": "Vote subject"},
-            "for_option": {"type": "str", "optional": True, "description": "For-option label"},
-            "date": {"type": "str", "optional": True, "description": "Vote date"},
-            "time": {"type": "str", "optional": True, "description": "Vote time"},
-            "is_accepted": {"type": "bool", "optional": True, "description": "Whether accepted"},
-            "total_for": {"type": "int", "optional": True, "description": "Votes for"},
-            "total_against": {"type": "int", "optional": True, "description": "Votes against"},
-            "total_abstain": {"type": "int", "optional": True, "description": "Abstentions"},
-        },
-    },
-}
+get_vote.OUTPUT_MODEL = VoteDetail

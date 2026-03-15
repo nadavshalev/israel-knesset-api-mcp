@@ -17,9 +17,10 @@ from typing import Annotated
 from pydantic import Field
 
 from core.db import connect_readonly
-from core.helpers import simple_date, normalize_inputs, _clean
+from core.helpers import simple_date, normalize_inputs
 from core.mcp_meta import mcp_tool
 from core.search_meta import register_search
+from origins.plenums.search_plenums_models import SessionSummary, SessionSearchResults
 
 register_search({
     "entity_key": "plenums",
@@ -71,7 +72,7 @@ def search_sessions(
     date_to: Annotated[str | None, Field(description="End of date range (YYYY-MM-DD); use with date for a range")] = None,
     name: Annotated[str | None, Field(description="Session name or agenda item name contains text")] = None,
     item_type: Annotated[str | None, Field(description="Filter to sessions with items of this type")] = None,
-) -> list:
+) -> SessionSearchResults:
     """Search for plenum sessions and return summary data (no items/docs).
 
     Filters (all ANDed):
@@ -142,22 +143,15 @@ def search_sessions(
 
     results = []
     for row in rows:
-        results.append({
-            "session_id": row["id"],
-            "knesset_num": row["knessetnum"],
-            "name": row["name"],
-            "date": simple_date(row["startdate"]),
-        })
+        results.append(SessionSummary(
+            session_id=row["id"],
+            knesset_num=row["knessetnum"],
+            name=row["name"],
+            date=simple_date(row["startdate"]) or None,
+        ))
 
     conn.close()
-    return _clean(results)
+    return SessionSearchResults(items=results)
 
 
-search_sessions.RESPONSE_SCHEMA = {
-    "_type": "list[dict]",
-    "_description": "List of session summaries sorted by date DESC, session_id DESC",
-    "session_id": {"type": "int", "optional": False, "description": "Unique session identifier"},
-    "knesset_num": {"type": "int", "optional": True, "description": "Knesset number"},
-    "name": {"type": "str", "optional": True, "description": "Session name"},
-    "date": {"type": "str", "optional": True, "description": "Session date (YYYY-MM-DD)"},
-}
+search_sessions.OUTPUT_MODEL = SessionSearchResults

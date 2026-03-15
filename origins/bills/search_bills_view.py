@@ -17,9 +17,10 @@ from typing import Annotated
 from pydantic import Field
 
 from core.db import connect_readonly
-from core.helpers import simple_date, normalize_inputs, _clean
+from core.helpers import simple_date, normalize_inputs
 from core.mcp_meta import mcp_tool
 from core.search_meta import register_search
+from origins.bills.search_bills_models import BillSummary, BillSearchResults
 
 register_search({
     "entity_key": "bills",
@@ -69,7 +70,7 @@ def search_bills(
     initiator_id: Annotated[int | None, Field(description="Filter by initiator's member/person ID")] = None,
     date: Annotated[str | None, Field(description="Single date or start of range (YYYY-MM-DD) for plenum appearance")] = None,
     date_to: Annotated[str | None, Field(description="End of date range (YYYY-MM-DD) for plenum appearance; use with date for a range")] = None,
-) -> list:
+) -> BillSearchResults:
     """Search for bills and return summary metadata (no stages/votes).
 
     Filters (all ANDed):
@@ -199,39 +200,23 @@ def search_bills(
 
     results = []
     for row in rows:
-        result = {
-            "bill_id": row["id"],
-            "name": row["name"],
-            "knesset_num": row["knessetnum"],
-            "sub_type": row["subtypedesc"],
-            "status": row["statusdesc"],
-            "committee": row["committeename"],
-            "committee_id": row["committeeid"],
-            "publication_date": simple_date(row["publicationdate"]),
-            "publication_series": row["publicationseriesdesc"],
-            "summary": row["summarylaw"],
-        }
         initiators = initiators_by_bill.get(row["id"], [])
-        if initiators:
-            result["primary_initiators"] = initiators
-        results.append(result)
+        results.append(BillSummary(
+            bill_id=row["id"],
+            name=row["name"],
+            knesset_num=row["knessetnum"],
+            sub_type=row["subtypedesc"],
+            status=row["statusdesc"],
+            committee=row["committeename"],
+            committee_id=row["committeeid"],
+            publication_date=simple_date(row["publicationdate"]) or None,
+            publication_series=row["publicationseriesdesc"],
+            summary=row["summarylaw"],
+            primary_initiators=initiators or None,
+        ))
 
     conn.close()
-    return _clean(results)
+    return BillSearchResults(items=results)
 
 
-search_bills.RESPONSE_SCHEMA = {
-    "_type": "list[dict]",
-    "_description": "List of bill summaries sorted by publication_date DESC, bill_id DESC",
-    "bill_id": {"type": "int", "optional": False, "description": "Unique bill identifier"},
-    "name": {"type": "str", "optional": True, "description": "Bill name"},
-    "knesset_num": {"type": "int", "optional": True, "description": "Knesset number"},
-    "sub_type": {"type": "str", "optional": True, "description": "Bill sub-type (private/government/committee)"},
-    "status": {"type": "str", "optional": True, "description": "Current status description"},
-    "committee": {"type": "str", "optional": True, "description": "Assigned committee name"},
-    "committee_id": {"type": "int", "optional": True, "description": "Assigned committee ID"},
-    "publication_date": {"type": "str", "optional": True, "description": "Publication date (YYYY-MM-DD)"},
-    "publication_series": {"type": "str", "optional": True, "description": "Publication series description"},
-    "summary": {"type": "str", "optional": True, "description": "Summary of the law"},
-    "primary_initiators": {"type": "list[str]", "optional": True, "description": "Primary initiator names with party (only present if initiators exist)"},
-}
+search_bills.OUTPUT_MODEL = BillSearchResults

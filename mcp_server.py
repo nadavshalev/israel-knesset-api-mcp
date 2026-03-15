@@ -34,14 +34,14 @@ from config import (
     RATE_LIMIT_PER_MINUTE,
 )
 from core.db import connect_db, connect_readonly, ensure_indexes
+from core.helpers import clean
 from core.rate_limit import RateLimitMiddleware
 
 # Import all view modules so @mcp_tool decorators and register_search()
 # calls run and populate their global registries.
-import views  # noqa: F401 — triggers views/__init__.py which imports all view modules
+import origins  # noqa: F401 — triggers origins/__init__.py which imports all view modules
 
 from core.mcp_meta import get_all_tools
-from core.helpers import _render_schema_compact
 
 logger = logging.getLogger(__name__)
 
@@ -214,6 +214,23 @@ def _validate_size(result) -> str:
     return text
 
 
+def _validate_size_dict(result_dict: dict) -> dict:
+    """Check a dict result against MAX_OUTPUT_TOKENS.
+
+    Returns the dict unchanged if within the limit, or an error dict
+    instructing the client to use better filters.
+    """
+    text = json.dumps(result_dict, ensure_ascii=False, default=str)
+    if len(text) > MAX_OUTPUT_TOKENS:
+        return {
+            "error": "Response too large",
+            "size": len(text),
+            "limit": MAX_OUTPUT_TOKENS,
+            "hint": "Add more filters to narrow results.",
+        }
+    return result_dict
+
+
 # ---------------------------------------------------------------------------
 # Register all tools from decorated views
 # ---------------------------------------------------------------------------
@@ -224,6 +241,11 @@ def _make_handler(view_fn, enum_map: dict[str, list[str]]):
     The handler has the same typed parameters as the view function,
     with enum-constrained parameters replaced by ``Literal[..] | None``
     types so FastMCP exposes them as JSON-schema ``enum`` constraints.
+
+    If the view function has an ``OUTPUT_MODEL`` attribute (a Pydantic
+    BaseModel class), the handler returns a dict that FastMCP validates
+    against that model — producing a proper ``outputSchema`` instead of
+    the generic ``{result: string}``.
     """
     view_sig = inspect.signature(view_fn)
     new_params: list[inspect.Parameter] = []
@@ -241,18 +263,35 @@ def _make_handler(view_fn, enum_map: dict[str, list[str]]):
         else:
             new_params.append(p)
 
-    async def handler(**kwargs) -> str:
-        # Remove None-valued optional params so the view uses its defaults
-        view_kwargs = {k: v for k, v in kwargs.items() if v is not None}
-        result = view_fn(**view_kwargs)
-        return _validate_size(result)
+    output_model = getattr(view_fn, "OUTPUT_MODEL", None)
 
-    # Attach the enriched signature so FastMCP can introspect it
-    handler.__signature__ = inspect.Signature(
-        new_params, return_annotation=str
-    )
-    handler.__annotations__ = {p.name: p.annotation for p in new_params}
-    handler.__annotations__["return"] = str
+    if output_model is not None:
+        # View returns a Pydantic model — serialize to dict for FastMCP
+        async def handler(**kwargs):
+            view_kwargs = {k: v for k, v in kwargs.items() if v is not None}
+            result = view_fn(**view_kwargs)
+            if result is None:
+                return _validate_size(None)
+            result_dict = result.model_dump()
+            return _validate_size_dict(result_dict)
+
+        handler.__signature__ = inspect.Signature(
+            new_params, return_annotation=output_model
+        )
+        handler.__annotations__ = {p.name: p.annotation for p in new_params}
+        handler.__annotations__["return"] = output_model
+    else:
+        # Legacy: view returns a plain dict/list — serialize to JSON string
+        async def handler(**kwargs) -> str:
+            view_kwargs = {k: v for k, v in kwargs.items() if v is not None}
+            result = view_fn(**view_kwargs)
+            return _validate_size(clean(result))
+
+        handler.__signature__ = inspect.Signature(
+            new_params, return_annotation=str
+        )
+        handler.__annotations__ = {p.name: p.annotation for p in new_params}
+        handler.__annotations__["return"] = str
 
     return handler
 
@@ -277,7 +316,7 @@ _OMISSION_NOTE = (
 
 
 def _enrich_description(base: str, tool_name: str, view_fn) -> str:
-    """Append entity count, most-recent date, schema summary, and omission note."""
+    """Append entity count, most-recent date, and omission note."""
     parts = [base]
     count = _startup_meta["counts"].get(tool_name)
     date = _startup_meta["recent_dates"].get(tool_name)
@@ -287,16 +326,6 @@ def _enrich_description(base: str, tool_name: str, view_fn) -> str:
             parts.append(f"Searches {count_str} records (data through {date}).")
         else:
             parts.append(f"Searches {count_str} records.")
-
-    # Compact schema summary from RESPONSE_SCHEMA
-    schema = getattr(view_fn, "RESPONSE_SCHEMA", None)
-    if schema:
-        ret_type = schema.get("_type", "")
-        compact = _render_schema_compact(schema)
-        if ret_type:
-            parts.append(f"Returns {ret_type}: {compact}")
-        else:
-            parts.append(f"Returns: {compact}")
 
     parts.append(_OMISSION_NOTE)
     return "\n\n".join(parts)
@@ -318,12 +347,12 @@ for _fn in get_all_tools():
 # Schema lookup tool
 # ---------------------------------------------------------------------------
 
-# Build a mapping of tool_name -> RESPONSE_SCHEMA for the lookup tool.
+# Build a mapping of tool_name -> JSON schema from OUTPUT_MODEL for the lookup tool.
 _SCHEMA_MAP: dict[str, dict] = {}
 for _fn in get_all_tools():
-    _schema = getattr(_fn, "RESPONSE_SCHEMA", None)
-    if _schema:
-        _SCHEMA_MAP[_fn._mcp_tool["name"]] = _schema
+    _output_model = getattr(_fn, "OUTPUT_MODEL", None)
+    if _output_model is not None:
+        _SCHEMA_MAP[_fn._mcp_tool["name"]] = _output_model.model_json_schema()
 
 _VALID_TOOL_NAMES = sorted(_SCHEMA_MAP.keys())
 _ToolNameLiteral = Literal[tuple(_VALID_TOOL_NAMES)]  # type: ignore[valid-type]
@@ -340,7 +369,7 @@ _ToolNameLiteral = Literal[tuple(_VALID_TOOL_NAMES)]  # type: ignore[valid-type]
 async def get_response_schema(
     tool_name: Annotated[_ToolNameLiteral, Field(description="Name of the tool to get the schema for")],  # type: ignore[valid-type]
 ) -> str:
-    """Return the full RESPONSE_SCHEMA dict for the given tool as JSON."""
+    """Return the full JSON schema for the given tool's output model."""
     schema = _SCHEMA_MAP.get(tool_name)
     if schema is None:
         return json.dumps({

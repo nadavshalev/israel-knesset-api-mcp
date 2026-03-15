@@ -18,8 +18,12 @@ from typing import Annotated
 from pydantic import Field
 
 from core.db import connect_readonly
-from core.helpers import simple_date, format_person_name, normalize_inputs, _clean
+from core.helpers import simple_date, format_person_name, normalize_inputs
 from core.mcp_meta import mcp_tool
+from origins.members.get_member_models import (
+    GovernmentRole, CommitteeRole, ParliamentaryRole, MemberRoles,
+    MemberDetail, MemberDetailList,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -74,8 +78,8 @@ def _is_transition_gov(knesset_num: int, gov_num: int) -> bool:
 # Build — full member object for one (PersonID, KnessetNum)
 # ---------------------------------------------------------------------------
 
-def _build_member_detail(cursor, person_id, knesset_num):
-    """Build a full detail dict for one member in one Knesset term.
+def _build_member_detail(cursor, person_id, knesset_num) -> MemberDetail | None:
+    """Build a full MemberDetail model for one member in one Knesset term.
 
     Includes government roles, committee memberships, and parliamentary roles.
     """
@@ -99,53 +103,56 @@ def _build_member_detail(cursor, person_id, knesset_num):
     )
     role_rows = cursor.fetchall()
 
-    member = {
-        "member_id": person_id,
-        "name": format_person_name(p_info['firstname'], p_info['lastname']),
-        "gender": p_info["genderdesc"],
-        "knesset_num": knesset_num,
-        "faction": [],
-        "roles": {
-            "government": [],
-            "committees": [],
-            "parliamentary": [],
-        },
-    }
+    factions: list[str] = []
+    gov_roles: list[GovernmentRole] = []
+    cmt_roles: list[CommitteeRole] = []
+    parl_roles: list[ParliamentaryRole] = []
 
     for row in role_rows:
         cat = _row_category(row)
         display_title = row["dutydesc"] or row["officialpositiontitle"] or ""
 
         if cat == "faction":
-            member["faction"].append(row["factionname"])
+            factions.append(row["factionname"])
 
         elif cat == "government":
-            member["roles"]["government"].append({
-                "title": display_title,
-                "ministry": row["govministryname"],
-                "is_transition": _is_transition_gov(knesset_num, row["governmentnum"]),
-                "start": simple_date(row["startdate"]),
-                "end": simple_date(row["finishdate"]),
-            })
+            gov_roles.append(GovernmentRole(
+                title=display_title or None,
+                ministry=row["govministryname"] or None,
+                is_transition=_is_transition_gov(knesset_num, row["governmentnum"]),
+                start=simple_date(row["startdate"]) or None,
+                end=simple_date(row["finishdate"]) or None,
+            ))
 
         elif cat == "committee":
-            member["roles"]["committees"].append({
-                "id": row["committeeid"],
-                "name": row["committeename"],
-                "role": row["officialpositiontitle"],
-                "start": simple_date(row["startdate"]),
-                "end": simple_date(row["finishdate"]),
-            })
+            cmt_roles.append(CommitteeRole(
+                id=row["committeeid"],
+                name=row["committeename"] or None,
+                role=row["officialpositiontitle"] or None,
+                start=simple_date(row["startdate"]) or None,
+                end=simple_date(row["finishdate"]) or None,
+            ))
 
         else:  # parliamentary
-            member["roles"]["parliamentary"].append({
-                "name": display_title,
-                "role": row["officialpositiontitle"],
-                "start": simple_date(row["startdate"]),
-                "end": simple_date(row["finishdate"]),
-            })
+            parl_roles.append(ParliamentaryRole(
+                name=display_title or None,
+                role=row["officialpositiontitle"] or None,
+                start=simple_date(row["startdate"]) or None,
+                end=simple_date(row["finishdate"]) or None,
+            ))
 
-    return member
+    return MemberDetail(
+        member_id=person_id,
+        name=format_person_name(p_info['firstname'], p_info['lastname']),
+        gender=p_info["genderdesc"] or None,
+        knesset_num=knesset_num,
+        faction=factions,
+        roles=MemberRoles(
+            government=gov_roles,
+            committees=cmt_roles,
+            parliamentary=parl_roles,
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -165,12 +172,12 @@ def _build_member_detail(cursor, person_id, knesset_num):
 def get_member(
     member_id: Annotated[int, Field(description="The member's person ID (required)")],
     knesset_num: Annotated[int | None, Field(description="Knesset number to filter by; omit for all terms")] = None,
-) -> dict | list | None:
+) -> MemberDetail | MemberDetailList | None:
     """Return full detail for a single member.
 
-    If ``knesset_num`` is provided, returns a single dict for that term.
-    If omitted, returns a list of dicts — one per Knesset term the member
-    served in.  Returns ``None`` if no data is found.
+    If ``knesset_num`` is provided, returns a ``MemberDetail`` for that term.
+    If omitted, returns a ``MemberDetailList`` — one item per Knesset term
+    the member served in.  Returns ``None`` if no data is found.
     """
     normalized = normalize_inputs(locals())
     member_id = normalized["member_id"]
@@ -182,7 +189,7 @@ def get_member(
     if knesset_num is not None:
         result = _build_member_detail(cursor, member_id, knesset_num)
         conn.close()
-        return _clean(result) if result else None
+        return result
 
     # No knesset_num — return all terms
     cursor.execute(
@@ -208,57 +215,7 @@ def get_member(
             results.append(obj)
 
     conn.close()
-    return _clean(results) if results else None
+    return MemberDetailList(items=results) if results else None
 
 
-get_member.RESPONSE_SCHEMA = {
-    "_type": "dict | list[dict] | None",
-    "_description": "Single term dict (if knesset_num given), list of term dicts (if omitted), or null",
-    "member_id": {"type": "int", "optional": False, "description": "Member person ID"},
-    "name": {"type": "str", "optional": False, "description": "Full name"},
-    "gender": {"type": "str", "optional": True, "description": "Gender description"},
-    "knesset_num": {"type": "int", "optional": False, "description": "Knesset number for this term"},
-    "faction": {"type": "list[str]", "optional": False, "description": "Faction/party names during this term"},
-    "roles": {
-        "type": "dict",
-        "optional": False,
-        "description": "Roles grouped by category",
-        "schema": {
-            "government": {
-                "type": "list[dict]",
-                "optional": False,
-                "description": "Government/ministerial roles",
-                "items": {
-                    "title": {"type": "str", "optional": True, "description": "Role title"},
-                    "ministry": {"type": "str", "optional": True, "description": "Ministry name"},
-                    "is_transition": {"type": "bool", "optional": False, "description": "Whether from a transition government"},
-                    "start": {"type": "str", "optional": True, "description": "Start date (YYYY-MM-DD)"},
-                    "end": {"type": "str", "optional": True, "description": "End date (YYYY-MM-DD)"},
-                },
-            },
-            "committees": {
-                "type": "list[dict]",
-                "optional": False,
-                "description": "Committee memberships",
-                "items": {
-                    "id": {"type": "int", "optional": True, "description": "Committee ID"},
-                    "name": {"type": "str", "optional": True, "description": "Committee name"},
-                    "role": {"type": "str", "optional": True, "description": "Position title on committee"},
-                    "start": {"type": "str", "optional": True, "description": "Start date"},
-                    "end": {"type": "str", "optional": True, "description": "End date"},
-                },
-            },
-            "parliamentary": {
-                "type": "list[dict]",
-                "optional": False,
-                "description": "Parliamentary roles (e.g. Knesset member, Speaker)",
-                "items": {
-                    "name": {"type": "str", "optional": True, "description": "Role display title"},
-                    "role": {"type": "str", "optional": True, "description": "Official position title"},
-                    "start": {"type": "str", "optional": True, "description": "Start date"},
-                    "end": {"type": "str", "optional": True, "description": "End date"},
-                },
-            },
-        },
-    },
-}
+get_member.OUTPUT_MODEL = MemberDetailList

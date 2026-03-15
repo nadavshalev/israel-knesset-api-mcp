@@ -10,18 +10,18 @@ if str(ROOT.parent) not in sys.path:
     sys.path.insert(0, str(ROOT.parent))
 
 from core.db import connect_db, ensure_indexes
-from views import members_view
-from views import member_view
-from views import committees_view
-from views import committee_view
-from views import plenum_sessions_view
-from views import plenum_session_view
-from views import bills_view
-from views import bill_view
-from views import votes_view
-from views import vote_view
-from views import search_across_view
-from views import knesset_dates_view
+from origins.members import search_members_view as members_view
+from origins.members import get_member_view as member_view
+from origins.committees import search_committees_view as committees_view
+from origins.committees import get_committee_view as committee_view
+from origins.plenums import search_plenums_view as plenum_sessions_view
+from origins.plenums import get_plenum_view as plenum_session_view
+from origins.bills import search_bills_view as bills_view
+from origins.bills import get_bill_view as bill_view
+from origins.votes import search_votes_view as votes_view
+from origins.votes import get_vote_view as vote_view
+from origins.search import search_across_view
+from origins.knesset import get_knesset_dates_view as knesset_dates_view
 
 
 # ---------------------------------------------------------------------------

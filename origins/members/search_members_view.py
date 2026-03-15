@@ -18,9 +18,10 @@ from typing import Annotated
 from pydantic import Field
 
 from core.db import connect_readonly
-from core.helpers import simple_date, format_person_name, normalize_inputs, _clean
+from core.helpers import simple_date, format_person_name, normalize_inputs
 from core.mcp_meta import mcp_tool
 from core.search_meta import register_search
+from origins.members.search_members_models import MemberSummary, MemberSearchResults
 
 register_search({
     "entity_key": "members",
@@ -121,8 +122,8 @@ def _fetch_members_bulk(cursor, *, knesset_num=None, first_name=None,
     rows = cursor.fetchall()
 
     # Group rows by (PersonID, KnessetNum) preserving order
-    members = {}
-    order = []
+    members: dict[tuple, dict] = {}
+    order: list[tuple] = []
     for row in rows:
         pid = row["personid"]
         kns = row["knessetnum"]
@@ -177,16 +178,17 @@ def search_members(
     role_type: Annotated[str | None, Field(description="Position category")] = None,
     party: Annotated[str | None, Field(description="Party/faction name contains text")] = None,
     person_id: Annotated[int | None, Field(description="Filter by specific person ID")] = None,
-) -> list:
+) -> MemberSearchResults:
     """Search for Knesset members with dynamic filtering.
 
     Filters (all ANDed): knesset_num, first_name, last_name, role
     (free text across roles/ministries/committees), role_type (position
     category), party (party/faction name), person_id.
 
-    Returns a list of summary dicts sorted by (knesset_num DESC, member_id).
-    Each dict contains general info and a ``role_types`` list.
-    For full detail on a single member, use ``member_view.get_member()``.
+    Returns a ``MemberSearchResults`` with ``items`` sorted by
+    (knesset_num DESC, member_id).  Each item contains general info
+    and a ``role_types`` list.  For full detail on a single member,
+    use ``member_view.get_member()``.
     """
     normalized = normalize_inputs(locals())
     knesset_num = normalized["knesset_num"]
@@ -206,9 +208,9 @@ def search_members(
         role_ids = _resolve_role_ids(cursor, role_type)
         if not role_ids:
             conn.close()
-            return []
+            return MemberSearchResults(items=[])
 
-    results = _fetch_members_bulk(
+    raw = _fetch_members_bulk(
         cursor,
         knesset_num=knesset_num,
         first_name=first_name,
@@ -220,16 +222,19 @@ def search_members(
     )
 
     conn.close()
-    return _clean(results)
+
+    items = [
+        MemberSummary(
+            member_id=m["member_id"],
+            name=m["name"],
+            gender=m["gender"] or None,
+            knesset_num=m["knesset_num"],
+            faction=m["faction"],
+            role_types=m["role_types"],
+        )
+        for m in raw
+    ]
+    return MemberSearchResults(items=items)
 
 
-search_members.RESPONSE_SCHEMA = {
-    "_type": "list[dict]",
-    "_description": "List of member summaries sorted by knesset_num DESC, member_id",
-    "member_id": {"type": "int", "optional": False, "description": "Member person ID"},
-    "name": {"type": "str", "optional": False, "description": "Full name"},
-    "gender": {"type": "str", "optional": True, "description": "Gender description"},
-    "knesset_num": {"type": "int", "optional": False, "description": "Knesset number"},
-    "faction": {"type": "list[str]", "optional": False, "description": "Faction/party names"},
-    "role_types": {"type": "list[str]", "optional": False, "description": "Distinct position titles held"},
-}
+search_members.OUTPUT_MODEL = MemberSearchResults

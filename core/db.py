@@ -125,7 +125,7 @@ def return_conn(conn) -> None:
 def ensure_indexes(conn) -> None:
     """Create indexes declared by table modules. Idempotent (IF NOT EXISTS)."""
     # Import lazily to avoid circular imports with table modules.
-    from tables import get_table_specs
+    from origins import get_table_specs
 
     cur = conn.cursor()
     for spec in get_table_specs():
