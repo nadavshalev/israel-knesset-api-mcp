@@ -14,6 +14,9 @@ Usage::
 
 import io
 import os
+import socket as stdlib_socket
+import threading
+import time
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -67,8 +70,9 @@ def _build_config() -> WireGuardConfig:
 
 
 def _patch_makefile_buffering():
-    """Fix a buffering bug in wireguard_requests' socket wrappers.
+    """Fix bugs in wireguard_requests' socket wrappers.
 
+    **Bug 1 — makefile buffering:**
     Both ``WireGuardSocket.makefile()`` and ``WireGuardTlsSocket.makefile()``
     incorrectly return an unbuffered raw wrapper when ``buffering=-1``
     (the default).  The condition::
@@ -81,9 +85,14 @@ def _patch_makefile_buffering():
     (a single TLS record), which ``http.client._safe_read()`` interprets
     as ``IncompleteRead``.
 
-    This function monkey-patches both ``makefile()`` methods so that
-    ``buffering=-1`` falls through to create an ``io.BufferedReader``,
-    matching the behaviour of real sockets.
+    **Bug 2 — connect timeout:**
+    ``WireGuardSocket.connect()`` never propagates the stored ``_timeout``
+    to the newly created ``WgStream``.  When urllib3 calls
+    ``sock.settimeout(60)`` *before* ``sock.connect()``, the timeout is
+    stored but the ``_stream`` is ``None``, so ``set_timeout`` is never
+    called.  After ``connect()`` creates the stream, the timeout is not
+    applied — causing ``create_stream()`` to block indefinitely on slow
+    or unresponsive servers.
 
     Returns a callable that restores the original methods.
     """
@@ -92,6 +101,7 @@ def _patch_makefile_buffering():
 
     orig_sock_makefile = WireGuardSocket.makefile
     orig_tls_makefile = WireGuardTlsSocket.makefile
+    orig_connect = WireGuardSocket.connect
 
     def _fixed_makefile(self, mode="r", buffering=-1, **kwargs):
         if "b" not in mode:
@@ -122,9 +132,60 @@ def _patch_makefile_buffering():
     WireGuardSocket.makefile = _fixed_makefile
     WireGuardTlsSocket.makefile = _fixed_makefile
 
+    def _fixed_connect(self, address):
+        # Enforce a timeout on create_stream() itself (DNS + TCP handshake
+        # through the VPN tunnel).  The original connect() never passes
+        # the stored _timeout to the Rust side, so create_stream() can
+        # block forever.
+        timeout = self._timeout
+        t0 = time.monotonic()
+        if timeout is not None and timeout > 0:
+            exc_holder = []
+
+            def _do_connect():
+                try:
+                    orig_connect(self, address)
+                except Exception as e:
+                    exc_holder.append(e)
+
+            t = threading.Thread(target=_do_connect, daemon=True)
+            t.start()
+            t.join(timeout=timeout)
+            if t.is_alive():
+                elapsed = time.monotonic() - t0
+                print(f"  [vpn] connect to {address} TIMED OUT after {elapsed:.1f}s "
+                      f"(timeout={timeout}s)")
+                # connect is stuck — close the socket to unblock the thread
+                try:
+                    self._closed = True
+                    if self._stream is not None:
+                        self._stream.close()
+                except Exception:
+                    pass
+                raise stdlib_socket.timeout(
+                    f"VPN connect to {address} timed out after {timeout}s"
+                )
+            if exc_holder:
+                elapsed = time.monotonic() - t0
+                print(f"  [vpn] connect to {address} FAILED after {elapsed:.1f}s: "
+                      f"{type(exc_holder[0]).__name__}: {exc_holder[0]}")
+                raise exc_holder[0]
+        else:
+            orig_connect(self, address)
+
+        elapsed = time.monotonic() - t0
+        print(f"  [vpn] connected to {address} in {elapsed:.1f}s")
+
+        # Propagate any timeout that was set before connect()
+        if timeout is not None and self._stream is not None:
+            self._stream.set_timeout(timeout)
+
+    WireGuardSocket.connect = _fixed_connect
+
     def _restore():
         WireGuardSocket.makefile = orig_sock_makefile
         WireGuardTlsSocket.makefile = orig_tls_makefile
+        WireGuardSocket.connect = orig_connect
 
     return _restore
 
@@ -139,10 +200,32 @@ def vpn_connection():
     """
     config = _build_config()
     restore_makefile = _patch_makefile_buffering()
-    print("Connecting to VPN...")
+    endpoint = os.getenv("WG_ENDPOINT", "?")
+    print(f"Connecting to VPN (endpoint={endpoint})...")
+    t0 = time.monotonic()
     try:
-        with wireguard_context(config):
-            print("VPN connected.")
+        with wireguard_context(config) as tunnel:
+            elapsed = time.monotonic() - t0
+            print(f"VPN connected in {elapsed:.1f}s "
+                  f"(tunnel alive={tunnel.is_alive()})")
+            # Quick connectivity check — make a tiny OData request through
+            # the tunnel to verify end-to-end connectivity before starting
+            # the real fetches.  DNS is resolved by the system resolver
+            # (not the tunnel), so we test with an HTTP round-trip instead.
+            try:
+                import requests as _req
+                check_t0 = time.monotonic()
+                r = _req.get(
+                    "https://knesset.gov.il/OdataV4/ParliamentInfo/",
+                    timeout=15,
+                )
+                check_elapsed = time.monotonic() - check_t0
+                print(f"VPN health check OK: HTTP {r.status_code} "
+                      f"in {check_elapsed:.1f}s")
+            except Exception as e:
+                check_elapsed = time.monotonic() - check_t0
+                print(f"VPN health check FAILED after {check_elapsed:.1f}s: "
+                      f"{type(e).__name__}: {e}")
             yield
     finally:
         restore_makefile()

@@ -32,7 +32,13 @@ def _request_with_retry(
     last_exc: Optional[Exception] = None
     for attempt in range(1 + max_retries):
         try:
+            t0 = time.monotonic()
             resp = requests.get(url, params=params, timeout=timeout)
+            elapsed = time.monotonic() - t0
+            # Log response details for diagnostics
+            body_len = len(resp.content) if resp.content else 0
+            print(f"  Response: {resp.status_code} in {elapsed:.1f}s, "
+                  f"{body_len:,} bytes")
             # Retry on server errors and rate limits
             if resp.status_code in (429, 500, 502, 503, 504):
                 raise requests.exceptions.HTTPError(
@@ -50,6 +56,9 @@ def _request_with_retry(
                 print(f"  Retry {attempt + 1}/{max_retries} in {wait}s "
                       f"({type(exc).__name__}: {exc})")
                 time.sleep(wait)
+            else:
+                print(f"  FAILED after {1 + max_retries} attempts: "
+                      f"{type(exc).__name__}: {exc}")
     raise last_exc  # type: ignore[misc]
 
 
