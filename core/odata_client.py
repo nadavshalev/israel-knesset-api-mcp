@@ -2,10 +2,69 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional
 import csv
 import io
+import time
 
 import requests
 
 from config import BASE_URL, DEFAULT_PAGE_SIZE
+
+# ---------------------------------------------------------------------------
+# Retry configuration
+# ---------------------------------------------------------------------------
+MAX_RETRIES = 4          # total attempts = 1 + MAX_RETRIES
+RETRY_BACKOFF_BASE = 2   # seconds; doubles each retry (2, 4, 8, 16)
+
+
+def _request_with_retry(
+    url: str,
+    params: Dict[str, Any],
+    timeout: int = 60,
+    *,
+    max_retries: int = MAX_RETRIES,
+) -> requests.Response:
+    """GET with retry + exponential backoff.
+
+    Retries on:
+    - Connection / timeout errors
+    - HTTP 429 / 5xx responses
+    - Empty response body (common Knesset API transient failure)
+    """
+    last_exc: Optional[Exception] = None
+    for attempt in range(1 + max_retries):
+        try:
+            resp = requests.get(url, params=params, timeout=timeout)
+            # Retry on server errors and rate limits
+            if resp.status_code in (429, 500, 502, 503, 504):
+                raise requests.exceptions.HTTPError(
+                    f"HTTP {resp.status_code}", response=resp,
+                )
+            resp.raise_for_status()
+            # Detect empty body (Knesset API sometimes returns 200 with no body)
+            if not resp.text.strip():
+                raise ValueError("Empty response body from API")
+            return resp
+        except (requests.exceptions.RequestException, ValueError) as exc:
+            last_exc = exc
+            if attempt < max_retries:
+                wait = RETRY_BACKOFF_BASE * (2 ** attempt)
+                print(f"  Retry {attempt + 1}/{max_retries} in {wait}s "
+                      f"({type(exc).__name__}: {exc})")
+                time.sleep(wait)
+    raise last_exc  # type: ignore[misc]
+
+
+def _get_json(resp: requests.Response) -> Dict[str, Any]:
+    """Parse JSON from a response, with a clear error on failure."""
+    try:
+        return resp.json()
+    except Exception:
+        snippet = resp.text[:300] if resp.text else "(empty)"
+        raise ValueError(
+            f"Invalid JSON from {resp.url} "
+            f"(status={resp.status_code}, "
+            f"content-type={resp.headers.get('Content-Type', '?')}): "
+            f"{snippet}"
+        )
 
 def _utc_now_iso() -> str:
     return datetime.now().isoformat(timespec="seconds").replace("+00:00", "Z")
@@ -104,9 +163,8 @@ def fetch_odata_table(
         elif "$filter" in params:
             params.pop("$filter")
         print(f"Requesting {url} with params {params}")
-        resp = requests.get(url, params=params, timeout=60)
-        resp.raise_for_status()
-        data = resp.json()
+        resp = _request_with_retry(url, params, timeout=60)
+        data = _get_json(resp)
         batch = data.get("value", [])
         last_seen: Optional[str] = None
         print(f"    Fetched {len(batch)} rows")
@@ -166,9 +224,8 @@ def fetch_odata_max_id(table: str, id_field: str = "Id") -> Optional[int]:
     """Fetch the maximum value of a numeric field from an OData table."""
     url = f"{BASE_URL}{table}"
     params = {"$orderby": f"{id_field} desc", "$top": 1, "$select": id_field}
-    resp = requests.get(url, params=params, timeout=60)
-    resp.raise_for_status()
-    data = resp.json()
+    resp = _request_with_retry(url, params, timeout=60)
+    data = _get_json(resp)
     rows = data.get("value", [])
     if rows:
         return _parse_numeric(rows[0].get(id_field))
@@ -197,9 +254,8 @@ def fetch_odata_range(
             "$orderby": f"{id_field} asc",
             "$filter": f"{id_field} gt {cursor} and {id_field} le {range_end}",
         }
-        resp = requests.get(url, params=params, timeout=120)
-        resp.raise_for_status()
-        data = resp.json()
+        resp = _request_with_retry(url, params, timeout=120)
+        data = _get_json(resp)
         batch = data.get("value", [])
         if not batch:
             break
@@ -214,8 +270,7 @@ def fetch_odata_range(
 
 
 def fetch_csv_table(url: str) -> Iterable[Dict[str, Any]]:
-    resp = requests.get(url, timeout=60)
-    resp.raise_for_status()
+    resp = _request_with_retry(url, params={}, timeout=60)
     text = resp.text
     if not text:
         return

@@ -19,15 +19,13 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
-import requests
-
 ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from config import BASE_URL
 from core.db import connect_db, update_metadata
-from core.odata_client import _utc_now_iso, fetch_odata_max_id
+from core.odata_client import _utc_now_iso, _request_with_retry, _get_json, fetch_odata_max_id
 from origins import get_table_spec
 
 DEFAULT_WORKERS = 5
@@ -104,19 +102,12 @@ def _fetch_chunk(
             "$filter": f"Id gt {cursor} and Id le {range_end}",
         }
         try:
-            resp = requests.get(url, params=params, timeout=120)
-            resp.raise_for_status()
+            resp = _request_with_retry(url, params, timeout=120)
         except Exception as exc:
-            print(f"  {chunk_label}: HTTP error at cursor {cursor}: {exc}")
-            time.sleep(2)
-            try:
-                resp = requests.get(url, params=params, timeout=120)
-                resp.raise_for_status()
-            except Exception as exc2:
-                print(f"  {chunk_label}: Retry failed: {exc2}. Stopping chunk.")
-                break
+            print(f"  {chunk_label}: Failed at cursor {cursor} after retries: {exc}. Stopping chunk.")
+            break
 
-        data = resp.json()
+        data = _get_json(resp)
         batch = data.get("value", [])
         if not batch:
             break
