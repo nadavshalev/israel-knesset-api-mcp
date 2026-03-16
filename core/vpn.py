@@ -96,11 +96,12 @@ def _patch_wireguard_bugs():
 
     **Bug 3 — recv timeout not enforced:**
     ``WgStream.set_timeout()`` sets a timeout on the Rust side, but it
-    may not be reliably enforced during ``recv()`` — observed as 10+ hour
-    hangs in production.  We add a Python-level watchdog: a
-    ``threading.Timer`` that closes the stream if ``recv()`` doesn't
-    return within the timeout.  The timer is cancelled on every successful
-    return (the common path), so overhead is minimal (~1ms per call).
+    is not reliably enforced during ``recv()`` — observed as 10+ hour
+    hangs in production.  Furthermore, ``stream.close()`` does NOT
+    interrupt a blocked ``recv()``.  We work around this by running each
+    ``recv()`` in a disposable daemon thread with a ``join(timeout)``
+    — the same pattern used for the connect fix.  If the thread doesn't
+    return in time, we abandon it and raise ``socket.timeout``.
 
     Returns a callable that restores the original methods.
     """
@@ -195,57 +196,68 @@ def _patch_wireguard_bugs():
 
     WireGuardSocket.connect = _fixed_connect
 
-    # -- Bug 3 fix: recv timeout watchdog --------------------------------
+    # -- Bug 3 fix: recv timeout enforcement -------------------------------
+    #
+    # The Rust WgStream.recv() blocks indefinitely even when set_timeout()
+    # has been called, and stream.close() does NOT interrupt a blocked
+    # recv().  The only reliable way to enforce a timeout is to run recv()
+    # in a disposable daemon thread and abandon it on timeout — the same
+    # pattern used for _fixed_connect above.
+    #
+    # Performance: thread creation is ~0.1-1ms on Linux.  A typical HTTP
+    # request does 10-40 recv() calls, adding <40ms total — negligible
+    # compared to network latency.
 
     # Hard ceiling so a single recv() can never block longer than this,
     # even if the caller sets an absurdly large timeout.
     _MAX_RECV_TIMEOUT = 120  # seconds
 
+    _recv_diag_logged = False
+
     def _fixed_recv(self, bufsize, flags=0):
+        nonlocal _recv_diag_logged
         timeout = self._timeout
-        # No watchdog needed when timeout is None/0 or stream is gone.
+
+        if not _recv_diag_logged:
+            _recv_diag_logged = True
+            print(f"  [vpn] _fixed_recv active: timeout={timeout}, "
+                  f"stream={self._stream is not None}")
+
+        # No timeout enforcement needed when no timeout or stream is gone.
         if not timeout or timeout <= 0 or self._stream is None:
             return orig_recv(self, bufsize, flags)
 
         effective = min(timeout, _MAX_RECV_TIMEOUT)
-        timed_out = threading.Event()
+        result_holder = []
+        exc_holder = []
 
-        def _watchdog():
-            timed_out.set()
-            print(f"  [vpn] recv watchdog FIRED after {effective}s — "
-                  f"closing stream to unblock recv()")
-            # Force-close the stream so the blocked recv() unblocks.
+        def _do_recv():
             try:
-                stream = self._stream
-                if stream is not None:
-                    stream.close()
-                    print(f"  [vpn] stream.close() completed")
+                result_holder.append(orig_recv(self, bufsize, flags))
             except Exception as e:
-                print(f"  [vpn] stream.close() failed: "
-                      f"{type(e).__name__}: {e}")
+                exc_holder.append(e)
 
-        timer = threading.Timer(effective, _watchdog)
-        timer.daemon = True
-        timer.start()
-        try:
-            data = orig_recv(self, bufsize, flags)
-            # The watchdog may have closed the stream right as recv
-            # returned — check if we got an empty result because of it.
-            if timed_out.is_set():
-                raise stdlib_socket.timeout(
-                    f"VPN recv timed out after {effective}s"
-                )
-            return data
-        except stdlib_socket.timeout:
-            raise
-        except Exception as e:
-            if timed_out.is_set():
-                raise stdlib_socket.timeout(
-                    f"VPN recv timed out after {effective}s"
-                )
-            raise
-        finally:
-            timer.cancel()
+        t = threading.Thread(target=_do_recv, daemon=True)
+        t.start()
+        t.join(timeout=effective)
+
+        if t.is_alive():
+            # recv is stuck — the daemon thread will be abandoned.
+            # Mark the socket as closed so no further operations try to
+            # use it; the abandoned thread will eventually be cleaned up
+            # when the process exits or the Rust tunnel is torn down.
+            print(f"  [vpn] recv TIMED OUT after {effective}s")
+            try:
+                self._closed = True
+            except Exception:
+                pass
+            raise stdlib_socket.timeout(
+                f"VPN recv timed out after {effective}s"
+            )
+
+        if exc_holder:
+            raise exc_holder[0]
+        return result_holder[0]
 
     WireGuardSocket.recv = _fixed_recv
 
