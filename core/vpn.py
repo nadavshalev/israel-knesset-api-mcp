@@ -69,7 +69,7 @@ def _build_config() -> WireGuardConfig:
     )
 
 
-def _patch_makefile_buffering():
+def _patch_wireguard_bugs():
     """Fix bugs in wireguard_requests' socket wrappers.
 
     **Bug 1 — makefile buffering:**
@@ -94,6 +94,14 @@ def _patch_makefile_buffering():
     applied — causing ``create_stream()`` to block indefinitely on slow
     or unresponsive servers.
 
+    **Bug 3 — recv timeout not enforced:**
+    ``WgStream.set_timeout()`` sets a timeout on the Rust side, but it
+    may not be reliably enforced during ``recv()`` — observed as 10+ hour
+    hangs in production.  We add a Python-level watchdog: a
+    ``threading.Timer`` that closes the stream if ``recv()`` doesn't
+    return within the timeout.  The timer is cancelled on every successful
+    return (the common path), so overhead is minimal (~1ms per call).
+
     Returns a callable that restores the original methods.
     """
     from wireguard_requests.socket import WireGuardSocket, _SocketFileWrapper
@@ -102,6 +110,9 @@ def _patch_makefile_buffering():
     orig_sock_makefile = WireGuardSocket.makefile
     orig_tls_makefile = WireGuardTlsSocket.makefile
     orig_connect = WireGuardSocket.connect
+    orig_recv = WireGuardSocket.recv
+
+    # -- Bug 1 fix: makefile buffering -----------------------------------
 
     def _fixed_makefile(self, mode="r", buffering=-1, **kwargs):
         if "b" not in mode:
@@ -131,6 +142,8 @@ def _patch_makefile_buffering():
 
     WireGuardSocket.makefile = _fixed_makefile
     WireGuardTlsSocket.makefile = _fixed_makefile
+
+    # -- Bug 2 fix: connect timeout --------------------------------------
 
     def _fixed_connect(self, address):
         # Enforce a timeout on create_stream() itself (DNS + TCP handshake
@@ -182,10 +195,67 @@ def _patch_makefile_buffering():
 
     WireGuardSocket.connect = _fixed_connect
 
+    # -- Bug 3 fix: recv timeout watchdog --------------------------------
+
+    # Hard ceiling so a single recv() can never block longer than this,
+    # even if the caller sets an absurdly large timeout.
+    _MAX_RECV_TIMEOUT = 120  # seconds
+
+    def _fixed_recv(self, bufsize, flags=0):
+        timeout = self._timeout
+        # No watchdog needed when timeout is None/0 or stream is gone.
+        if not timeout or timeout <= 0 or self._stream is None:
+            return orig_recv(self, bufsize, flags)
+
+        effective = min(timeout, _MAX_RECV_TIMEOUT)
+        timed_out = threading.Event()
+
+        def _watchdog():
+            timed_out.set()
+            print(f"  [vpn] recv watchdog FIRED after {effective}s — "
+                  f"closing stream to unblock recv()")
+            # Force-close the stream so the blocked recv() unblocks.
+            try:
+                stream = self._stream
+                if stream is not None:
+                    stream.close()
+                    print(f"  [vpn] stream.close() completed")
+            except Exception as e:
+                print(f"  [vpn] stream.close() failed: "
+                      f"{type(e).__name__}: {e}")
+
+        timer = threading.Timer(effective, _watchdog)
+        timer.daemon = True
+        timer.start()
+        try:
+            data = orig_recv(self, bufsize, flags)
+            # The watchdog may have closed the stream right as recv
+            # returned — check if we got an empty result because of it.
+            if timed_out.is_set():
+                raise stdlib_socket.timeout(
+                    f"VPN recv timed out after {effective}s"
+                )
+            return data
+        except stdlib_socket.timeout:
+            raise
+        except Exception as e:
+            if timed_out.is_set():
+                raise stdlib_socket.timeout(
+                    f"VPN recv timed out after {effective}s"
+                )
+            raise
+        finally:
+            timer.cancel()
+
+    WireGuardSocket.recv = _fixed_recv
+
+    # -- Restore callback ------------------------------------------------
+
     def _restore():
         WireGuardSocket.makefile = orig_sock_makefile
         WireGuardTlsSocket.makefile = orig_tls_makefile
         WireGuardSocket.connect = orig_connect
+        WireGuardSocket.recv = orig_recv
 
     return _restore
 
@@ -199,7 +269,7 @@ def vpn_connection():
     be torn down when the block exits, even on exceptions.
     """
     config = _build_config()
-    restore_makefile = _patch_makefile_buffering()
+    restore_patches = _patch_wireguard_bugs()
     endpoint = os.getenv("WG_ENDPOINT", "?")
     print(f"Connecting to VPN (endpoint={endpoint})...")
     t0 = time.monotonic()
@@ -215,9 +285,10 @@ def vpn_connection():
             try:
                 import requests as _req
                 check_t0 = time.monotonic()
+                print("VPN health check: requesting...")
                 r = _req.get(
                     "https://knesset.gov.il/OdataV4/ParliamentInfo/",
-                    timeout=15,
+                    timeout=30,
                 )
                 check_elapsed = time.monotonic() - check_t0
                 print(f"VPN health check OK: HTTP {r.status_code} "
@@ -228,5 +299,5 @@ def vpn_connection():
                       f"{type(e).__name__}: {e}")
             yield
     finally:
-        restore_makefile()
+        restore_patches()
     print("VPN disconnected.")
