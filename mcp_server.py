@@ -379,14 +379,48 @@ async def get_response_schema(
 
 
 # ---------------------------------------------------------------------------
+# Health check endpoint
+# ---------------------------------------------------------------------------
+
+async def _health_check(scope, receive, send):
+    """Minimal /health endpoint for Docker/load-balancer health checks."""
+    await send({
+        "type": "http.response.start",
+        "status": 200,
+        "headers": [
+            [b"content-type", b"application/json"],
+        ],
+    })
+    await send({
+        "type": "http.response.body",
+        "body": b'{"status": "ok"}',
+    })
+
+
+class _HealthCheckMiddleware:
+    """ASGI middleware that handles /health before passing to the inner app."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http" and scope.get("path") == "/health":
+            await _health_check(scope, receive, send)
+            return
+        await self.app(scope, receive, send)
+
+
+# ---------------------------------------------------------------------------
 # ASGI app with rate limiting
 # ---------------------------------------------------------------------------
 
 # Get the Starlette ASGI app from MCP
 _mcp_app = mcp.streamable_http_app()
 
-# Wrap with rate limiting middleware
-app = RateLimitMiddleware(_mcp_app, max_per_minute=RATE_LIMIT_PER_MINUTE)
+# Wrap with rate limiting middleware, then health check (outermost)
+app = _HealthCheckMiddleware(
+    RateLimitMiddleware(_mcp_app, max_per_minute=RATE_LIMIT_PER_MINUTE)
+)
 
 
 # ---------------------------------------------------------------------------
