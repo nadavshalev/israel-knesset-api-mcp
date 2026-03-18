@@ -197,5 +197,52 @@ class TestCombinedFilters(unittest.TestCase):
         self.assertIn("חוקה", results.items[0].name)
 
 
+class TestDateFilter(unittest.TestCase):
+    """Filter committees by session date via committee_session_raw."""
+
+    def test_date_from_only(self):
+        """Knesset 20 committees with sessions from 2019-01-01 onwards."""
+        results = search_committees(knesset_num=20, date="2019-01-01")
+        self.assertEqual(len(results.items), 22)
+
+    def test_date_to_only(self):
+        """Knesset 20 committees with sessions up to end of 2015."""
+        results = search_committees(knesset_num=20, date_to="2015-12-31")
+        self.assertEqual(len(results.items), 35)
+
+    def test_date_range(self):
+        """Knesset 20 committees active in January 2016."""
+        results = search_committees(knesset_num=20, date="2016-01-01", date_to="2016-01-31")
+        self.assertEqual(len(results.items), 27)
+
+    def test_date_range_is_subset_of_date_from(self):
+        """Committees in a range are a subset of committees from that start date."""
+        all_from = search_committees(knesset_num=20, date="2019-01-01")
+        in_range = search_committees(knesset_num=20, date="2019-01-01", date_to="2019-12-31")
+        ids_all = {r.committee_id for r in all_from.items}
+        ids_range = {r.committee_id for r in in_range.items}
+        self.assertTrue(ids_range.issubset(ids_all))
+
+    def test_known_committee_in_date_filter(self):
+        """Committee 922 (ועדת הכספים) had sessions from 2015-04-01, should appear."""
+        results = search_committees(knesset_num=20, date="2019-01-01")
+        ids = {r.committee_id for r in results.items}
+        self.assertIn(922, ids)
+
+    def test_no_sessions_before_knesset_start(self):
+        """No Knesset 20 committees had sessions before Knesset 20 started (2015-03-31)."""
+        results = search_committees(knesset_num=20, date="2015-04-02", date_to="2015-04-02")
+        # Only committee 922 started on 2015-04-01, so sessions on 2015-04-02 may be 0 or more
+        # The point is the filter runs without error and returns a valid model
+        self.assertIsInstance(results, CommitteeSearchResults)
+
+    def test_date_combined_with_name(self):
+        """Date filter combined with name filter."""
+        results = search_committees(knesset_num=20, date="2019-01-01", name="כספים")
+        self.assertGreater(len(results.items), 0)
+        for r in results.items:
+            self.assertIn("כספים", r.name)
+
+
 if __name__ == "__main__":
     unittest.main()

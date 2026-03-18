@@ -104,6 +104,8 @@ def search_committees(
     category: Annotated[str | None, Field(description="Category description contains text")] = None,
     is_current: Annotated[bool | None, Field(description="True for current committees, False for inactive")] = None,
     parent_committee_id: Annotated[int | None, Field(description="Parent committee ID (for sub-committees)")] = None,
+    date: Annotated[str | None, Field(description="Filter to committees that had sessions on or after this date (YYYY-MM-DD)")] = None,
+    date_to: Annotated[str | None, Field(description="Filter to committees that had sessions on or before this date (YYYY-MM-DD). Use with date for a range.")] = None,
 ) -> CommitteeSearchResults:
     """Search for committees and return summary metadata.
 
@@ -114,6 +116,8 @@ def search_committees(
       - category: CategoryDesc contains text
       - is_current: True for current committees, False for inactive
       - parent_committee_id: parent committee ID (for sub-committees)
+      - date: committees that had sessions starting on or after this date
+      - date_to: committees that had sessions starting on or before this date
 
     Returns a list of committee summary dicts sorted by (start_date DESC, committee_id DESC).
     """
@@ -124,6 +128,8 @@ def search_committees(
     category = normalized["category"]
     is_current = normalized["is_current"]
     parent_committee_id = normalized["parent_committee_id"]
+    date = normalized["date"]
+    date_to = normalized["date_to"]
 
     conn = connect_readonly()
     cursor = conn.cursor()
@@ -160,6 +166,28 @@ def search_committees(
     if parent_committee_id is not None:
         sql += " AND c.ParentCommitteeID = %s"
         params.append(parent_committee_id)
+
+    if date and date_to:
+        sql += """ AND EXISTS (
+            SELECT 1 FROM committee_session_raw cs
+            WHERE cs.CommitteeID = c.Id
+            AND cs.StartDate >= %s AND cs.StartDate <= %s
+        )"""
+        params.extend([date, date_to + "T99"])
+    elif date:
+        sql += """ AND EXISTS (
+            SELECT 1 FROM committee_session_raw cs
+            WHERE cs.CommitteeID = c.Id
+            AND cs.StartDate >= %s
+        )"""
+        params.append(date)
+    elif date_to:
+        sql += """ AND EXISTS (
+            SELECT 1 FROM committee_session_raw cs
+            WHERE cs.CommitteeID = c.Id
+            AND cs.StartDate <= %s
+        )"""
+        params.append(date_to + "T99")
 
     sql += ' ORDER BY c.StartDate DESC, c.Id DESC'
 
