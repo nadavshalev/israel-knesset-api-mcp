@@ -258,6 +258,10 @@ def parse_args():
         "--repair-metadata", dest="repair_metadata", action="store_true",
         help="Remove stale metadata rows for tables that no longer exist",
     )
+    parser.add_argument(
+        "--vpn", action="store_true", dest="use_vpn", default=False,
+        help="Use VPN connection for OData fetches",
+    )
     return parser.parse_args()
 
 
@@ -280,9 +284,13 @@ def main():
     ensure_tables(conn)
 
     # All OData fetches require the Knesset VPN
-    with vpn_connection():
+    if args.use_vpn:
+        with vpn_connection():
+            update_tables(conn, table_filter=args.tables, full=args.full,
+                        dry_run=args.dry_run)
+    else:
         update_tables(conn, table_filter=args.tables, full=args.full,
-                      dry_run=args.dry_run)
+                    dry_run=args.dry_run)
     conn.close()
 
 
