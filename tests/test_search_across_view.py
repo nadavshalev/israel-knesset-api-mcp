@@ -261,7 +261,7 @@ class TestSearchAcrossDateFilter(unittest.TestCase):
 
     def test_date_filters_members(self):
         """Date range should return only members with active positions, not all."""
-        result = search_across(date="2015-03-01", date_to="2015-03-31", top_n=1)
+        result = search_across(date="2016-01-01", date_to="2016-06-30", top_n=1)
         members = result.results["members"]
         # Knesset 20 had ~120 MKs, not 1000+
         self.assertGreater(members.count, 0)
@@ -270,7 +270,7 @@ class TestSearchAcrossDateFilter(unittest.TestCase):
 
     def test_date_filters_committees(self):
         """Date range should return only committees with sessions, not all."""
-        result = search_across(date="2015-03-01", date_to="2015-03-31", top_n=1)
+        result = search_across(date="2016-01-01", date_to="2016-06-30", top_n=1)
         committees = result.results["committees"]
         # Should have some committees with sessions, but far fewer than all ~2900
         self.assertGreater(committees.count, 0)
@@ -278,10 +278,10 @@ class TestSearchAcrossDateFilter(unittest.TestCase):
                         "Date filter should limit committees to those with sessions")
 
     def test_date_filters_bills(self):
-        """Date range should return bills active in that period."""
-        result = search_across(date="2015-03-01", date_to="2015-03-31", top_n=1)
+        """Date range should return bills that appeared in plenum sessions in that period."""
+        result = search_across(date="2016-01-01", date_to="2016-06-30", top_n=1)
         bills = result.results["bills"]
-        # Should have a reasonable number of bills, not just 1
+        # Should have a reasonable number of bills with plenum appearances
         self.assertGreater(bills.count, 0)
 
 

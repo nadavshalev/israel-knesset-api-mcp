@@ -26,7 +26,7 @@ def _build_bills_search(*, query, knesset_num, date, date_to, top_n):
     """Build SQL for cross-entity bill search.
 
     Supports: query (name LIKE), knesset_num,
-    date/date_to (bills active/updated in the date range via LastUpdatedDate).
+    date/date_to (bills that appeared in a plenum session in the date range).
     """
     conditions = []
     params = []
@@ -39,16 +39,28 @@ def _build_bills_search(*, query, knesset_num, date, date_to, top_n):
         conditions.append("b.KnessetNum = %s")
         params.append(knesset_num)
 
+    # Plenum-stage date filters — matches search_bills logic
+    stage_conditions = []
+    stage_params = []
+
     if date and date_to:
-        conditions.append("b.LastUpdatedDate >= %s")
-        params.append(date)
-        conditions.append("b.LastUpdatedDate <= %s")
-        params.append(date_to + "T99")
+        stage_conditions.append("s.StartDate >= %s")
+        stage_params.append(date)
+        stage_conditions.append("s.StartDate <= %s")
+        stage_params.append(date_to + "T99")
     elif date:
-        conditions.append("b.LastUpdatedDate >= %s")
-        params.append(date)
-        conditions.append("b.LastUpdatedDate <= %s")
-        params.append(date + "T99")
+        stage_conditions.append("s.StartDate LIKE %s")
+        stage_params.append(f"{date}%")
+
+    if stage_conditions:
+        cond_str = " AND ".join(stage_conditions)
+        conditions.append(f"""EXISTS (
+            SELECT 1 FROM plm_session_item_raw i
+            JOIN plenum_session_raw s ON s.Id = i.PlenumSessionID
+            WHERE i.ItemID = b.Id
+              AND {cond_str}
+        )""")
+        params.extend(stage_params)
 
     where = " AND ".join(conditions) if conditions else "1=1"
 
@@ -168,11 +180,11 @@ def search_bills(
     stage_params = []
 
     if date and date_to:
-        # Date range
+        # Date range — append T99 so timestamps on date_to day are included
         stage_conditions.append("s.StartDate >= %s")
         stage_params.append(date)
         stage_conditions.append("s.StartDate <= %s")
-        stage_params.append(date_to)
+        stage_params.append(date_to + "T99")
     elif date:
         # Single day
         stage_conditions.append("s.StartDate LIKE %s")

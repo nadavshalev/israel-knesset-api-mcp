@@ -264,21 +264,38 @@ def _make_handler(view_fn, enum_map: dict[str, list[str]]):
     output_model = getattr(view_fn, "OUTPUT_MODEL", None)
 
     if output_model is not None:
-        # View returns a Pydantic model — serialize to dict for FastMCP
-        async def handler(**kwargs):
-            view_kwargs = {k: v for k, v in kwargs.items() if v is not None}
-            result = view_fn(**view_kwargs)
-            if result is None:
-                return _validate_size(None)
-            result_dict = result.model_dump()
-            _check_size_dict(result_dict)
-            return result_dict
+        is_list_tool = getattr(view_fn, '_mcp_tool', {}).get('is_list', False)
 
-        handler.__signature__ = inspect.Signature(
-            new_params, return_annotation=output_model
-        )
-        handler.__annotations__ = {p.name: p.annotation for p in new_params}
-        handler.__annotations__["return"] = output_model
+        if is_list_tool:
+            # List/search tools always return a model (never None)
+            async def handler(**kwargs):
+                view_kwargs = {k: v for k, v in kwargs.items() if v is not None}
+                result = view_fn(**view_kwargs)
+                result_dict = result.model_dump()
+                _check_size_dict(result_dict)
+                return result_dict
+
+            handler.__signature__ = inspect.Signature(
+                new_params, return_annotation=output_model
+            )
+            handler.__annotations__ = {p.name: p.annotation for p in new_params}
+            handler.__annotations__["return"] = output_model
+        else:
+            # Single-entity views may return None when the ID is not found
+            async def handler(**kwargs):
+                view_kwargs = {k: v for k, v in kwargs.items() if v is not None}
+                result = view_fn(**view_kwargs)
+                if result is None:
+                    return {"error": "not_found", "message": "No record found for the given ID."}
+                result_dict = result.model_dump()
+                _check_size_dict(result_dict)
+                return result_dict
+
+            handler.__signature__ = inspect.Signature(
+                new_params, return_annotation=output_model
+            )
+            handler.__annotations__ = {p.name: p.annotation for p in new_params}
+            handler.__annotations__["return"] = output_model
     else:
         # Legacy: view returns a plain dict/list — serialize to JSON string
         async def handler(**kwargs) -> str:
