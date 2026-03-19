@@ -172,7 +172,7 @@ def _build_member_detail(cursor, person_id, knesset_num) -> MemberDetail | None:
 def get_member(
     member_id: Annotated[int, Field(description="The member's person ID (required)")],
     knesset_num: Annotated[int | None, Field(description="Knesset number to filter by; omit for all terms")] = None,
-) -> MemberDetail | MemberDetailList | None:
+) -> MemberDetailList | None:
     """Return full detail for a single member.
 
     If ``knesset_num`` is provided, returns a ``MemberDetail`` for that term.
@@ -189,7 +189,9 @@ def get_member(
     if knesset_num is not None:
         result = _build_member_detail(cursor, member_id, knesset_num)
         conn.close()
-        return result
+        if result is None:
+            return None
+        return MemberDetailList(items=[result])
 
     # No knesset_num — return all terms
     cursor.execute(
