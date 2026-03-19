@@ -102,14 +102,17 @@ class TestIsTransitionGov(unittest.TestCase):
 
 
 class TestGetMemberSingleKnesset(unittest.TestCase):
-    """get_member with a specific knesset_num returns a single MemberDetail."""
+    """get_member with a specific knesset_num returns a MemberDetailList with one item."""
 
     def test_netanyahu_knesset_20(self):
         """Netanyahu (965) in Knesset 20: known PM with many portfolios."""
-        m = get_member(965, knesset_num=20)
-        self.assertIsNotNone(m)
-        self.assertIsInstance(m, MemberDetail)
+        result = get_member(965, knesset_num=20)
+        self.assertIsNotNone(result)
+        self.assertIsInstance(result, MemberDetailList)
+        self.assertEqual(len(result.items), 1)
 
+        m = result.items[0]
+        self.assertIsInstance(m, MemberDetail)
         self.assertEqual(m.member_id, 965)
         self.assertEqual(m.name, "בנימין נתניהו")
         self.assertEqual(m.gender, "זכר")
@@ -121,10 +124,12 @@ class TestGetMemberSingleKnesset(unittest.TestCase):
 
     def test_lapid_knesset_20_output_structure(self):
         """Lapid (23594) in Knesset 20: opposition MK with committees."""
-        m = get_member(23594, knesset_num=20)
-        self.assertIsNotNone(m)
-        self.assertIsInstance(m, MemberDetail)
+        result = get_member(23594, knesset_num=20)
+        self.assertIsNotNone(result)
+        self.assertIsInstance(result, MemberDetailList)
+        self.assertEqual(len(result.items), 1)
 
+        m = result.items[0]
         # Verify top-level attributes
         for key in ("member_id", "name", "gender", "knesset_num", "faction", "roles"):
             self.assertTrue(hasattr(m, key))
@@ -170,9 +175,9 @@ class TestGetMemberAllKnessets(unittest.TestCase):
 class TestTransitionGovernment(unittest.TestCase):
     def test_netanyahu_knesset_20_transition_flags(self):
         """Gov 33 roles should be marked as transition; gov 34 should not."""
-        m = get_member(965, knesset_num=20)
-        self.assertIsNotNone(m)
-        gov_roles = m.roles.government
+        result = get_member(965, knesset_num=20)
+        self.assertIsNotNone(result)
+        gov_roles = result.items[0].roles.government
         self.assertGreater(len(gov_roles), 0)
 
         # Find at least one transition and one non-transition
@@ -185,9 +190,9 @@ class TestTransitionGovernment(unittest.TestCase):
 class TestDateFormatting(unittest.TestCase):
     def test_dates_have_no_time_component(self):
         """Dates in output should be YYYY-MM-DD, not datetime strings."""
-        m = get_member(23594, knesset_num=20)
-        self.assertIsNotNone(m)
-        parl = m.roles.parliamentary[0]
+        result = get_member(23594, knesset_num=20)
+        self.assertIsNotNone(result)
+        parl = result.items[0].roles.parliamentary[0]
         self.assertEqual(parl.start, "2015-03-31")
         self.assertEqual(parl.end, "2019-04-30")
         self.assertNotIn("T", parl.start)
@@ -199,22 +204,24 @@ class TestCommitteesAlwaysIncluded(unittest.TestCase):
 
     def test_committees_always_present(self):
         """get_member always includes committees in roles."""
-        m = get_member(23594, knesset_num=20)
-        self.assertIsNotNone(m)
+        result = get_member(23594, knesset_num=20)
+        self.assertIsNotNone(result)
+        m = result.items[0]
         self.assertTrue(hasattr(m.roles, "committees"))
         self.assertEqual(len(m.roles.committees), 3)
 
     def test_committees_empty_when_member_has_none(self):
         """Netanyahu (965) has no committee roles; committees list should be empty."""
-        m = get_member(965, knesset_num=20)
-        self.assertIsNotNone(m)
+        result = get_member(965, knesset_num=20)
+        self.assertIsNotNone(result)
+        m = result.items[0]
         self.assertTrue(hasattr(m.roles, "committees"))
         self.assertEqual(len(m.roles.committees), 0)
 
     def test_detail_roles_keys(self):
         """Detail view roles should have government, parliamentary, and committees."""
-        m = get_member(23594, knesset_num=20)
-        self.assertIsNotNone(m)
+        result = get_member(23594, knesset_num=20)
+        self.assertIsNotNone(result)
         self.assertEqual(set(MemberRoles.model_fields.keys()), {"government", "parliamentary", "committees"})
 
 

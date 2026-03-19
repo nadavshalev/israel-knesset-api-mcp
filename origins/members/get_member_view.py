@@ -172,12 +172,12 @@ def _build_member_detail(cursor, person_id, knesset_num) -> MemberDetail | None:
 def get_member(
     member_id: Annotated[int, Field(description="The member's person ID (required)")],
     knesset_num: Annotated[int | None, Field(description="Knesset number to filter by; omit for all terms")] = None,
-) -> MemberDetail | MemberDetailList | None:
-    """Return full detail for a single member.
+) -> MemberDetailList | None:
+    """Return full detail for a single member as a ``MemberDetailList``.
 
-    If ``knesset_num`` is provided, returns a ``MemberDetail`` for that term.
-    If omitted, returns a ``MemberDetailList`` — one item per Knesset term
-    the member served in.  Returns ``None`` if no data is found.
+    If ``knesset_num`` is provided, returns a list with one item for that term.
+    If omitted, returns one item per Knesset term the member served in.
+    Returns ``None`` if no data is found.
     """
     normalized = normalize_inputs(locals())
     member_id = normalized["member_id"]
@@ -187,9 +187,9 @@ def get_member(
     cursor = conn.cursor()
 
     if knesset_num is not None:
-        result = _build_member_detail(cursor, member_id, knesset_num)
+        obj = _build_member_detail(cursor, member_id, knesset_num)
         conn.close()
-        return result
+        return MemberDetailList(items=[obj]) if obj else None
 
     # No knesset_num — return all terms
     cursor.execute(
