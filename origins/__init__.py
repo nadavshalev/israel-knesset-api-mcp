@@ -49,19 +49,16 @@ def _discover_table_specs() -> list[TableSpec]:
     specs: list[TableSpec] = []
     for sub in _SUB_PACKAGES:
         sub_pkg = f"origins.{sub}"
-        sub_dir = os.path.join(os.path.dirname(__file__), sub)
-        if not os.path.isdir(sub_dir):
+        tables_dir = os.path.join(os.path.dirname(__file__), sub, "tables")
+        if not os.path.isdir(tables_dir):
             continue
 
-        for fname in sorted(os.listdir(sub_dir)):
+        for fname in sorted(os.listdir(tables_dir)):
             if not fname.endswith(".py") or fname.startswith("_"):
                 continue
             mod_name = fname[:-3]
-            # Skip view and model modules — only table modules have TABLE_NAME
-            if mod_name.endswith("_view") or mod_name.endswith("_models"):
-                continue
 
-            full_name = f"{sub_pkg}.{mod_name}"
+            full_name = f"{sub_pkg}.tables.{mod_name}"
             module = import_module(full_name)
 
             table_name = getattr(module, "TABLE_NAME", None)

@@ -15,8 +15,9 @@ Israeli Knesset (parliament) data API — members, committees, bills, plenum ses
 
 ## Search → Detail Workflow
 
-- **Search tools** (`search_members`, `search_bills`, `search_votes`, `search_committees`, `search_plenums`) return compact summaries. Use them to find IDs.
-- **Detail tools** (`get_member`, `get_bill`, `get_vote`, `get_committee`, `get_plenum`) return the full record for a single entity by ID.
+- **Search tools** (`search_members`, `search_bills`, `search_votes`) return compact summaries. Use them to find IDs.
+- **Detail tools** (`get_member`, `get_bill`, `get_vote`) return the full record for a single entity by ID.
+- **Session tools** (`plenum_sessions`, `committee_sessions`) combine search and detail in one tool — use `full_details=True` or `session_id` to get full detail.
 - **Lookup tools** (`get_knesset_dates`) return reference data grouped by Knesset number.
 - Always search first to find the ID, then call the detail tool. Do not guess IDs.
 
@@ -28,20 +29,23 @@ Responses that exceed the server limit are rejected with an error. The more filt
 - Combine `knesset_num` with name, type, status, or date filters to narrow results further.
 - If you get a "Response too large" error, add more filters — do not retry the same query.
 
-## Date Filtering — Use Ranges, Not Single Days
+## Date Filtering
 
-Several search tools accept `date` and `date_to` (both in `YYYY-MM-DD` format).
+Session tools (`plenum_sessions`, `committee_sessions`) use `from_date` and `to_date` (both `YYYY-MM-DD`):
 
-- **Use `date` + `date_to` for date ranges.** For example, to get all votes in March 2020: `date="2020-03-01", date_to="2020-03-31"`. Do NOT send a separate request for each day — a single range query is faster and uses one response.
+- **`from_date` is required** (unless `session_id` is provided). If `to_date` is omitted, it defaults to today.
+- **`to_date` requires `from_date`** — providing `to_date` alone is an error.
+
+Other search tools (`search_votes`, `search_bills`) use `date` and `date_to`:
+
+- **Use `date` + `date_to` for date ranges.** For example, to get all votes in March 2020: `date="2020-03-01", date_to="2020-03-31"`.
 - **`date` alone is a shortcut for a single day** — filters to that exact date only.
-- **Always provide `date_to` when you need a range**, otherwise `date` alone filters to just that one day.
-- Date-filterable search tools: `search_votes`, `search_bills`, `search_plenums`. The detail tool `get_committee` also accepts date params to scope its sessions, members, bills, and documents.
 
 ## Parameter Types
 
-- IDs (`vote_id`, `bill_id`, `member_id`, etc.) are integers.
+- IDs (`vote_id`, `bill_id`, `member_id`, `session_id`, etc.) are integers.
 - `knesset_num` is an integer.
-- Boolean flags (`accepted`, `is_current`, `include_sessions`, etc.) accept `true`/`false`.
+- Boolean flags (`accepted`, `is_current`, `full_details`, etc.) accept `true`/`false`.
 - All text filters (names, types, statuses) are Hebrew strings with case-insensitive substring matching.
 - Parameters with enum constraints list the exact allowed values in their schema — use those values verbatim (they are in Hebrew).
 
@@ -108,22 +112,6 @@ search_bills(knesset_num=20, date="2016-01-01", date_to="2016-06-30")
 → Bills with plenum activity in H1 2016
 ```
 
-### Explore a committee
-
-```
-search_committees(knesset_num=25, committee_type="ועדה ראשית")
-→ All main committees in the current Knesset
-
-search_committees(knesset_num=20, name="כספים")
-→ Finance-related committees in the 20th Knesset
-
-get_committee(committee_id=928, include_sessions=True, date="2016-01-01", date_to="2016-06-30")
-→ Committee 928's sessions in H1 2016
-
-get_committee(committee_id=928, include_members=True, include_bills=True)
-→ All members who served on the committee and all bills discussed
-```
-
 ### Search votes
 
 ```
@@ -143,14 +131,30 @@ get_vote(vote_id=26916)
 ### Search plenum sessions
 
 ```
-search_plenums(knesset_num=20, date="2015-03-31", date_to="2015-04-07")
-→ Plenum sessions in a date range
+plenum_sessions(from_date="2015-03-31", to_date="2015-04-07", knesset_num=20)
+→ Plenum session summaries in a date range
 
-search_plenums(knesset_num=20, name="תקציב")
+plenum_sessions(from_date="2015-03-01", to_date="2015-12-31", query_items="תקציב")
 → Plenum sessions with "תקציב" (budget) in the agenda
 
-get_plenum(session_id=12345)
-→ Full session detail with all agenda items and documents
+plenum_sessions(session_id=568294)
+→ Full session detail with all agenda items and documents (auto full_details)
+```
+
+### Search committee sessions
+
+```
+committee_sessions(from_date="2016-01-01", to_date="2016-01-31", knesset_num=20)
+→ Committee session summaries in a date range
+
+committee_sessions(committee_name_query="כספים", from_date="2016-01-01", to_date="2016-03-31")
+→ Finance committee sessions in Q1 2016
+
+committee_sessions(session_id=2064301)
+→ Full session detail with agenda items, documents, and bill votes (auto full_details)
+
+committee_sessions(from_date="2016-01-01", to_date="2016-01-31", member_id=839)
+→ Sessions where member 839 served on the committee
 ```
 
 ### Look up Knesset terms and dates
@@ -172,10 +176,9 @@ get_knesset_dates(knesset_num=25)
 4. `get_vote(vote_id=...)` → see the member's vote in the per-member breakdown
 
 **"What happened in the Finance Committee last month?"**
-1. `search_committees(knesset_num=25, name="כספים")` → get `committee_id`
-2. `get_committee(committee_id=..., include_sessions=True, include_bills=True, date="2026-02-01", date_to="2026-02-28")` → sessions and bills from February
+1. `committee_sessions(committee_name_query="כספים", from_date="2026-02-01", to_date="2026-02-28", full_details=True)` → sessions with items and documents
 
-**"What how is the last vote on Bill Y devided by party?"**
+**"What how is the last vote on Bill Y divided by party?"**
 1. `search_bills(name="Y")` → get `bill_id`
 2. `search_votes(bill_id=..., accepted=true)` → get the decisive vote for the bill
 3. `get_vote(vote_id=...)` → see the per-member votes

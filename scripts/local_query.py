@@ -12,10 +12,8 @@ if str(ROOT.parent) not in sys.path:
 from core.db import connect_db, ensure_indexes
 from origins.members import search_members_view as members_view
 from origins.members import get_member_view as member_view
-from origins.committees import search_committees_view as committees_view
-from origins.committees import get_committee_view as committee_view
-from origins.plenums import search_plenums_view as plenum_sessions_view
-from origins.plenums import get_plenum_view as plenum_session_view
+from origins.plenums import plenum_sessions_view
+from origins.committees import committee_sessions_view
 from origins.bills import search_bills_view as bills_view
 from origins.bills import get_bill_view as bill_view
 from origins.votes import search_votes_view as votes_view
@@ -57,42 +55,26 @@ def parse_args() -> argparse.Namespace:
     member_p.add_argument("--member-id", dest="member_id", type=int, required=True, help="Member/Person ID (required)")
     member_p.add_argument("--knesset", type=int, default=None, help="Knesset number (omit for all terms)")
 
-    # --- committees (list) ---
-    committees_p = sub.add_parser("committees", help="Search committees (summary)")
-    committees_p.add_argument("--knesset", type=int, default=None, help="Knesset number")
-    committees_p.add_argument("--name", type=str, default=None, help="Committee name contains text")
-    committees_p.add_argument("--type", dest="committee_type", type=str, default=None,
-                              help="Committee type (ועדה ראשית, ועדת משנה, ועדה מיוחדת, ועדה משותפת)")
-    committees_p.add_argument("--category", type=str, default=None, help="Category description contains text")
-    committees_p.add_argument("--current", dest="is_current", default=None, action="store_true",
-                              help="Current committees only")
-    committees_p.add_argument("--inactive", dest="is_inactive", default=None, action="store_true",
-                              help="Inactive committees only")
-    committees_p.add_argument("--parent-id", dest="parent_committee_id", type=int, default=None,
-                              help="Parent committee ID (for sub-committees)")
+    # --- committee-sessions ---
+    cmt_p = sub.add_parser("committee-sessions", help="Search committee sessions")
+    cmt_p.add_argument("--knesset", type=int, default=None, help="Knesset number")
+    cmt_p.add_argument("--from-date", dest="from_date", type=str, default=None, help="Start of date range (YYYY-MM-DD)")
+    cmt_p.add_argument("--to-date", dest="to_date", type=str, default=None, help="End of date range (YYYY-MM-DD)")
+    cmt_p.add_argument("--committee-id", dest="committee_id", type=int, default=None, help="Filter by committee ID")
+    cmt_p.add_argument("--committee-name", dest="committee_name_query", type=str, default=None, help="Committee name contains text")
+    cmt_p.add_argument("--query-items", dest="query_items", type=str, default=None, help="Item name contains text")
+    cmt_p.add_argument("--session-id", dest="session_id", type=int, default=None, help="Get a specific session by ID")
+    cmt_p.add_argument("--full-details", dest="full_details", action="store_true", help="Include items and documents")
 
-    # --- committee (single) ---
-    committee_p = sub.add_parser("committee", help="Get full detail for a single committee (metadata + opt-in lists)")
-    committee_p.add_argument("--committee-id", dest="committee_id", type=int, required=True, help="Committee ID (required)")
-    committee_p.add_argument("--knesset", type=int, default=None, help="Knesset number (informational context)")
-    committee_p.add_argument("--date", type=str, default=None, help="Single date or start of range (YYYY-MM-DD)")
-    committee_p.add_argument("--date-to", dest="date_to", type=str, default=None, help="End of range (YYYY-MM-DD)")
-    committee_p.add_argument("--sessions", dest="include_sessions", action="store_true", help="Include committee sessions")
-    committee_p.add_argument("--members", dest="include_members", action="store_true", help="Include committee members")
-    committee_p.add_argument("--bills", dest="include_bills", action="store_true", help="Include bills discussed")
-    committee_p.add_argument("--documents", dest="include_documents", action="store_true", help="Include session documents")
-
-    # --- plenums (list) ---
-    plenum_p = sub.add_parser("plenums", help="Search plenum sessions (summary, no items/docs)")
+    # --- plenums ---
+    plenum_p = sub.add_parser("plenums", help="Search plenum sessions")
     plenum_p.add_argument("--knesset", type=int, default=None, help="Knesset number")
-    plenum_p.add_argument("--date", type=str, default=None, help="Single date or start of range (YYYY-MM-DD)")
-    plenum_p.add_argument("--date-to", dest="date_to", type=str, default=None, help="End of range (YYYY-MM-DD)")
-    plenum_p.add_argument("--name", type=str, default=None, help="Session/item name contains text")
+    plenum_p.add_argument("--from-date", dest="from_date", type=str, default=None, help="Start of date range (YYYY-MM-DD)")
+    plenum_p.add_argument("--to-date", dest="to_date", type=str, default=None, help="End of date range (YYYY-MM-DD)")
+    plenum_p.add_argument("--query-items", dest="query_items", type=str, default=None, help="Session/item name contains text")
     plenum_p.add_argument("--item-type", dest="item_type", type=str, default=None, help="Item type contains text")
-
-    # --- plenum (single) ---
-    session_p = sub.add_parser("plenum", help="Get full detail for a single plenum session")
-    session_p.add_argument("--session-id", dest="session_id", type=int, required=True, help="Session ID (required)")
+    plenum_p.add_argument("--session-id", dest="session_id", type=int, default=None, help="Get a specific session by ID")
+    plenum_p.add_argument("--full-details", dest="full_details", action="store_true", help="Include items and documents")
 
     # --- bills (list) ---
     bills_p = sub.add_parser("bills", help="Search bills (summary, no stages)")
@@ -160,52 +142,31 @@ def main() -> None:
         _output(result)
         return
 
-    if args.command == "committees":
-        is_current = None
-        if getattr(args, "is_current", None):
-            is_current = True
-        elif getattr(args, "is_inactive", None):
-            is_current = False
-
-        results = committees_view.search_committees(
+    if args.command == "committee-sessions":
+        results = committee_sessions_view.committee_sessions(
+            session_id=args.session_id,
+            committee_id=args.committee_id,
+            committee_name_query=args.committee_name_query,
             knesset_num=args.knesset,
-            name=args.name,
-            committee_type=args.committee_type,
-            category=args.category,
-            is_current=is_current,
-            parent_committee_id=args.parent_committee_id,
+            from_date=args.from_date,
+            to_date=args.to_date,
+            query_items=args.query_items,
+            full_details=args.full_details,
         )
         _output(results)
-        return
-
-    if args.command == "committee":
-        result = committee_view.get_committee(
-            args.committee_id,
-            knesset_num=args.knesset,
-            date=args.date,
-            date_to=args.date_to,
-            include_sessions=args.include_sessions,
-            include_members=args.include_members,
-            include_bills=args.include_bills,
-            include_documents=args.include_documents,
-        )
-        _output(result)
         return
 
     if args.command == "plenums":
-        results = plenum_sessions_view.search_sessions(
+        results = plenum_sessions_view.plenum_sessions(
+            session_id=args.session_id,
             knesset_num=args.knesset,
-            date=args.date,
-            date_to=args.date_to,
-            name=args.name,
+            from_date=args.from_date,
+            to_date=args.to_date,
+            query_items=args.query_items,
             item_type=args.item_type,
+            full_details=args.full_details,
         )
         _output(results)
-        return
-
-    if args.command == "plenum":
-        result = plenum_session_view.get_session(args.session_id)
-        _output(result)
         return
 
     if args.command == "bills":

@@ -1,0 +1,282 @@
+"""Unified plenum sessions tool — search and detail via ``full_details`` flag.
+
+Replaces the old ``search_plenums`` + ``get_plenum`` pair with a single
+``plenum_sessions`` tool.
+
+Required scoping: either ``session_id`` or ``from_date`` must be provided.
+When ``session_id`` is given, ``full_details`` is auto-enabled.
+"""
+
+import sys
+from datetime import date as date_today
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+if str(ROOT.parent) not in sys.path:
+    sys.path.insert(0, str(ROOT.parent))
+
+from typing import Annotated
+from pydantic import Field
+
+from core.db import connect_readonly
+from core.helpers import simple_date, normalize_inputs, check_search_count
+from core.mcp_meta import mcp_tool
+from core.search_meta import register_search
+from core.session_models import SessionItem, SessionDocument, get_item_votes
+from origins.plenums.plenum_sessions_models import PlenumSessionResult, PlenumSessionsResults
+
+
+# ---------------------------------------------------------------------------
+# Cross-entity search builder (for search_across)
+# ---------------------------------------------------------------------------
+
+def _build_plenums_search(*, query, knesset_num, date, date_to, top_n):
+    """Build SQL for cross-entity plenum session search."""
+    conditions = []
+    params = []
+    need_item_join = False
+
+    if query:
+        conditions.append("(ps.Name LIKE %s OR psi.Name LIKE %s)")
+        params.extend([f"%{query}%", f"%{query}%"])
+        need_item_join = True
+
+    if knesset_num is not None:
+        conditions.append("ps.KnessetNum = %s")
+        params.append(knesset_num)
+
+    if date and date_to:
+        conditions.append("ps.StartDate >= %s")
+        params.append(date)
+        conditions.append("ps.StartDate <= %s")
+        params.append(date_to + "T99")
+    elif date:
+        conditions.append("ps.StartDate LIKE %s")
+        params.append(f"{date}%")
+
+    where = " AND ".join(conditions) if conditions else "1=1"
+    item_join = """
+        LEFT JOIN plm_session_item_raw psi
+               ON ps.Id = psi.PlenumSessionID
+    """ if need_item_join else ""
+
+    count_sql = f"""
+        SELECT COUNT(DISTINCT ps.Id)
+        FROM plenum_session_raw ps
+        {item_join}
+        WHERE {where}
+    """
+    search_sql = f"""
+        SELECT DISTINCT ps.Id AS id,
+               ps.Name AS name,
+               ps.KnessetNum AS knesset_num,
+               ps.StartDate AS date
+        FROM plenum_session_raw ps
+        {item_join}
+        WHERE {where}
+        ORDER BY ps.Id DESC
+        LIMIT %s
+    """
+    return count_sql, list(params), search_sql, list(params) + [top_n]
+
+
+register_search({
+    "entity_key": "plenums",
+    "builder": _build_plenums_search,
+})
+
+
+# ---------------------------------------------------------------------------
+# Full-details helpers
+# ---------------------------------------------------------------------------
+
+def _fetch_items(cursor, session_id):
+    """Fetch agenda items for a plenum session, with status and votes."""
+    cursor.execute(
+        """
+        SELECT i.ItemID, i.Name, i.ItemTypeID, i.ItemTypeDesc,
+               i.Ordinal, st."Desc" AS StatusDesc
+        FROM plm_session_item_raw i
+        LEFT JOIN status_raw st ON i.StatusID = st.Id
+        WHERE i.PlenumSessionID = %s
+        ORDER BY i.Ordinal ASC
+        """,
+        (session_id,),
+    )
+    item_rows = cursor.fetchall()
+
+    items = []
+    for item in item_rows:
+        item_id = item["itemid"]
+        item_type_id = item["itemtypeid"]
+        bill_id = item_id if item_type_id == 2 and item_id else None
+        votes = get_item_votes(cursor, item_id) if bill_id else None
+
+        items.append(SessionItem(
+            item_id=item_id,
+            item_type=item["itemtypedesc"],
+            item_name=item["name"],
+            item_status=item["statusdesc"],
+            bill_id=bill_id,
+            votes=votes,
+        ))
+    return items
+
+
+def _fetch_documents(cursor, session_id):
+    """Fetch documents for a plenum session."""
+    cursor.execute(
+        """
+        SELECT GroupTypeDesc, ApplicationDesc, FilePath
+        FROM document_plenum_session_raw
+        WHERE PlenumSessionID = %s
+        ORDER BY GroupTypeDesc, ApplicationDesc
+        """,
+        (session_id,),
+    )
+    return [
+        SessionDocument(
+            name=doc["grouptypedesc"],
+            type=doc["applicationdesc"],
+            path=doc["filepath"],
+        )
+        for doc in cursor.fetchall()
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+@mcp_tool(
+    name="plenum_sessions",
+    description=(
+        "Search for Knesset plenum sessions. Returns summary info by default; "
+        "set full_details=True for agenda items and documents. "
+        "Provide session_id for a single session (auto-enables full_details) "
+        "or from_date to search by date range."
+    ),
+    entity="Plenum Sessions",
+    count_sql="SELECT COUNT(*) FROM plenum_session_raw",
+    most_recent_date_sql="SELECT MAX(StartDate) FROM plenum_session_raw",
+    enum_sql={
+        "item_type": "SELECT DISTINCT ItemTypeDesc FROM plm_session_item_raw WHERE ItemTypeDesc IS NOT NULL ORDER BY ItemTypeDesc",
+    },
+    is_list=True,
+)
+def plenum_sessions(
+    session_id: Annotated[int | None, Field(description="Get a specific session by ID (auto-enables full_details)")] = None,
+    knesset_num: Annotated[int | None, Field(description="Filter by Knesset number")] = None,
+    from_date: Annotated[str | None, Field(description="Start of date range (YYYY-MM-DD). Required unless session_id is provided. to_date defaults to today if omitted.")] = None,
+    to_date: Annotated[str | None, Field(description="End of date range (YYYY-MM-DD). Requires from_date.")] = None,
+    query_items: Annotated[str | None, Field(description="Session name or agenda item name contains text")] = None,
+    item_type: Annotated[str | None, Field(description="Filter to sessions with items of this type")] = None,
+    full_details: Annotated[bool, Field(description="Include agenda items and documents (auto-True when session_id is set)")] = False,
+) -> PlenumSessionsResults:
+    """Search for plenum sessions with optional full detail.
+
+    Required scoping: either ``session_id`` or ``from_date`` must be provided.
+    """
+    normalized = normalize_inputs(locals())
+    session_id = normalized["session_id"]
+    knesset_num = normalized["knesset_num"]
+    from_date = normalized["from_date"]
+    to_date = normalized["to_date"]
+    query_items = normalized["query_items"]
+    item_type = normalized["item_type"]
+    full_details = normalized["full_details"]
+
+    # --- Validation ---
+    if to_date and not from_date:
+        raise ValueError("to_date requires from_date. Provide from_date or use session_id instead.")
+    if not session_id and not from_date:
+        raise ValueError("Provide session_id or from_date to scope the query.")
+
+    # Auto-enable full_details when session_id is given
+    if session_id:
+        full_details = True
+
+    # Default to_date to today when from_date is provided alone
+    if from_date and not to_date:
+        to_date = str(date_today.today())
+
+    conn = connect_readonly()
+    cursor = conn.cursor()
+
+    conditions = []
+    params = []
+
+    if session_id is not None:
+        conditions.append("s.Id = %s")
+        params.append(session_id)
+
+    if knesset_num is not None:
+        conditions.append("s.KnessetNum = %s")
+        params.append(knesset_num)
+
+    if from_date and to_date:
+        conditions.append("s.StartDate >= %s")
+        params.append(from_date)
+        conditions.append("s.StartDate <= %s")
+        params.append(to_date + "T99")
+
+    if query_items:
+        conditions.append("""(
+            s.Name LIKE %s
+            OR EXISTS (
+                SELECT 1 FROM plm_session_item_raw i
+                WHERE i.PlenumSessionID = s.Id AND i.Name LIKE %s
+            )
+        )""")
+        params.extend([f"%{query_items}%", f"%{query_items}%"])
+
+    if item_type:
+        conditions.append("""EXISTS (
+            SELECT 1 FROM plm_session_item_raw i
+            WHERE i.PlenumSessionID = s.Id AND i.ItemTypeDesc LIKE %s
+        )""")
+        params.append(f"%{item_type}%")
+
+    where = " AND ".join(conditions) if conditions else "1=1"
+
+    if not session_id:
+        check_search_count(
+            cursor,
+            f"SELECT COUNT(*) FROM plenum_session_raw s WHERE {where}",
+            params,
+            entity_name="plenum sessions",
+        )
+
+    cursor.execute(
+        f"""SELECT DISTINCT s.Id, s.KnessetNum, s.Name, s.StartDate,
+               (SELECT COUNT(*) FROM plm_session_item_raw
+                WHERE PlenumSessionID = s.Id) AS item_count
+        FROM plenum_session_raw s
+        WHERE {where}
+        ORDER BY s.StartDate DESC, s.Id DESC""",
+        params,
+    )
+    rows = cursor.fetchall()
+
+    results = []
+    for row in rows:
+        sid = row["id"]
+        result = PlenumSessionResult(
+            session_id=sid,
+            knesset_num=row["knessetnum"],
+            name=row["name"],
+            date=simple_date(row["startdate"]) or None,
+            item_count=row["item_count"] or 0,
+        )
+        if full_details:
+            result.items = _fetch_items(cursor, sid)
+            result.documents = _fetch_documents(cursor, sid)
+        results.append(result)
+
+    conn.close()
+    return PlenumSessionsResults(items=results)
+
+
+plenum_sessions.OUTPUT_MODEL = PlenumSessionsResults
