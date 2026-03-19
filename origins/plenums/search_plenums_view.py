@@ -17,7 +17,7 @@ from typing import Annotated
 from pydantic import Field
 
 from core.db import connect_readonly
-from core.helpers import simple_date, normalize_inputs
+from core.helpers import simple_date, normalize_inputs, check_search_count
 from core.mcp_meta import mcp_tool
 from core.search_meta import register_search
 from origins.plenums.search_plenums_models import SessionSummary, SessionSearchResults
@@ -128,52 +128,54 @@ def search_sessions(
     conn = connect_readonly()
     cursor = conn.cursor()
 
-    sql = """
-    SELECT DISTINCT s.Id, s.KnessetNum, s.Name, s.StartDate
-    FROM plenum_session_raw s
-    WHERE 1=1
-    """
+    conditions = []
     params = []
 
     if knesset_num is not None:
-        sql += " AND s.KnessetNum = %s"
+        conditions.append("s.KnessetNum = %s")
         params.append(knesset_num)
 
     if date and date_to:
-        # Date range
-        sql += " AND s.StartDate >= %s"
+        conditions.append("s.StartDate >= %s")
         params.append(date)
-        sql += " AND s.StartDate <= %s"
+        conditions.append("s.StartDate <= %s")
         params.append(date_to)
     elif date:
-        # Single day
-        sql += " AND s.StartDate LIKE %s"
+        conditions.append("s.StartDate LIKE %s")
         params.append(f"{date}%")
 
     if name:
-        sql += """
-        AND (
+        conditions.append("""(
             s.Name LIKE %s
             OR EXISTS (
                 SELECT 1 FROM plm_session_item_raw i
-                WHERE i.PlenumSessionID = s.Id
-                  AND i.Name LIKE %s
+                WHERE i.PlenumSessionID = s.Id AND i.Name LIKE %s
             )
-        )"""
+        )""")
         params.extend([f"%{name}%", f"%{name}%"])
 
     if item_type:
-        sql += """
-        AND EXISTS (
+        conditions.append("""EXISTS (
             SELECT 1 FROM plm_session_item_raw i
-            WHERE i.PlenumSessionID = s.Id
-              AND i.ItemTypeDesc LIKE %s
-        )"""
+            WHERE i.PlenumSessionID = s.Id AND i.ItemTypeDesc LIKE %s
+        )""")
         params.append(f"%{item_type}%")
 
-    sql += " ORDER BY s.StartDate DESC, s.Id DESC"
+    where = " AND ".join(conditions) if conditions else "1=1"
 
-    cursor.execute(sql, params)
+    check_search_count(
+        cursor,
+        f"SELECT COUNT(*) FROM plenum_session_raw s WHERE {where}",
+        params,
+        entity_name="plenum sessions",
+    )
+
+    cursor.execute(
+        f"SELECT DISTINCT s.Id, s.KnessetNum, s.Name, s.StartDate"
+        f" FROM plenum_session_raw s WHERE {where}"
+        f" ORDER BY s.StartDate DESC, s.Id DESC",
+        params,
+    )
     rows = cursor.fetchall()
 
     results = []

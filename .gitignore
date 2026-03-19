@@ -23,5 +23,4 @@ Thumbs.db
 
 # OpenCode
 .opencode/
-
-fetch_vote_results.py
+notes.md

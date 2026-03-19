@@ -17,7 +17,7 @@ from typing import Annotated
 from pydantic import Field
 
 from core.db import connect_readonly
-from core.helpers import simple_date, normalize_inputs
+from core.helpers import simple_date, normalize_inputs, check_search_count
 from core.mcp_meta import mcp_tool
 from core.search_meta import register_search
 from origins.bills.search_bills_models import BillSummary, BillSearchResults
@@ -140,70 +140,71 @@ def search_bills(
     conn = connect_readonly()
     cursor = conn.cursor()
 
-    sql = """
-    SELECT b.Id, b.Name, b.KnessetNum, b.SubTypeDesc,
-           st."Desc" AS StatusDesc, b.CommitteeID, c.Name AS CommitteeName,
-           b.PublicationDate, b.PublicationSeriesDesc, b.SummaryLaw
-    FROM bill_raw b
-    LEFT JOIN status_raw st ON b.StatusID = st.Id
-    LEFT JOIN committee_raw c ON b.CommitteeID = c.Id
-    WHERE 1=1
-    """
+    conditions = []
     params = []
 
     if knesset_num is not None:
-        sql += " AND b.KnessetNum = %s"
+        conditions.append("b.KnessetNum = %s")
         params.append(knesset_num)
 
     if name:
-        sql += " AND b.Name LIKE %s"
+        conditions.append("b.Name LIKE %s")
         params.append(f"%{name}%")
 
     if sub_type:
-        sql += " AND b.SubTypeDesc LIKE %s"
+        conditions.append("b.SubTypeDesc LIKE %s")
         params.append(f"%{sub_type}%")
 
     if status:
-        sql += " AND st.\"Desc\" LIKE %s"
+        conditions.append('st."Desc" LIKE %s')
         params.append(f"%{status}%")
 
     if initiator_id is not None:
-        sql += """
-        AND EXISTS (
+        conditions.append("""EXISTS (
             SELECT 1 FROM bill_initiator_raw bi
             WHERE bi.BillID = b.Id AND bi.PersonID = %s AND bi.IsInitiator = 1
-        )"""
+        )""")
         params.append(initiator_id)
 
     # Plenum-stage date filters
-    stage_conditions = []
-    stage_params = []
-
     if date and date_to:
-        # Date range — append T99 so timestamps on date_to day are included
-        stage_conditions.append("s.StartDate >= %s")
-        stage_params.append(date)
-        stage_conditions.append("s.StartDate <= %s")
-        stage_params.append(date_to + "T99")
-    elif date:
-        # Single day
-        stage_conditions.append("s.StartDate LIKE %s")
-        stage_params.append(f"{date}%")
-
-    if stage_conditions:
-        cond_str = " AND ".join(stage_conditions)
-        sql += f"""
-        AND EXISTS (
+        conditions.append("""EXISTS (
             SELECT 1 FROM plm_session_item_raw i
             JOIN plenum_session_raw s ON s.Id = i.PlenumSessionID
             WHERE i.ItemID = b.Id
-              AND {cond_str}
-        )"""
-        params.extend(stage_params)
+              AND s.StartDate >= %s AND s.StartDate <= %s
+        )""")
+        params.extend([date, date_to + "T99"])
+    elif date:
+        conditions.append("""EXISTS (
+            SELECT 1 FROM plm_session_item_raw i
+            JOIN plenum_session_raw s ON s.Id = i.PlenumSessionID
+            WHERE i.ItemID = b.Id AND s.StartDate LIKE %s
+        )""")
+        params.append(f"{date}%")
 
-    sql += ' ORDER BY b.PublicationDate DESC, b.Id DESC'
+    where = " AND ".join(conditions) if conditions else "1=1"
 
-    cursor.execute(sql, params)
+    check_search_count(
+        cursor,
+        f"SELECT COUNT(*) FROM bill_raw b"
+        f" LEFT JOIN status_raw st ON b.StatusID = st.Id"
+        f" WHERE {where}",
+        params,
+        entity_name="bills",
+    )
+
+    cursor.execute(
+        f"""SELECT b.Id, b.Name, b.KnessetNum, b.SubTypeDesc,
+               st."Desc" AS StatusDesc, b.CommitteeID, c.Name AS CommitteeName,
+               b.PublicationDate, b.PublicationSeriesDesc, b.SummaryLaw
+        FROM bill_raw b
+        LEFT JOIN status_raw st ON b.StatusID = st.Id
+        LEFT JOIN committee_raw c ON b.CommitteeID = c.Id
+        WHERE {where}
+        ORDER BY b.PublicationDate DESC, b.Id DESC""",
+        params,
+    )
     rows = cursor.fetchall()
 
     # Collect bill IDs and fetch primary initiators in batch

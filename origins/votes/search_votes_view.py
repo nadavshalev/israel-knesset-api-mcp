@@ -17,7 +17,7 @@ from typing import Annotated
 from pydantic import Field
 
 from core.db import connect_readonly
-from core.helpers import simple_date, simple_time, normalize_inputs
+from core.helpers import simple_date, simple_time, normalize_inputs, check_search_count
 from core.mcp_meta import mcp_tool
 from core.search_meta import register_search
 from origins.votes.search_votes_models import VoteSummary, VoteSearchResults
@@ -124,6 +124,40 @@ def search_votes(
 
     conn = connect_readonly()
     cursor = conn.cursor()
+
+    # Pre-flight count (excludes `accepted` filter which needs the heavy totals join).
+    count_conditions = []
+    count_params = []
+
+    if bill_id is not None:
+        count_conditions.append("v.ItemID = %s")
+        count_params.append(bill_id)
+
+    if knesset_num is not None:
+        count_conditions.append("s.KnessetNum = %s")
+        count_params.append(knesset_num)
+
+    if name:
+        count_conditions.append("(v.VoteTitle LIKE %s OR v.VoteSubject LIKE %s)")
+        count_params.extend([f"%{name}%", f"%{name}%"])
+
+    if date and date_to:
+        count_conditions.append("v.VoteDateTime >= %s AND v.VoteDateTime <= %s")
+        count_params.extend([date, date_to + "T99"])
+    elif date:
+        count_conditions.append("v.VoteDateTime LIKE %s")
+        count_params.append(f"{date}%")
+
+    count_where = " AND ".join(count_conditions) if count_conditions else "1=1"
+    check_search_count(
+        cursor,
+        f"SELECT COUNT(*) FROM plenum_vote_raw v"
+        f" LEFT JOIN plenum_session_raw s ON v.SessionID = s.Id"
+        f" LEFT JOIN bill_raw b ON v.ItemID = b.Id"
+        f" WHERE {count_where}",
+        count_params,
+        entity_name="votes",
+    )
 
     # LEFT JOIN with computed totals from per-MK results for votes that
     # lack stored totals (OData-origin).  COALESCE picks stored values

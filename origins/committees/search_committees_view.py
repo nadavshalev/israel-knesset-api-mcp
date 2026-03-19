@@ -18,7 +18,7 @@ from typing import Annotated
 from pydantic import Field
 
 from core.db import connect_readonly
-from core.helpers import simple_date, normalize_inputs
+from core.helpers import simple_date, normalize_inputs, check_search_count
 from core.mcp_meta import mcp_tool
 from core.search_meta import register_search
 from origins.committees.search_committees_models import CommitteeSummary, CommitteeSearchResults
@@ -134,64 +134,73 @@ def search_committees(
     conn = connect_readonly()
     cursor = conn.cursor()
 
-    sql = """
-    SELECT c.Id, c.Name, c.KnessetNum, c.CommitteeTypeDesc,
-           c.CategoryDesc, c.IsCurrent, c.StartDate, c.FinishDate,
-           c.ParentCommitteeID, c.CommitteeParentName, c.Email
-    FROM committee_raw c
-    WHERE 1=1
-    """
+    conditions = []
     params = []
 
     if knesset_num is not None:
-        sql += " AND c.KnessetNum = %s"
+        conditions.append("c.KnessetNum = %s")
         params.append(knesset_num)
 
     if name:
-        sql += " AND c.Name LIKE %s"
+        conditions.append("c.Name LIKE %s")
         params.append(f"%{name}%")
 
     if committee_type:
-        sql += " AND c.CommitteeTypeDesc LIKE %s"
+        conditions.append("c.CommitteeTypeDesc LIKE %s")
         params.append(f"%{committee_type}%")
 
     if category:
-        sql += " AND c.CategoryDesc LIKE %s"
+        conditions.append("c.CategoryDesc LIKE %s")
         params.append(f"%{category}%")
 
     if is_current is not None:
-        sql += " AND c.IsCurrent = %s"
+        conditions.append("c.IsCurrent = %s")
         params.append(1 if is_current else 0)
 
     if parent_committee_id is not None:
-        sql += " AND c.ParentCommitteeID = %s"
+        conditions.append("c.ParentCommitteeID = %s")
         params.append(parent_committee_id)
 
     if date and date_to:
-        sql += """ AND EXISTS (
+        conditions.append("""EXISTS (
             SELECT 1 FROM committee_session_raw cs
             WHERE cs.CommitteeID = c.Id
             AND cs.StartDate >= %s AND cs.StartDate <= %s
-        )"""
+        )""")
         params.extend([date, date_to + "T99"])
     elif date:
-        sql += """ AND EXISTS (
+        conditions.append("""EXISTS (
             SELECT 1 FROM committee_session_raw cs
             WHERE cs.CommitteeID = c.Id
             AND cs.StartDate >= %s
-        )"""
+        )""")
         params.append(date)
     elif date_to:
-        sql += """ AND EXISTS (
+        conditions.append("""EXISTS (
             SELECT 1 FROM committee_session_raw cs
             WHERE cs.CommitteeID = c.Id
             AND cs.StartDate <= %s
-        )"""
+        )""")
         params.append(date_to + "T99")
 
-    sql += ' ORDER BY c.StartDate DESC, c.Id DESC'
+    where = " AND ".join(conditions) if conditions else "1=1"
 
-    cursor.execute(sql, params)
+    check_search_count(
+        cursor,
+        f"SELECT COUNT(*) FROM committee_raw c WHERE {where}",
+        params,
+        entity_name="committees",
+    )
+
+    cursor.execute(
+        f"""SELECT c.Id, c.Name, c.KnessetNum, c.CommitteeTypeDesc,
+               c.CategoryDesc, c.IsCurrent, c.StartDate, c.FinishDate,
+               c.ParentCommitteeID, c.CommitteeParentName, c.Email
+        FROM committee_raw c
+        WHERE {where}
+        ORDER BY c.StartDate DESC, c.Id DESC""",
+        params,
+    )
     rows = cursor.fetchall()
 
     results = []

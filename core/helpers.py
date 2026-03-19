@@ -284,6 +284,28 @@ def _caller_param_annotations() -> dict[str, object]:
 
 
 # ---------------------------------------------------------------------------
+# Search count guard
+# ---------------------------------------------------------------------------
+
+def check_search_count(cursor, count_sql: str, params: list, entity_name: str = "results") -> int:
+    """Run count_sql and raise ValueError if result exceeds MAX_SEARCH_RESULTS.
+
+    Returns the count so the caller can use it if needed.
+    Call this BEFORE the main SELECT to fail fast on broad queries.
+    """
+    from config import MAX_SEARCH_RESULTS
+    cursor.execute(count_sql, params)
+    count = cursor.fetchone()
+    count = list(count.values())[0] if count else 0
+    if count > MAX_SEARCH_RESULTS:
+        raise ValueError(
+            f"Too many {entity_name} ({count:,} matches). "
+            "Add more filters (e.g. date, knesset_num, or a search query) to narrow results."
+        )
+    return count
+
+
+# ---------------------------------------------------------------------------
 # Output cleaning
 # ---------------------------------------------------------------------------
 

@@ -29,3 +29,4 @@ RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "60"))
 # Response limits
 MAX_OUTPUT_TOKENS = int(os.getenv("MAX_OUTPUT_TOKENS", "50000"))
 SEARCH_ACROSS_TOP_N = int(os.getenv("SEARCH_ACROSS_TOP_N", "5"))
+MAX_SEARCH_RESULTS = int(os.getenv("MAX_SEARCH_RESULTS", "300"))
