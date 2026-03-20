@@ -1,8 +1,13 @@
-"""Members list view — returns summary data for multiple Knesset members.
+"""Unified members tool — search and detail via ``full_details`` flag.
 
-Shows general person info and a list of distinct role types each member held.
-For full detail on a single member (committees, government roles, etc.),
-use ``member_view.get_member()``.
+Replaces the old ``search_members`` + ``get_member`` pair with a single
+``members`` tool.
+
+Search mode returns summaries (name, gender, knesset_num, factions,
+role_types).  ``full_details=True`` or ``member_id`` returns full detail
+including government roles, committee memberships, and parliamentary roles.
+When ``member_id`` is given without ``knesset_num``, all Knesset terms are
+returned.
 """
 
 import sys
@@ -21,14 +26,18 @@ from core.db import connect_readonly
 from core.helpers import simple_date, format_person_name, normalize_inputs, check_search_count
 from core.mcp_meta import mcp_tool
 from core.search_meta import register_search
-from origins.members.search_members_models import MemberSummary, MemberSearchResults
+from origins.members.members_models import (
+    MemberResult, MembersResults,
+    GovernmentRole, CommitteeRole, ParliamentaryRole, MemberRoles,
+)
+
+
+# ---------------------------------------------------------------------------
+# Cross-entity search builder (for search_across)
+# ---------------------------------------------------------------------------
 
 def _build_members_search(*, query, knesset_num, date, date_to, top_n):
-    """Build SQL for cross-entity member search.
-
-    Supports: query (name LIKE), knesset_num (via person_to_position),
-    date/date_to (members whose position overlaps the date range).
-    """
+    """Build SQL for cross-entity member search."""
     conditions = []
     params = []
 
@@ -44,8 +53,6 @@ def _build_members_search(*, query, knesset_num, date, date_to, top_n):
         params.append(knesset_num)
 
     if date and date_to:
-        # Position overlaps the range: started before range end AND
-        # not finished before range start (NULL/empty FinishDate = still active)
         conditions.append("""EXISTS (
             SELECT 1 FROM person_to_position_raw ptp
             WHERE ptp.PersonID = p.PersonID
@@ -54,7 +61,6 @@ def _build_members_search(*, query, knesset_num, date, date_to, top_n):
         )""")
         params.extend([date_to + "T99", date])
     elif date:
-        # Position active on this date
         conditions.append("""EXISTS (
             SELECT 1 FROM person_to_position_raw ptp
             WHERE ptp.PersonID = p.PersonID
@@ -87,18 +93,12 @@ register_search({
 })
 
 
-def _resolve_role_ids(cursor, role_type: str) -> list:
-    """Map a free-text role_type to matching Position IDs."""
-    cursor.execute(
-        "SELECT Id, Description FROM position_raw WHERE Description LIKE %s",
-        (f"%{role_type}%",),
-    )
-    rows = cursor.fetchall()
-    return [row["id"] for row in rows]
-
+# ---------------------------------------------------------------------------
+# WHERE clause builder (shared between count and fetch)
+# ---------------------------------------------------------------------------
 
 def _build_members_where(*, knesset_num=None, first_name=None, last_name=None,
-                          role=None, role_ids=None, party=None, person_id=None):
+                          role=None, role_ids=None, party=None, member_id=None):
     """Build shared WHERE clause and params for member queries."""
     conditions = ["1=1"]
     params = []
@@ -107,9 +107,9 @@ def _build_members_where(*, knesset_num=None, first_name=None, last_name=None,
         conditions.append("ptp.KnessetNum = %s")
         params.append(knesset_num)
 
-    if person_id is not None:
+    if member_id is not None:
         conditions.append("p.PersonID = %s")
-        params.append(person_id)
+        params.append(member_id)
 
     if first_name:
         conditions.append("p.FirstName LIKE %s")
@@ -146,20 +146,19 @@ def _build_members_where(*, knesset_num=None, first_name=None, last_name=None,
 
 
 # ---------------------------------------------------------------------------
-# Bulk query — fetch all matching members in a single round-trip
+# Bulk summary fetch
 # ---------------------------------------------------------------------------
 
 def _fetch_members_bulk(cursor, *, knesset_num=None, first_name=None,
                         last_name=None, role=None, role_ids=None,
-                        party=None, person_id=None):
-    """Fetch all matching members in one query and group in Python.
+                        party=None, member_id=None):
+    """Fetch all matching (PersonID, KnessetNum) pairs and group in Python.
 
     Returns a list of summary dicts sorted by (knesset_num DESC, member_id).
-    Uses a single SQL query instead of per-member round-trips.
     """
     where, params = _build_members_where(
         knesset_num=knesset_num, first_name=first_name, last_name=last_name,
-        role=role, role_ids=role_ids, party=party, person_id=person_id,
+        role=role, role_ids=role_ids, party=party, member_id=member_id,
     )
     sql = f"""
     SELECT p.PersonID, p.FirstName, p.LastName, p.GenderDesc,
@@ -172,11 +171,9 @@ def _fetch_members_bulk(cursor, *, knesset_num=None, first_name=None,
     WHERE {where}
     ORDER BY ptp.KnessetNum DESC, p.PersonID, ptp.StartDate ASC
     """
-
     cursor.execute(sql, params)
     rows = cursor.fetchall()
 
-    # Group rows by (PersonID, KnessetNum) preserving order
     members: dict[tuple, dict] = {}
     order: list[tuple] = []
     for row in rows:
@@ -207,15 +204,117 @@ def _fetch_members_bulk(cursor, *, knesset_num=None, first_name=None,
 
 
 # ---------------------------------------------------------------------------
+# Full detail helpers
+# ---------------------------------------------------------------------------
+
+def _row_category(row) -> str:
+    """Classify a person_to_position_raw row by which fields are populated."""
+    def _get(key):
+        lower = key.lower()
+        for k in row:
+            if k.lower() == lower:
+                return row[k]
+        return None
+
+    if _get("FactionName"):
+        return "faction"
+    if _get("GovMinistryName"):
+        return "government"
+    if _get("CommitteeID"):
+        return "committee"
+    return "parliamentary"
+
+
+def _is_transition_gov(knesset_num: int, gov_num: int) -> bool:
+    if not gov_num or gov_num == 0 or knesset_num < 19:
+        return False
+    primary_gov_mapping = {
+        25: 37, 24: 36, 23: 35, 22: 34, 21: 34, 20: 34, 19: 33,
+    }
+    return gov_num < primary_gov_mapping.get(knesset_num, 0)
+
+
+def _fetch_member_roles(cursor, person_id, knesset_num) -> MemberRoles | None:
+    """Fetch full roles for one member in one Knesset term."""
+    cursor.execute(
+        """
+        SELECT ptp.*, pos.Description AS OfficialPositionTitle
+        FROM person_to_position_raw ptp
+        LEFT JOIN position_raw pos ON ptp.PositionID = pos.Id
+        WHERE ptp.PersonID = %s AND ptp.KnessetNum = %s
+        ORDER BY ptp.StartDate ASC
+        """,
+        (person_id, knesset_num),
+    )
+    role_rows = cursor.fetchall()
+    if not role_rows:
+        return None
+
+    gov_roles: list[GovernmentRole] = []
+    cmt_roles: list[CommitteeRole] = []
+    parl_roles: list[ParliamentaryRole] = []
+
+    for row in role_rows:
+        cat = _row_category(row)
+        display_title = row["dutydesc"] or row["officialpositiontitle"] or ""
+
+        if cat == "faction":
+            pass  # factions already captured in summary
+        elif cat == "government":
+            gov_roles.append(GovernmentRole(
+                title=display_title or None,
+                ministry=row["govministryname"] or None,
+                is_transition=_is_transition_gov(knesset_num, row["governmentnum"]),
+                start=simple_date(row["startdate"]) or None,
+                end=simple_date(row["finishdate"]) or None,
+            ))
+        elif cat == "committee":
+            cmt_roles.append(CommitteeRole(
+                id=row["committeeid"],
+                name=row["committeename"] or None,
+                role=row["officialpositiontitle"] or None,
+                start=simple_date(row["startdate"]) or None,
+                end=simple_date(row["finishdate"]) or None,
+            ))
+        else:
+            parl_roles.append(ParliamentaryRole(
+                name=display_title or None,
+                role=row["officialpositiontitle"] or None,
+                start=simple_date(row["startdate"]) or None,
+                end=simple_date(row["finishdate"]) or None,
+            ))
+
+    return MemberRoles(
+        government=gov_roles,
+        committees=cmt_roles,
+        parliamentary=parl_roles,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Role type resolver
+# ---------------------------------------------------------------------------
+
+def _resolve_role_ids(cursor, role_type: str) -> list:
+    cursor.execute(
+        "SELECT Id FROM position_raw WHERE Description LIKE %s",
+        (f"%{role_type}%",),
+    )
+    return [row["id"] for row in cursor.fetchall()]
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
 @mcp_tool(
-    name="search_members",
+    name="members",
     description=(
-        "Search for Knesset members (MKs). Returns summary info: name, "
-        "gender, knesset number, factions, and role types. "
-        "Use get_member for full detail on a single member."
+        "Search for Knesset members or get full detail for a single member. "
+        "Returns summary info by default (name, gender, factions, role types). "
+        "Set full_details=True or provide member_id for full detail including "
+        "government roles, committee memberships, and parliamentary roles. "
+        "When member_id is given without knesset_num, all terms are returned."
     ),
     entity="Knesset Members",
     count_sql="SELECT COUNT(DISTINCT PersonID) FROM person_to_position_raw",
@@ -225,34 +324,39 @@ def _fetch_members_bulk(cursor, *, knesset_num=None, first_name=None,
     },
     is_list=True,
 )
-def search_members(
+def members(
+    member_id: Annotated[int | None, Field(description="Get a specific member by ID (auto-enables full_details; returns all terms unless knesset_num is set)")] = None,
     knesset_num: Annotated[int | None, Field(description="Filter by Knesset number")] = None,
     first_name: Annotated[str | None, Field(description="First name contains text")] = None,
     last_name: Annotated[str | None, Field(description="Last name contains text")] = None,
     role: Annotated[str | None, Field(description="Free text search across roles, ministries, and committees")] = None,
     role_type: Annotated[str | None, Field(description="Position category")] = None,
     party: Annotated[str | None, Field(description="Party/faction name contains text")] = None,
-    person_id: Annotated[int | None, Field(description="Filter by specific person ID")] = None,
-) -> MemberSearchResults:
-    """Search for Knesset members with dynamic filtering.
+    full_details: Annotated[bool, Field(description="Include government roles, committee memberships, parliamentary roles (auto-True when member_id is set)")] = False,
+) -> MembersResults:
+    """Search for Knesset members or get full detail for a single member.
 
     Filters (all ANDed): knesset_num, first_name, last_name, role
     (free text across roles/ministries/committees), role_type (position
-    category), party (party/faction name), person_id.
+    category), party (party/faction name), member_id.
 
-    Returns a ``MemberSearchResults`` with ``items`` sorted by
+    Returns a ``MembersResults`` with ``items`` sorted by
     (knesset_num DESC, member_id).  Each item contains general info
-    and a ``role_types`` list.  For full detail on a single member,
-    use ``member_view.get_member()``.
+    and a ``role_types`` list.  Set ``full_details=True`` or provide
+    ``member_id`` for full roles detail.
     """
     normalized = normalize_inputs(locals())
+    member_id = normalized["member_id"]
     knesset_num = normalized["knesset_num"]
     first_name = normalized["first_name"]
     last_name = normalized["last_name"]
     role = normalized["role"]
     role_type = normalized["role_type"]
     party = normalized["party"]
-    person_id = normalized["person_id"]
+    full_details = normalized["full_details"]
+
+    if member_id is not None:
+        full_details = True
 
     conn = connect_readonly()
     cursor = conn.cursor()
@@ -263,13 +367,13 @@ def search_members(
         role_ids = _resolve_role_ids(cursor, role_type)
         if not role_ids:
             conn.close()
-            return MemberSearchResults(items=[])
+            return MembersResults(items=[])
 
-    # Count guard: count distinct (PersonID, KnessetNum) pairs before fetching
-    if not person_id:
+    # Count guard (skip when fetching by member_id)
+    if member_id is None:
         where, count_params = _build_members_where(
             knesset_num=knesset_num, first_name=first_name, last_name=last_name,
-            role=role, role_ids=role_ids, party=party, person_id=person_id,
+            role=role, role_ids=role_ids, party=party, member_id=member_id,
         )
         check_search_count(
             cursor,
@@ -292,23 +396,26 @@ def search_members(
         role=role,
         role_ids=role_ids,
         party=party,
-        person_id=person_id,
+        member_id=member_id,
     )
 
-    conn.close()
-
-    items = [
-        MemberSummary(
+    items = []
+    for m in raw:
+        roles = None
+        if full_details:
+            roles = _fetch_member_roles(cursor, m["member_id"], m["knesset_num"])
+        items.append(MemberResult(
             member_id=m["member_id"],
             name=m["name"],
             gender=m["gender"] or None,
             knesset_num=m["knesset_num"],
             faction=m["faction"],
             role_types=m["role_types"],
-        )
-        for m in raw
-    ]
-    return MemberSearchResults(items=items)
+            roles=roles,
+        ))
+
+    conn.close()
+    return MembersResults(items=items)
 
 
-search_members.OUTPUT_MODEL = MemberSearchResults
+members.OUTPUT_MODEL = MembersResults

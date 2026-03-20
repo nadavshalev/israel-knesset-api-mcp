@@ -1,10 +1,4 @@
-"""Pydantic models for member_view outputs.
-
-These models serve two purposes:
-1. Input validation — the view function accepts a typed input model.
-2. Output schema — FastMCP uses the output model to generate a proper
-   JSON Schema ``outputSchema`` instead of the generic ``{result: string}``.
-"""
+"""Pydantic models for the unified members tool."""
 
 from __future__ import annotations
 
@@ -14,7 +8,7 @@ from core.models import KNSBaseModel
 
 
 # ---------------------------------------------------------------------------
-# Nested output models
+# Nested models (full detail)
 # ---------------------------------------------------------------------------
 
 class GovernmentRole(KNSBaseModel):
@@ -51,19 +45,22 @@ class MemberRoles(KNSBaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Main output model
+# Main result model (unified: partial + full)
 # ---------------------------------------------------------------------------
 
-class MemberDetail(KNSBaseModel):
-    """Full member detail for one Knesset term, returned by get_member."""
+class MemberResult(KNSBaseModel):
+    """A member result (summary or full detail)."""
+    # Always present (partial):
     member_id: int = Field(description="Member person ID")
     name: str = Field(description="Full name")
     gender: str | None = Field(default=None, description="Gender description")
     knesset_num: int = Field(description="Knesset number for this term")
     faction: list[str] = Field(default_factory=list, description="Faction/party names during this term")
-    roles: MemberRoles = Field(default_factory=MemberRoles, description="Roles grouped by category")
+    role_types: list[str] = Field(default_factory=list, description="Distinct position titles held")
+    # Full detail only (None when partial):
+    roles: MemberRoles | None = Field(default=None, description="Roles grouped by category (government, committees, parliamentary) — only when full_details=True")
 
 
-class MemberDetailList(KNSBaseModel):
-    """Wrapper for get_member when returning all terms (no knesset_num filter)."""
-    items: list[MemberDetail] = Field(description="List of member details, one per Knesset term")
+class MembersResults(KNSBaseModel):
+    """Results from members tool."""
+    items: list[MemberResult] = Field(description="List of member results")
