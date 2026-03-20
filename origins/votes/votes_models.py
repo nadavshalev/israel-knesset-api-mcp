@@ -1,4 +1,4 @@
-"""Pydantic models for vote_view outputs."""
+"""Pydantic models for the unified votes tool."""
 
 from __future__ import annotations
 
@@ -8,13 +8,14 @@ from core.models import KNSBaseModel
 
 
 # ---------------------------------------------------------------------------
-# Nested output models
+# Nested models (full detail)
 # ---------------------------------------------------------------------------
 
 class VoteMember(KNSBaseModel):
     """A single MK's vote in a vote."""
     member_id: int = Field(description="Member person ID")
     name: str = Field(description="Member full name")
+    party: str | None = Field(default=None, description="Faction/party name")
     result: str = Field(description="Vote result description")
 
 
@@ -32,14 +33,15 @@ class RelatedVote(KNSBaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Main output model
+# Main result model (unified: partial + full)
 # ---------------------------------------------------------------------------
 
-class VoteDetail(KNSBaseModel):
-    """Full vote detail returned by get_vote."""
+class VoteResult(KNSBaseModel):
+    """A vote result (summary or full detail)."""
+    # Always present (partial):
     vote_id: int = Field(description="Unique vote identifier")
-    bill_id: int | None = Field(default=None, description="Linked bill ID")
-    knesset_num: int | None = Field(default=None, description="Knesset number")
+    bill_id: int | None = Field(default=None, description="Linked bill ID (if vote is on a bill)")
+    knesset_num: int | None = Field(default=None, description="Knesset number (via session)")
     session_id: int | None = Field(default=None, description="Plenum session ID")
     title: str | None = Field(default=None, description="Vote title")
     subject: str | None = Field(default=None, description="Vote subject/stage")
@@ -52,5 +54,11 @@ class VoteDetail(KNSBaseModel):
     for_option: str | None = Field(default=None, description="Label for the 'for' option")
     against_option: str | None = Field(default=None, description="Label for the 'against' option")
     vote_method: str | None = Field(default=None, description="Voting method description")
-    members: list[VoteMember] = Field(default_factory=list, description="Per-MK vote breakdown")
-    related_votes: list[RelatedVote] = Field(default_factory=list, description="Other votes with the same title in the same session")
+    # Full detail only (None/empty when partial):
+    members: list[VoteMember] | None = Field(default=None, description="Per-MK vote breakdown with party (only when full_details=True)")
+    related_votes: list[RelatedVote] | None = Field(default=None, description="Other votes with the same title in the same session (only when full_details=True)")
+
+
+class VotesResults(KNSBaseModel):
+    """Results from votes tool."""
+    items: list[VoteResult] = Field(description="List of vote results sorted by date DESC, vote_id DESC")
