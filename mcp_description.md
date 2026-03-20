@@ -1,6 +1,6 @@
 # Israeli Knesset Data MCP
 
-Israeli Knesset (parliament) data API — members, committees, bills, plenum sessions, votes, and Knesset term dates.{sync_line}{knesset_line}
+Israeli Knesset (parliament) data API — members, committees, bills, agendas, queries, plenum sessions, votes, and Knesset term dates.{sync_line}{knesset_line}
 
 ## Getting Started
 
@@ -15,8 +15,9 @@ Israeli Knesset (parliament) data API — members, committees, bills, plenum ses
 
 ## Search → Detail Workflow
 
-- **Search tools** (`search_members`, `search_bills`, `search_votes`) return compact summaries. Use them to find IDs.
-- **Detail tools** (`get_member`, `get_bill`, `get_vote`) return the full record for a single entity by ID.
+- **Unified item tools** (`bills`, `agendas`, `queries`) combine search and detail in one tool — use `full_details=True` or provide an item ID to get full detail.
+- **Search tools** (`search_members`, `search_votes`) return compact summaries. Use them to find IDs.
+- **Detail tools** (`get_member`, `get_vote`) return the full record for a single entity by ID.
 - **Session tools** (`plenum_sessions`, `committee_sessions`) combine search and detail in one tool — use `full_details=True` or `session_id` to get full detail.
 - **Lookup tools** (`get_knesset_dates`) return reference data grouped by Knesset number.
 - Always search first to find the ID, then call the detail tool. Do not guess IDs.
@@ -36,14 +37,21 @@ Session tools (`plenum_sessions`, `committee_sessions`) use `from_date` and `to_
 - **`from_date` is required** (unless `session_id` is provided). If `to_date` is omitted, it defaults to today.
 - **`to_date` requires `from_date`** — providing `to_date` alone is an error.
 
-Other search tools (`search_votes`, `search_bills`) use `date` and `date_to`:
+Item tools (`bills`, `agendas`, `queries`) also use `from_date` and `to_date`:
+
+- **For `bills`**: filters by plenum session appearance date.
+- **For `agendas`**: filters by president decision date.
+- **For `queries`**: filters by submission date.
+- Use `from_date` + `to_date` for date ranges. `from_date` alone filters to a single day.
+
+Other search tools (`search_votes`) use `date` and `date_to`:
 
 - **Use `date` + `date_to` for date ranges.** For example, to get all votes in March 2020: `date="2020-03-01", date_to="2020-03-31"`.
 - **`date` alone is a shortcut for a single day** — filters to that exact date only.
 
 ## Parameter Types
 
-- IDs (`vote_id`, `bill_id`, `member_id`, `session_id`, etc.) are integers.
+- IDs (`vote_id`, `bill_id`, `member_id`, `session_id`, `agenda_id`, `query_id`, etc.) are integers.
 - `knesset_num` is an integer.
 - Boolean flags (`accepted`, `is_current`, `full_details`, etc.) accept `true`/`false`.
 - All text filters (names, types, statuses) are Hebrew strings with case-insensitive substring matching.
@@ -57,7 +65,7 @@ Use `search_across` when you don't know which entity type to look for:
 
 ```
 search_across(query="חינוך")
-→ Returns top matches across members, bills, committees, votes, and plenums related to "חינוך" (education)
+→ Returns top matches across members, bills, agendas, queries, committees, votes, and plenums related to "חינוך" (education)
 
 search_across(query="נתניהו", top_n=3)
 → Returns top 3 matches per entity type for "נתניהו" (Netanyahu)
@@ -95,21 +103,43 @@ get_member(member_id=839)
 ### Find a bill and its votes
 
 ```
-search_bills(knesset_num=20, name="חוק-יסוד")
-→ Basic law bills in the 20th Knesset (bill_id, name, status, sub_type)
+bills(knesset_num=20, name_query="חוק-יסוד")
+→ Basic law bills in the 20th Knesset (bill_id, name, status, type)
 
-search_bills(knesset_num=20, sub_type="ממשלתית", status="אושר בקריאה שלישית")
+bills(knesset_num=20, type="ממשלתית", status="אושר בקריאה שלישית")
 → Government bills that passed third reading
 
-get_bill(bill_id=565913)
-→ Full bill detail with plenum stages and the decisive vote at each stage
-```
+bills(bill_id=565913)
+→ Full bill detail with plenum stages and the decisive vote at each stage (auto full_details)
 
-Use date filters to find bills discussed in a specific period:
-
-```
-search_bills(knesset_num=20, date="2016-01-01", date_to="2016-06-30")
+bills(knesset_num=20, from_date="2016-01-01", to_date="2016-06-30")
 → Bills with plenum activity in H1 2016
+```
+
+### Search agendas (motions for the agenda)
+
+```
+agendas(knesset_num=20, name_query="חינוך")
+→ Education-related agendas in the 20th Knesset
+
+agendas(agenda_id=12345)
+→ Full agenda detail with documents, committee info, minister info (auto full_details)
+
+agendas(knesset_num=20, initiator_id=839)
+→ Agendas initiated by member 839 in the 20th Knesset
+```
+
+### Search parliamentary queries
+
+```
+queries(knesset_num=20, name_query="תקציב")
+→ Budget-related queries in the 20th Knesset
+
+queries(query_id=54321)
+→ Full query detail with documents, ministry info, reply dates (auto full_details)
+
+queries(knesset_num=20, initiator_id=839)
+→ Queries submitted by member 839 in the 20th Knesset
 ```
 
 ### Search votes
@@ -179,7 +209,16 @@ get_knesset_dates(knesset_num=25)
 1. `committee_sessions(committee_name_query="כספים", from_date="2026-02-01", to_date="2026-02-28", full_details=True)` → sessions with items and documents
 
 **"What how is the last vote on Bill Y divided by party?"**
-1. `search_bills(name="Y")` → get `bill_id`
+1. `bills(name_query="Y")` → get `bill_id`
 2. `search_votes(bill_id=..., accepted=true)` → get the decisive vote for the bill
 3. `get_vote(vote_id=...)` → see the per-member votes
 4. `search_members(knesset_num=25)` → get current members with their parties
+
+**"What agendas did member X submit?"**
+1. `search_members(last_name="X")` → get `person_id`
+2. `agendas(knesset_num=25, initiator_id=...)` → agendas they initiated
+3. `agendas(agenda_id=...)` → full detail for a specific agenda
+
+**"What queries were submitted about topic Y?"**
+1. `queries(knesset_num=25, name_query="Y")` → find matching queries
+2. `queries(query_id=...)` → full detail with documents and ministry response info

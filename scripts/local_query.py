@@ -14,8 +14,9 @@ from origins.members import search_members_view as members_view
 from origins.members import get_member_view as member_view
 from origins.plenums import plenum_sessions_view
 from origins.committees import committee_sessions_view
-from origins.bills import search_bills_view as bills_view
-from origins.bills import get_bill_view as bill_view
+from origins.bills import bills_view
+from origins.agendas import agendas_view
+from origins.queries import queries_view
 from origins.votes import search_votes_view as votes_view
 from origins.votes import get_vote_view as vote_view
 from origins.search import search_across_view
@@ -76,18 +77,41 @@ def parse_args() -> argparse.Namespace:
     plenum_p.add_argument("--session-id", dest="session_id", type=int, default=None, help="Get a specific session by ID")
     plenum_p.add_argument("--full-details", dest="full_details", action="store_true", help="Include items and documents")
 
-    # --- bills (list) ---
-    bills_p = sub.add_parser("bills", help="Search bills (summary, no stages)")
+    # --- bills (unified) ---
+    bills_p = sub.add_parser("bills", help="Search bills or get full detail")
+    bills_p.add_argument("--bill-id", dest="bill_id", type=int, default=None, help="Bill ID (auto-enables full details)")
     bills_p.add_argument("--knesset", type=int, default=None, help="Knesset number")
-    bills_p.add_argument("--name", type=str, default=None, help="Bill name contains text")
+    bills_p.add_argument("--name", dest="name_query", type=str, default=None, help="Bill name contains text")
     bills_p.add_argument("--status", type=str, default=None, help="Current status contains text")
-    bills_p.add_argument("--sub-type", dest="sub_type", type=str, default=None, help="Sub-type (פרטית/ממשלתית/ועדה)")
-    bills_p.add_argument("--date", type=str, default=None, help="Single date or start of range (YYYY-MM-DD)")
-    bills_p.add_argument("--date-to", dest="date_to", type=str, default=None, help="End of range (YYYY-MM-DD)")
+    bills_p.add_argument("--type", type=str, default=None, help="Bill type (פרטית/ממשלתית/ועדה)")
+    bills_p.add_argument("--initiator-id", dest="initiator_id", type=int, default=None, help="Initiator person ID")
+    bills_p.add_argument("--from-date", dest="from_date", type=str, default=None, help="Start of date range (YYYY-MM-DD)")
+    bills_p.add_argument("--to-date", dest="to_date", type=str, default=None, help="End of date range (YYYY-MM-DD)")
+    bills_p.add_argument("--full-details", dest="full_details", action="store_true", help="Include stages, votes, initiators, documents")
 
-    # --- bill (single) ---
-    bill_p = sub.add_parser("bill", help="Get full detail for a single bill (with stages/votes)")
-    bill_p.add_argument("--bill-id", dest="bill_id", type=int, required=True, help="Bill ID (required)")
+    # --- agendas (unified) ---
+    agendas_p = sub.add_parser("agendas", help="Search agendas or get full detail")
+    agendas_p.add_argument("--agenda-id", dest="agenda_id", type=int, default=None, help="Agenda ID (auto-enables full details)")
+    agendas_p.add_argument("--knesset", type=int, default=None, help="Knesset number")
+    agendas_p.add_argument("--name", dest="name_query", type=str, default=None, help="Agenda name contains text")
+    agendas_p.add_argument("--status", type=str, default=None, help="Status contains text")
+    agendas_p.add_argument("--type", type=str, default=None, help="Sub-type contains text")
+    agendas_p.add_argument("--initiator-id", dest="initiator_id", type=int, default=None, help="Initiator person ID")
+    agendas_p.add_argument("--from-date", dest="from_date", type=str, default=None, help="Start of date range (YYYY-MM-DD)")
+    agendas_p.add_argument("--to-date", dest="to_date", type=str, default=None, help="End of date range (YYYY-MM-DD)")
+    agendas_p.add_argument("--full-details", dest="full_details", action="store_true", help="Include documents, committee details, minister info")
+
+    # --- queries (unified) ---
+    queries_p = sub.add_parser("queries", help="Search parliamentary queries or get full detail")
+    queries_p.add_argument("--query-id", dest="query_id", type=int, default=None, help="Query ID (auto-enables full details)")
+    queries_p.add_argument("--knesset", type=int, default=None, help="Knesset number")
+    queries_p.add_argument("--name", dest="name_query", type=str, default=None, help="Query name/subject contains text")
+    queries_p.add_argument("--status", type=str, default=None, help="Status contains text")
+    queries_p.add_argument("--type", type=str, default=None, help="Query type contains text")
+    queries_p.add_argument("--initiator-id", dest="initiator_id", type=int, default=None, help="Submitter person ID")
+    queries_p.add_argument("--from-date", dest="from_date", type=str, default=None, help="Start of date range (YYYY-MM-DD)")
+    queries_p.add_argument("--to-date", dest="to_date", type=str, default=None, help="End of date range (YYYY-MM-DD)")
+    queries_p.add_argument("--full-details", dest="full_details", action="store_true", help="Include documents, ministry info, reply dates")
 
     # --- votes (list) ---
     votes_p = sub.add_parser("votes", help="Search plenum votes (summary)")
@@ -170,20 +194,48 @@ def main() -> None:
         return
 
     if args.command == "bills":
-        results = bills_view.search_bills(
+        results = bills_view.bills(
+            bill_id=args.bill_id,
             knesset_num=args.knesset,
-            name=args.name,
+            name_query=args.name_query,
             status=args.status,
-            sub_type=args.sub_type,
-            date=args.date,
-            date_to=args.date_to,
+            type=args.type,
+            initiator_id=args.initiator_id,
+            from_date=args.from_date,
+            to_date=args.to_date,
+            full_details=args.full_details,
         )
         _output(results)
         return
 
-    if args.command == "bill":
-        result = bill_view.get_bill(args.bill_id)
-        _output(result)
+    if args.command == "agendas":
+        results = agendas_view.agendas(
+            agenda_id=args.agenda_id,
+            knesset_num=args.knesset,
+            name_query=args.name_query,
+            status=args.status,
+            type=args.type,
+            initiator_id=args.initiator_id,
+            from_date=args.from_date,
+            to_date=args.to_date,
+            full_details=args.full_details,
+        )
+        _output(results)
+        return
+
+    if args.command == "queries":
+        results = queries_view.queries(
+            query_id=args.query_id,
+            knesset_num=args.knesset,
+            name_query=args.name_query,
+            status=args.status,
+            type=args.type,
+            initiator_id=args.initiator_id,
+            from_date=args.from_date,
+            to_date=args.to_date,
+            full_details=args.full_details,
+        )
+        _output(results)
         return
 
     if args.command == "votes":

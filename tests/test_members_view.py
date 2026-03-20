@@ -53,10 +53,12 @@ class TestSearchByPersonId(unittest.TestCase):
 
 
 class TestKnessetFilter(unittest.TestCase):
-    def test_knesset_20_total_count(self):
-        """Knesset 20 had 154 distinct members."""
-        results = search_members(knesset_num=20)
-        self.assertEqual(len(results.items), 154)
+    def test_knesset_20_narrowed_count(self):
+        """Ministers in Knesset 20 (role_type narrows below MAX_SEARCH_RESULTS)."""
+        results = search_members(knesset_num=20, role_type="שר")
+        self.assertGreater(len(results.items), 0)
+        for m in results.items:
+            self.assertEqual(m.knesset_num, 20)
 
 
 class TestCrossCategoryFilters(unittest.TestCase):
@@ -151,10 +153,10 @@ class TestRoleType(unittest.TestCase):
 
 
 class TestNoFilters(unittest.TestCase):
-    def test_no_filters_returns_results(self):
-        """With no filters, we should get results across all Knessets."""
-        results = search_members()
-        self.assertGreater(len(results.items), 0)
+    def test_no_filters_raises(self):
+        """With no filters, the count guard should reject the broad query."""
+        with self.assertRaises(ValueError):
+            search_members()
 
 
 class TestRoleTypesField(unittest.TestCase):

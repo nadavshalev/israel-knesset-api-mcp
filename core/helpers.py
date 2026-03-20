@@ -187,7 +187,7 @@ def _validate_date_str(key: str, value: str) -> None:
 
 
 # Parameter names that are expected to contain date strings.
-_DATE_PARAM_NAMES = frozenset({"date", "date_to"})
+_DATE_PARAM_NAMES = frozenset({"date", "date_to", "from_date", "to_date"})
 
 
 # ---------------------------------------------------------------------------

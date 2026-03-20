@@ -18,7 +18,7 @@ from typing import Annotated
 from pydantic import Field
 
 from core.db import connect_readonly
-from core.helpers import simple_date, format_person_name, normalize_inputs
+from core.helpers import simple_date, format_person_name, normalize_inputs, check_search_count
 from core.mcp_meta import mcp_tool
 from core.search_meta import register_search
 from origins.members.search_members_models import MemberSummary, MemberSearchResults
@@ -97,6 +97,54 @@ def _resolve_role_ids(cursor, role_type: str) -> list:
     return [row["id"] for row in rows]
 
 
+def _build_members_where(*, knesset_num=None, first_name=None, last_name=None,
+                          role=None, role_ids=None, party=None, person_id=None):
+    """Build shared WHERE clause and params for member queries."""
+    conditions = ["1=1"]
+    params = []
+
+    if knesset_num is not None:
+        conditions.append("ptp.KnessetNum = %s")
+        params.append(knesset_num)
+
+    if person_id is not None:
+        conditions.append("p.PersonID = %s")
+        params.append(person_id)
+
+    if first_name:
+        conditions.append("p.FirstName LIKE %s")
+        params.append(f"%{first_name}%")
+
+    if last_name:
+        conditions.append("p.LastName LIKE %s")
+        params.append(f"%{last_name}%")
+
+    if role:
+        conditions.append("""(
+            pos.Description LIKE %s OR
+            ptp.DutyDesc LIKE %s OR
+            ptp.GovMinistryName LIKE %s OR
+            ptp.CommitteeName LIKE %s
+        )""")
+        params.extend([f"%{role}%"] * 4)
+
+    if role_ids:
+        placeholders = ", ".join(["%s"] * len(role_ids))
+        conditions.append(f"ptp.PositionID IN ({placeholders})")
+        params.extend(role_ids)
+
+    if party:
+        conditions.append("""EXISTS (
+            SELECT 1 FROM person_to_position_raw f
+            WHERE f.PersonID = p.PersonID
+              AND f.KnessetNum = ptp.KnessetNum
+              AND f.FactionName LIKE %s
+        )""")
+        params.append(f"%{party}%")
+
+    return " AND ".join(conditions), params
+
+
 # ---------------------------------------------------------------------------
 # Bulk query — fetch all matching members in a single round-trip
 # ---------------------------------------------------------------------------
@@ -109,7 +157,11 @@ def _fetch_members_bulk(cursor, *, knesset_num=None, first_name=None,
     Returns a list of summary dicts sorted by (knesset_num DESC, member_id).
     Uses a single SQL query instead of per-member round-trips.
     """
-    sql = """
+    where, params = _build_members_where(
+        knesset_num=knesset_num, first_name=first_name, last_name=last_name,
+        role=role, role_ids=role_ids, party=party, person_id=person_id,
+    )
+    sql = f"""
     SELECT p.PersonID, p.FirstName, p.LastName, p.GenderDesc,
            ptp.KnessetNum, ptp.FactionName,
            pos.Description AS OfficialPositionTitle,
@@ -117,51 +169,9 @@ def _fetch_members_bulk(cursor, *, knesset_num=None, first_name=None,
     FROM person_raw p
     JOIN person_to_position_raw ptp ON p.PersonID = ptp.PersonID
     LEFT JOIN position_raw pos ON ptp.PositionID = pos.Id
-    WHERE 1=1
+    WHERE {where}
+    ORDER BY ptp.KnessetNum DESC, p.PersonID, ptp.StartDate ASC
     """
-    params = []
-
-    if knesset_num is not None:
-        sql += " AND ptp.KnessetNum = %s"
-        params.append(knesset_num)
-
-    if person_id is not None:
-        sql += " AND p.PersonID = %s"
-        params.append(person_id)
-
-    if first_name:
-        sql += " AND p.FirstName LIKE %s"
-        params.append(f"%{first_name}%")
-
-    if last_name:
-        sql += " AND p.LastName LIKE %s"
-        params.append(f"%{last_name}%")
-
-    if role:
-        sql += """ AND (
-            pos.Description LIKE %s OR
-            ptp.DutyDesc LIKE %s OR
-            ptp.GovMinistryName LIKE %s OR
-            ptp.CommitteeName LIKE %s
-        )"""
-        params.extend([f"%{role}%"] * 4)
-
-    if role_ids:
-        placeholders = ", ".join(["%s"] * len(role_ids))
-        sql += f" AND ptp.PositionID IN ({placeholders})"
-        params.extend(role_ids)
-
-    if party:
-        sql += """
-        AND EXISTS (
-            SELECT 1 FROM person_to_position_raw f
-            WHERE f.PersonID = p.PersonID
-              AND f.KnessetNum = ptp.KnessetNum
-              AND f.FactionName LIKE %s
-        )"""
-        params.append(f"%{party}%")
-
-    sql += " ORDER BY ptp.KnessetNum DESC, p.PersonID, ptp.StartDate ASC"
 
     cursor.execute(sql, params)
     rows = cursor.fetchall()
@@ -254,6 +264,25 @@ def search_members(
         if not role_ids:
             conn.close()
             return MemberSearchResults(items=[])
+
+    # Count guard: count distinct (PersonID, KnessetNum) pairs before fetching
+    if not person_id:
+        where, count_params = _build_members_where(
+            knesset_num=knesset_num, first_name=first_name, last_name=last_name,
+            role=role, role_ids=role_ids, party=party, person_id=person_id,
+        )
+        check_search_count(
+            cursor,
+            f"""SELECT COUNT(*) FROM (
+                SELECT DISTINCT p.PersonID, ptp.KnessetNum
+                FROM person_raw p
+                JOIN person_to_position_raw ptp ON p.PersonID = ptp.PersonID
+                LEFT JOIN position_raw pos ON ptp.PositionID = pos.Id
+                WHERE {where}
+            ) _cnt""",
+            count_params,
+            entity_name="members",
+        )
 
     raw = _fetch_members_bulk(
         cursor,

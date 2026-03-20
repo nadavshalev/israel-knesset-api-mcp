@@ -27,6 +27,8 @@ _SUB_PACKAGES = [
     "committees",
     "votes",
     "plenums",
+    "agendas",
+    "queries",
     "knesset",
     "search",
 ]

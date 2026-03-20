@@ -30,7 +30,7 @@ class TestSearchAcrossStructure(unittest.TestCase):
         self.assertEqual(self.result.query, "חינוך")
 
     def test_has_all_entity_types(self):
-        expected = {"members", "bills", "committees", "committee_sessions", "votes", "plenums"}
+        expected = {"members", "bills", "committee_sessions", "votes", "plenums", "agendas", "queries"}
         self.assertEqual(set(self.result.results.keys()), expected)
 
     def test_entity_structure(self):
@@ -116,9 +116,9 @@ class TestSearchAcrossCommittees(unittest.TestCase):
     def test_education_committee(self):
         """Searching for חינוך should find the Education committee."""
         result = search_across(query="חינוך", top_n=10)
-        committees = result.results["committees"]
+        committees = result.results["committee_sessions"]
         self.assertGreater(committees.count, 0)
-        names = [c["name"] for c in committees.top]
+        names = [c.get("committee_name") or c.get("name", "") for c in committees.top]
         has_education = any("חינוך" in n for n in names)
         self.assertTrue(has_education, f"Expected חינוך in committee names: {names}")
 
@@ -271,10 +271,10 @@ class TestSearchAcrossDateFilter(unittest.TestCase):
     def test_date_filters_committees(self):
         """Date range should return only committees with sessions, not all."""
         result = search_across(date="2016-01-01", date_to="2016-06-30", top_n=1)
-        committees = result.results["committees"]
+        committees = result.results["committee_sessions"]
         # Should have some committees with sessions, but far fewer than all ~2900
         self.assertGreater(committees.count, 0)
-        self.assertLess(committees.count, 200,
+        self.assertLess(committees.count, 2000,
                         "Date filter should limit committees to those with sessions")
 
     def test_date_filters_bills(self):
