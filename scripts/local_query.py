@@ -21,6 +21,7 @@ from origins.votes import search_votes_view as votes_view
 from origins.votes import get_vote_view as vote_view
 from origins.search import search_across_view
 from origins.knesset import get_knesset_dates_view as knesset_dates_view
+from origins.knesset import metadata_view
 
 
 # ---------------------------------------------------------------------------
@@ -136,6 +137,13 @@ def parse_args() -> argparse.Namespace:
     # --- knesset-dates ---
     kd_p = sub.add_parser("knesset-dates", help="Look up Knesset terms and plenum periods")
     kd_p.add_argument("--knesset", type=int, default=None, help="Knesset number")
+
+    # --- metadata ---
+    meta_p = sub.add_parser("metadata", help="Get Knesset term metadata (assemblies, committees, ministries, factions)")
+    meta_p.add_argument("--knesset", type=int, required=True, help="Knesset number (required)")
+    meta_p.add_argument("--committee-heads", dest="committee_heads", action="store_true", help="Include committee heads")
+    meta_p.add_argument("--ministry-members", dest="ministry_members", action="store_true", help="Include ministry members")
+    meta_p.add_argument("--faction-members", dest="faction_members", action="store_true", help="Include faction members")
 
     return parser.parse_args()
 
@@ -268,6 +276,16 @@ def main() -> None:
 
     if args.command == "knesset-dates":
         result = knesset_dates_view.get_knesset_dates(knesset_num=args.knesset)
+        _output(result)
+        return
+
+    if args.command == "metadata":
+        result = metadata_view.metadata(
+            knesset_num=args.knesset,
+            include_committee_heads=args.committee_heads,
+            include_ministry_members=args.ministry_members,
+            include_faction_members=args.faction_members,
+        )
         _output(result)
         return
 
