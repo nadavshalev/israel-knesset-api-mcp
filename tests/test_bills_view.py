@@ -13,7 +13,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from origins.bills.bills_view import bills
-from origins.bills.bills_models import BillResult, BillsResults
+from origins.bills.bills_models import BillResultPartial, BillResultFull, BillsResults
 
 
 class TestSearchMode(unittest.TestCase):
@@ -24,14 +24,14 @@ class TestSearchMode(unittest.TestCase):
         self.assertIsInstance(results, BillsResults)
         self.assertGreater(len(results.items), 0)
         for b in results.items:
-            self.assertIsInstance(b, BillResult)
+            self.assertIsInstance(b, BillResultPartial)
             self.assertEqual(b.knesset_num, 20)
 
     def test_no_stages_in_partial(self):
-        """Partial results should NOT include stages."""
+        """Partial results should be BillResultPartial, not BillResultFull."""
         results = bills(knesset_num=20, name_query="חוק-יסוד: כבוד")
         for b in results.items:
-            self.assertIsNone(b.stages)
+            self.assertNotIsInstance(b, BillResultFull)
 
     def test_output_structure(self):
         results = bills(knesset_num=20, name_query="חוק-יסוד: כבוד")

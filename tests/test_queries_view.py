@@ -12,7 +12,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from origins.queries.queries_view import queries
-from origins.queries.queries_models import QueryResult, QueriesResults
+from origins.queries.queries_models import QueryResultPartial, QueryResultFull, QueriesResults
 
 
 class TestSearchMode(unittest.TestCase):
@@ -23,14 +23,14 @@ class TestSearchMode(unittest.TestCase):
         self.assertIsInstance(results, QueriesResults)
         self.assertGreater(len(results.items), 0)
         for q in results.items:
-            self.assertIsInstance(q, QueryResult)
+            self.assertIsInstance(q, QueryResultPartial)
             self.assertEqual(q.knesset_num, 20)
 
     def test_no_full_detail_in_partial(self):
-        """Partial results should NOT include documents."""
+        """Partial results should be QueryResultPartial, not QueryResultFull."""
         results = queries(knesset_num=20, name_query="תקציב")
         for q in results.items:
-            self.assertIsNone(q.documents)
+            self.assertNotIsInstance(q, QueryResultFull)
 
     def test_output_structure(self):
         results = queries(knesset_num=20, name_query="תקציב")

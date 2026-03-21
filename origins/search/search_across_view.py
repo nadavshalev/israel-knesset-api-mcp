@@ -132,7 +132,11 @@ def search_across(
         try:
             cursor.execute(search_sql, search_params)
             rows = cursor.fetchall()
-            top = [dict(row) for row in rows]
+            mapper = eq.get("mapper")
+            if mapper:
+                top = [mapper(dict(row)).model_dump(exclude_none=True) for row in rows]
+            else:
+                top = [dict(row) for row in rows]
         except Exception:
             conn.rollback()
             top = []

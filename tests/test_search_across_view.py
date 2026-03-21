@@ -78,9 +78,9 @@ class TestSearchAcrossMembers(unittest.TestCase):
         self.assertGreater(members.count, 0)
         self.assertGreater(len(members.top), 0)
 
-        # Check the top result has an id and name
+        # Check the top result has expected fields from MemberResult
         top = members.top[0]
-        self.assertIn("id", top)
+        self.assertIn("member_id", top)
         self.assertIn("name", top)
 
     def test_member_name_contains_query(self):
@@ -106,7 +106,7 @@ class TestSearchAcrossBills(unittest.TestCase):
         bills = result.results["bills"]
         if bills.top:
             bill = bills.top[0]
-            self.assertIn("id", bill)
+            self.assertIn("bill_id", bill)
             self.assertIn("name", bill)
 
 
@@ -137,8 +137,8 @@ class TestSearchAcrossVotes(unittest.TestCase):
         votes = result.results["votes"]
         if votes.top:
             vote = votes.top[0]
-            self.assertIn("id", vote)
-            self.assertIn("name", vote)
+            self.assertIn("vote_id", vote)
+            self.assertIn("title", vote)
 
 
 class TestSearchAcrossTopN(unittest.TestCase):

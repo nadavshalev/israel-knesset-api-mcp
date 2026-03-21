@@ -25,7 +25,7 @@ from core.search_meta import register_search
 from core.session_models import (
     SessionDocument, build_session_date_exists, fetch_item_stages,
 )
-from origins.agendas.agendas_models import AgendaResult, AgendasResults
+from origins.agendas.agendas_models import AgendaResultPartial, AgendaResultFull, AgendasResults
 
 # ItemTypeID for agendas in session_item tables
 _AGENDA_TYPE_IDS = [4]
@@ -77,6 +77,13 @@ def _build_agendas_search(*, query, knesset_num, date, date_to, top_n):
 register_search({
     "entity_key": "agendas",
     "builder": _build_agendas_search,
+    "mapper": lambda row: AgendaResultPartial(
+        agenda_id=row["id"],
+        name=row["name"],
+        knesset_num=row["knesset_num"],
+        type=row["type"],
+        status=row["status"],
+    ),
 })
 
 
@@ -290,7 +297,7 @@ def agendas(
         results = []
         for row in rows:
             pid = row["initiatorpersonid"]
-            results.append(AgendaResult(
+            results.append(AgendaResultPartial(
                 agenda_id=row["id"],
                 name=row["name"],
                 knesset_num=row["knessetnum"],
@@ -355,7 +362,7 @@ def agendas(
                 for dr in cursor.fetchall()
             ]
 
-            results.append(AgendaResult(
+            results.append(AgendaResultFull(
                 agenda_id=row["id"],
                 name=row["name"],
                 knesset_num=kn,

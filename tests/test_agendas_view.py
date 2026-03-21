@@ -12,7 +12,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from origins.agendas.agendas_view import agendas
-from origins.agendas.agendas_models import AgendaResult, AgendasResults
+from origins.agendas.agendas_models import AgendaResultPartial, AgendaResultFull, AgendasResults
 
 
 class TestSearchMode(unittest.TestCase):
@@ -23,14 +23,14 @@ class TestSearchMode(unittest.TestCase):
         self.assertIsInstance(results, AgendasResults)
         self.assertGreater(len(results.items), 0)
         for a in results.items:
-            self.assertIsInstance(a, AgendaResult)
+            self.assertIsInstance(a, AgendaResultPartial)
             self.assertEqual(a.knesset_num, 20)
 
     def test_no_full_detail_in_partial(self):
-        """Partial results should NOT include documents."""
+        """Partial results should be AgendaResultPartial, not AgendaResultFull."""
         results = agendas(knesset_num=20, name_query="חינוך מיוחד")
         for a in results.items:
-            self.assertIsNone(a.documents)
+            self.assertNotIsInstance(a, AgendaResultFull)
 
     def test_output_structure(self):
         results = agendas(knesset_num=20, name_query="חינוך מיוחד")

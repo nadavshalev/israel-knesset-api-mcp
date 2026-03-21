@@ -22,7 +22,7 @@ from core.helpers import simple_date, normalize_inputs, check_search_count
 from core.mcp_meta import mcp_tool
 from core.search_meta import register_search
 from core.session_models import SessionItem, SessionDocument, get_item_votes
-from origins.plenums.plenum_sessions_models import PlenumSessionResult, PlenumSessionsResults
+from origins.plenums.plenum_sessions_models import PlenumSessionResultPartial, PlenumSessionResultFull, PlenumSessionsResults
 
 
 # ---------------------------------------------------------------------------
@@ -82,6 +82,12 @@ def _build_plenums_search(*, query, knesset_num, date, date_to, top_n):
 register_search({
     "entity_key": "plenums",
     "builder": _build_plenums_search,
+    "mapper": lambda row: PlenumSessionResultPartial(
+        session_id=row["id"],
+        name=row["name"],
+        knesset_num=row["knesset_num"],
+        date=simple_date(row["date"]),
+    ),
 })
 
 
@@ -260,7 +266,7 @@ def plenums(
     results = []
     for row in rows:
         sid = row["id"]
-        result = PlenumSessionResult(
+        partial_kwargs = dict(
             session_id=sid,
             knesset_num=row["knessetnum"],
             name=row["name"],
@@ -268,8 +274,13 @@ def plenums(
             item_count=row["item_count"] or 0,
         )
         if full_details:
-            result.items = _fetch_items(cursor, sid)
-            result.documents = _fetch_documents(cursor, sid)
+            result = PlenumSessionResultFull(
+                **partial_kwargs,
+                items=_fetch_items(cursor, sid),
+                documents=_fetch_documents(cursor, sid),
+            )
+        else:
+            result = PlenumSessionResultPartial(**partial_kwargs)
         results.append(result)
 
     conn.close()

@@ -22,7 +22,7 @@ from core.helpers import simple_date, simple_time, normalize_inputs, check_searc
 from core.mcp_meta import mcp_tool
 from core.search_meta import register_search
 from core.session_models import SessionItem, SessionDocument, get_item_votes
-from origins.committees.committee_sessions_models import CmtSessionResult, CmtSessionsResults
+from origins.committees.committee_sessions_models import CmtSessionResultPartial, CmtSessionResultFull, CmtSessionsResults
 
 
 # ---------------------------------------------------------------------------
@@ -85,6 +85,13 @@ def _build_cmt_sessions_search(*, query, knesset_num, date, date_to, top_n):
 register_search({
     "entity_key": "committees",
     "builder": _build_cmt_sessions_search,
+    "mapper": lambda row: CmtSessionResultPartial(
+        session_id=row["id"],
+        committee_id=row["committee_id"],
+        committee_name=row["committee_name"],
+        knesset_num=row["knesset_num"],
+        date=simple_date(row["date"]),
+    ),
 })
 
 
@@ -320,7 +327,7 @@ def committees(
     results = []
     for row in rows:
         sid = row["id"]
-        result = CmtSessionResult(
+        partial_kwargs = dict(
             session_id=sid,
             committee_id=row["committeeid"],
             committee_name=row["committeename"] or None,
@@ -329,17 +336,22 @@ def committees(
             item_count=row["item_count"] or 0,
         )
         if full_details:
-            result.number = row["number"]
-            result.start_time = simple_time(row["startdate"]) or None
-            result.end_time = simple_time(row["finishdate"]) or None
-            result.type = row["typedesc"] or None
-            result.status = row["statusdesc"] or None
-            result.location = row["location"] or None
-            result.url = row["sessionurl"] or None
-            result.broadcast_url = row["broadcasturl"] or None
-            result.note = row["note"] or None
-            result.items = _fetch_items(cursor, sid)
-            result.documents = _fetch_documents(cursor, sid)
+            result = CmtSessionResultFull(
+                **partial_kwargs,
+                number=row["number"],
+                start_time=simple_time(row["startdate"]) or None,
+                end_time=simple_time(row["finishdate"]) or None,
+                type=row["typedesc"] or None,
+                status=row["statusdesc"] or None,
+                location=row["location"] or None,
+                url=row["sessionurl"] or None,
+                broadcast_url=row["broadcasturl"] or None,
+                note=row["note"] or None,
+                items=_fetch_items(cursor, sid),
+                documents=_fetch_documents(cursor, sid),
+            )
+        else:
+            result = CmtSessionResultPartial(**partial_kwargs)
         results.append(result)
 
     conn.close()

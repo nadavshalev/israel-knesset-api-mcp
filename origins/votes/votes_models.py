@@ -36,9 +36,8 @@ class RelatedVote(KNSBaseModel):
 # Main result model (unified: partial + full)
 # ---------------------------------------------------------------------------
 
-class VoteResult(KNSBaseModel):
-    """A vote result (summary or full detail)."""
-    # Always present (partial):
+class VoteResultPartial(KNSBaseModel):
+    """A vote search result (summary fields only)."""
     vote_id: int = Field(description="Unique vote identifier")
     bill_id: int | None = Field(default=None, description="Linked bill ID (if vote is on a bill)")
     knesset_num: int | None = Field(default=None, description="Knesset number (via session)")
@@ -54,11 +53,18 @@ class VoteResult(KNSBaseModel):
     for_option: str | None = Field(default=None, description="Label for the 'for' option")
     against_option: str | None = Field(default=None, description="Label for the 'against' option")
     vote_method: str | None = Field(default=None, description="Voting method description")
-    # Full detail only (None/empty when partial):
-    members: list[VoteMember] | None = Field(default=None, description="Per-MK vote breakdown with party (only when full_details=True)")
-    related_votes: list[RelatedVote] | None = Field(default=None, description="Other votes with the same title in the same session (only when full_details=True)")
+
+
+class VoteResultFull(VoteResultPartial):
+    """A vote full-detail result (summary + detail fields)."""
+    members: list[VoteMember] | None = Field(default=None, description="Per-MK vote breakdown with party")
+    related_votes: list[RelatedVote] | None = Field(default=None, description="Other votes with the same title in the same session")
+
+
+# Backward-compat alias
+VoteResult = VoteResultFull
 
 
 class VotesResults(KNSBaseModel):
     """Results from votes tool."""
-    items: list[VoteResult] = Field(description="List of vote results sorted by date DESC, vote_id DESC")
+    items: list[VoteResultPartial | VoteResultFull] = Field(description="List of vote results sorted by date DESC, vote_id DESC")

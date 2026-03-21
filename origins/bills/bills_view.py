@@ -28,7 +28,7 @@ from core.session_models import (
     SessionDocument, StageVote, build_session_date_exists, fetch_item_stages,
 )
 from origins.bills.bills_models import (
-    BillResult, BillsResults,
+    BillResultPartial, BillResultFull, BillsResults,
     BillInitiators, Initiator, RemovedInitiator,
     BillNameHistory, SplitBill, MergedBill,
 )
@@ -83,6 +83,13 @@ def _build_bills_search(*, query, knesset_num, date, date_to, top_n):
 register_search({
     "entity_key": "bills",
     "builder": _build_bills_search,
+    "mapper": lambda row: BillResultPartial(
+        bill_id=row["id"],
+        name=row["name"],
+        knesset_num=row["knesset_num"],
+        type=row["sub_type"],
+        status=row["status"],
+    ),
 })
 
 
@@ -500,7 +507,7 @@ def bills(
         results = []
         for row in rows:
             initiators = initiators_by_bill.get(row["id"], [])
-            results.append(BillResult(
+            results.append(BillResultPartial(
                 bill_id=row["id"],
                 name=row["name"],
                 knesset_num=row["knessetnum"],
@@ -525,7 +532,7 @@ def bills(
             initiators_batch = _fetch_primary_initiators_batch(cursor, [bid])
             primary_names = initiators_batch.get(bid, [])
 
-            results.append(BillResult(
+            results.append(BillResultFull(
                 bill_id=bid,
                 name=row["name"],
                 knesset_num=row["knessetnum"],

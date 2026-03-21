@@ -13,6 +13,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from origins.members.members_view import members
+from origins.members.members_models import MemberResultPartial, MemberResultFull
 
 
 # ===================================================================
@@ -65,7 +66,7 @@ class TestKnessetFilter(unittest.TestCase):
         self.assertGreater(len(results.items), 0)
         for m in results.items:
             self.assertEqual(m.knesset_num, 20)
-            self.assertIsNone(m.roles)  # partial mode — no roles
+            self.assertNotIsInstance(m, MemberResultFull)  # partial mode
 
 
 class TestCrossCategoryFilters(unittest.TestCase):
@@ -190,11 +191,11 @@ class TestFullDetailRoles(unittest.TestCase):
         self.assertGreater(len(m.roles.parliamentary), 0)
 
     def test_partial_mode_has_no_roles(self):
-        """Search mode (no member_id, no full_details) should have roles=None."""
+        """Search mode (no member_id, no full_details) should be MemberResultPartial."""
         results = members(last_name="לפיד", knesset_num=20)
         self.assertGreater(len(results.items), 0)
         for m in results.items:
-            self.assertIsNone(m.roles)
+            self.assertNotIsInstance(m, MemberResultFull)
 
     def test_full_details_flag(self):
         """full_details=True without member_id should populate roles."""

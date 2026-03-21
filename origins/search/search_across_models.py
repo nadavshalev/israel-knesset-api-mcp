@@ -12,7 +12,7 @@ from core.models import KNSBaseModel
 class EntityResult(KNSBaseModel):
     """Search results for a single entity type."""
     count: int = Field(description="Total matches for this entity type")
-    top: list[dict[str, Any]] = Field(default_factory=list, description="Top N results (fields vary by entity type)")
+    top: list[dict[str, Any]] = Field(default_factory=list, description="Top N results — each item contains the same fields as the corresponding entity's search result (e.g. bill_id/name/type/status for bills, vote_id/title/date for votes)")
 
 
 class SearchAcrossResults(KNSBaseModel):

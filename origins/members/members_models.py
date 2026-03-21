@@ -48,19 +48,25 @@ class MemberRoles(KNSBaseModel):
 # Main result model (unified: partial + full)
 # ---------------------------------------------------------------------------
 
-class MemberResult(KNSBaseModel):
-    """A member result (summary or full detail)."""
-    # Always present (partial):
+class MemberResultPartial(KNSBaseModel):
+    """A member search result (summary fields only)."""
     member_id: int = Field(description="Member person ID")
     name: str = Field(description="Full name")
     gender: str | None = Field(default=None, description="Gender description")
     knesset_num: int = Field(description="Knesset number for this term")
     faction: list[str] = Field(default_factory=list, description="Faction/party names during this term")
     role_types: list[str] = Field(default_factory=list, description="Distinct position titles held")
-    # Full detail only (None when partial):
-    roles: MemberRoles | None = Field(default=None, description="Roles grouped by category (government, committees, parliamentary) — only when full_details=True")
+
+
+class MemberResultFull(MemberResultPartial):
+    """A member full-detail result (summary + detail fields)."""
+    roles: MemberRoles | None = Field(default=None, description="Roles grouped by category (government, committees, parliamentary)")
+
+
+# Backward-compat alias
+MemberResult = MemberResultFull
 
 
 class MembersResults(KNSBaseModel):
     """Results from members tool."""
-    items: list[MemberResult] = Field(description="List of member results")
+    items: list[MemberResultPartial | MemberResultFull] = Field(description="List of member results")

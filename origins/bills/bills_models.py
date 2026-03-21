@@ -54,9 +54,8 @@ class MergedBill(KNSBaseModel):
 # Main result model (unified: partial + full)
 # ---------------------------------------------------------------------------
 
-class BillResult(KNSBaseModel):
-    """A bill result (summary or full detail)."""
-    # Always present (partial):
+class BillResultPartial(KNSBaseModel):
+    """A bill search result (summary fields only)."""
     bill_id: int = Field(description="Unique bill identifier")
     name: str | None = Field(default=None, description="Bill name")
     knesset_num: int | None = Field(default=None, description="Knesset number")
@@ -69,15 +68,22 @@ class BillResult(KNSBaseModel):
     summary: str | None = Field(default=None, description="Summary of the law")
     primary_initiators: list[str] | None = Field(default=None, description="Primary initiator names with party")
     last_update_date: str | None = Field(default=None, description="Last updated date (YYYY-MM-DD)")
-    # Full detail only (None when partial):
-    stages: list[ItemStage] | None = Field(default=None, description="Session stages (plenum + committee appearances) in chronological order, with votes on plenum stages (only when full_details=True)")
-    initiators: BillInitiators | None = Field(default=None, description="Bill initiators grouped by role (only when full_details=True)")
-    name_history: list[BillNameHistory] | None = Field(default=None, description="Bill name changes over time (only when full_details=True)")
-    documents: list[SessionDocument] | None = Field(default=None, description="Bill documents (only when full_details=True)")
-    split_bills: list[SplitBill] | None = Field(default=None, description="Related bills from splits (only when full_details=True)")
-    merged_bills: list[MergedBill] | None = Field(default=None, description="Bills merged with this one (only when full_details=True)")
+
+
+class BillResultFull(BillResultPartial):
+    """A bill full-detail result (summary + detail fields)."""
+    stages: list[ItemStage] | None = Field(default=None, description="Session stages (plenum + committee appearances) in chronological order, with votes on plenum stages")
+    initiators: BillInitiators | None = Field(default=None, description="Bill initiators grouped by role")
+    name_history: list[BillNameHistory] | None = Field(default=None, description="Bill name changes over time")
+    documents: list[SessionDocument] | None = Field(default=None, description="Bill documents")
+    split_bills: list[SplitBill] | None = Field(default=None, description="Related bills from splits")
+    merged_bills: list[MergedBill] | None = Field(default=None, description="Bills merged with this one")
+
+
+# Backward-compat alias
+BillResult = BillResultFull
 
 
 class BillsResults(KNSBaseModel):
     """Results from bills tool."""
-    items: list[BillResult] = Field(description="List of bill results")
+    items: list[BillResultPartial | BillResultFull] = Field(description="List of bill results")

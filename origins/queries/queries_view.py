@@ -24,7 +24,7 @@ from core.search_meta import register_search
 from core.session_models import (
     SessionDocument, build_session_date_exists, fetch_item_stages,
 )
-from origins.queries.queries_models import QueryResult, QueriesResults
+from origins.queries.queries_models import QueryResultPartial, QueryResultFull, QueriesResults
 
 # ItemTypeID for queries in session_item tables (1=שאילתה, 950=שאילתה כוללת)
 _QUERY_TYPE_IDS = [1, 950]
@@ -92,6 +92,13 @@ def _build_queries_search(*, query, knesset_num, date, date_to, top_n):
 register_search({
     "entity_key": "queries",
     "builder": _build_queries_search,
+    "mapper": lambda row: QueryResultPartial(
+        query_id=row["id"],
+        name=row["name"],
+        knesset_num=row["knesset_num"],
+        type=row["type"],
+        status=row["status"],
+    ),
 })
 
 
@@ -329,7 +336,7 @@ def queries(
         results = []
         for row in rows:
             pid = row["personid"]
-            results.append(QueryResult(
+            results.append(QueryResultPartial(
                 query_id=row["queryid"],
                 name=row["name"],
                 knesset_num=row["knessetnum"],
@@ -370,7 +377,7 @@ def queries(
                 for dr in cursor.fetchall()
             ]
 
-            results.append(QueryResult(
+            results.append(QueryResultFull(
                 query_id=row["queryid"],
                 name=row["name"],
                 knesset_num=kn,

@@ -13,7 +13,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from origins.plenums.plenum_sessions_view import plenums as plenum_sessions
-from origins.plenums.plenum_sessions_models import PlenumSessionsResults, PlenumSessionResult
+from origins.plenums.plenum_sessions_models import PlenumSessionsResults, PlenumSessionResultPartial, PlenumSessionResultFull
 from core.session_models import SessionItem, SessionDocument
 
 
@@ -59,14 +59,14 @@ class TestSearchPartial(unittest.TestCase):
             self.assertLessEqual(s.date, "2015-04-01")
 
     def test_no_items_or_docs_when_partial(self):
+        """Partial results should be PlenumSessionResultPartial, not Full."""
         results = plenum_sessions(
             knesset_num=20,
             from_date="2015-03-31",
             to_date="2015-04-01",
         )
         for s in results.items:
-            self.assertIsNone(s.items)
-            self.assertIsNone(s.documents)
+            self.assertNotIsInstance(s, PlenumSessionResultFull)
 
     def test_item_count_present(self):
         results = plenum_sessions(

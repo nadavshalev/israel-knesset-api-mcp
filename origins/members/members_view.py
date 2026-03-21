@@ -27,7 +27,7 @@ from core.helpers import simple_date, format_person_name, normalize_inputs, chec
 from core.mcp_meta import mcp_tool
 from core.search_meta import register_search
 from origins.members.members_models import (
-    MemberResult, MembersResults,
+    MemberResultPartial, MemberResultFull, MembersResults,
     GovernmentRole, CommitteeRole, ParliamentaryRole, MemberRoles,
 )
 
@@ -78,7 +78,12 @@ def _build_members_search(*, query, knesset_num, date, date_to, top_n):
     search_sql = f"""
         SELECT DISTINCT p.PersonID AS id,
                p.FirstName || ' ' || p.LastName AS name,
-               p.LastName, p.FirstName
+               p.LastName, p.FirstName,
+               COALESCE(
+                   (SELECT MAX(ptp2.KnessetNum) FROM person_to_position_raw ptp2
+                    WHERE ptp2.PersonID = p.PersonID),
+                   0
+               ) AS knesset_num
         FROM person_raw p
         WHERE {where}
         ORDER BY p.LastName, p.FirstName
@@ -90,6 +95,11 @@ def _build_members_search(*, query, knesset_num, date, date_to, top_n):
 register_search({
     "entity_key": "members",
     "builder": _build_members_search,
+    "mapper": lambda row: MemberResultPartial(
+        member_id=row["id"],
+        name=row["name"],
+        knesset_num=row["knesset_num"] or 0,
+    ),
 })
 
 
@@ -401,18 +411,26 @@ def members(
 
     items = []
     for m in raw:
-        roles = None
         if full_details:
             roles = _fetch_member_roles(cursor, m["member_id"], m["knesset_num"])
-        items.append(MemberResult(
-            member_id=m["member_id"],
-            name=m["name"],
-            gender=m["gender"] or None,
-            knesset_num=m["knesset_num"],
-            faction=m["faction"],
-            role_types=m["role_types"],
-            roles=roles,
-        ))
+            items.append(MemberResultFull(
+                member_id=m["member_id"],
+                name=m["name"],
+                gender=m["gender"] or None,
+                knesset_num=m["knesset_num"],
+                faction=m["faction"],
+                role_types=m["role_types"],
+                roles=roles,
+            ))
+        else:
+            items.append(MemberResultPartial(
+                member_id=m["member_id"],
+                name=m["name"],
+                gender=m["gender"] or None,
+                knesset_num=m["knesset_num"],
+                faction=m["faction"],
+                role_types=m["role_types"],
+            ))
 
     conn.close()
     return MembersResults(items=items)

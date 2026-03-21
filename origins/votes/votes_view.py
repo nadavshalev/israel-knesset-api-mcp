@@ -24,7 +24,7 @@ from core.db import connect_readonly
 from core.helpers import simple_date, simple_time, normalize_inputs, check_search_count
 from core.mcp_meta import mcp_tool
 from core.search_meta import register_search
-from origins.votes.votes_models import VoteResult, VotesResults, VoteMember, RelatedVote
+from origins.votes.votes_models import VoteResultPartial, VoteResultFull, VotesResults, VoteMember, RelatedVote
 
 
 # ---------------------------------------------------------------------------
@@ -74,6 +74,12 @@ def _build_votes_search(*, query, knesset_num, date, date_to, top_n):
 register_search({
     "entity_key": "votes",
     "builder": _build_votes_search,
+    "mapper": lambda row: VoteResultPartial(
+        vote_id=row["id"],
+        title=row["name"],
+        knesset_num=row["knesset_num"],
+        date=simple_date(row["date"]),
+    ),
 })
 
 
@@ -344,15 +350,7 @@ def votes(
     for vote in rows:
         total_for, total_against, total_abstain, is_accepted = _build_vote_result(vote)
 
-        members = None
-        related_votes = None
-        if full_details:
-            members = _fetch_members(cursor, vote["id"], vote["knessetnum"])
-            related_votes = _fetch_related_votes(
-                cursor, vote["id"], vote["votetitle"], vote["sessionid"],
-            )
-
-        results.append(VoteResult(
+        partial_kwargs = dict(
             vote_id=vote["id"],
             bill_id=vote["_bill_id"],
             knesset_num=vote["knessetnum"],
@@ -368,9 +366,20 @@ def votes(
             for_option=vote["foroptiondesc"],
             against_option=vote["againstoptiondesc"],
             vote_method=vote["votemethoddesc"],
-            members=members,
-            related_votes=related_votes,
-        ))
+        )
+
+        if full_details:
+            members = _fetch_members(cursor, vote["id"], vote["knessetnum"])
+            related_votes = _fetch_related_votes(
+                cursor, vote["id"], vote["votetitle"], vote["sessionid"],
+            )
+            results.append(VoteResultFull(
+                **partial_kwargs,
+                members=members,
+                related_votes=related_votes,
+            ))
+        else:
+            results.append(VoteResultPartial(**partial_kwargs))
 
     conn.close()
     return VotesResults(items=results)

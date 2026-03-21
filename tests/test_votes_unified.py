@@ -13,7 +13,7 @@ if str(ROOT) not in sys.path:
 
 from core.helpers import simple_date, simple_time
 from origins.votes.votes_view import votes
-from origins.votes.votes_models import VotesResults, VoteResult
+from origins.votes.votes_models import VotesResults, VoteResultPartial, VoteResultFull
 
 
 # ===================================================================
@@ -28,15 +28,15 @@ class TestSearchMode(unittest.TestCase):
         self.assertIsInstance(results, VotesResults)
         self.assertEqual(len(results.items), 2)
         for v in results.items:
-            self.assertIsInstance(v, VoteResult)
+            self.assertIsInstance(v, VoteResultPartial)
             self.assertEqual(v.knesset_num, 20)
             self.assertEqual(v.date, "2015-03-31")
 
     def test_partial_has_no_members(self):
+        """Partial results should be VoteResultPartial, not VoteResultFull."""
         results = votes(knesset_num=20, date="2015-03-31")
         for v in results.items:
-            self.assertIsNone(v.members)
-            self.assertIsNone(v.related_votes)
+            self.assertNotIsInstance(v, VoteResultFull)
 
     def test_output_fields(self):
         results = votes(knesset_num=20, date="2015-03-31")

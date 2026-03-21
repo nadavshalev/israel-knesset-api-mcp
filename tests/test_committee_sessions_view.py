@@ -13,7 +13,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from origins.committees.committee_sessions_view import committees as committee_sessions
-from origins.committees.committee_sessions_models import CmtSessionsResults, CmtSessionResult
+from origins.committees.committee_sessions_models import CmtSessionsResults, CmtSessionResultPartial, CmtSessionResultFull
 from core.session_models import SessionItem, SessionDocument, ItemVote
 
 
@@ -70,14 +70,14 @@ class TestSearchPartial(unittest.TestCase):
             self.assertEqual(r.committee_id, 922)
 
     def test_no_items_or_docs_when_partial(self):
+        """Partial results should be CmtSessionResultPartial, not Full."""
         results = committee_sessions(
             committee_id=922,
             from_date="2016-01-01",
             to_date="2016-01-15",
         )
         for r in results.items:
-            self.assertIsNone(r.items)
-            self.assertIsNone(r.documents)
+            self.assertNotIsInstance(r, CmtSessionResultFull)
 
     def test_item_count_present(self):
         results = committee_sessions(
