@@ -1,7 +1,4 @@
-"""Unified committee sessions tool — search and detail via ``full_details`` flag.
-
-Replaces the old ``search_cmt_sessions`` + ``get_cmt_session`` pair with a
-single ``committee_sessions`` tool.
+"""Unified committees tool — search and detail via ``full_details`` flag.
 
 Required scoping: either ``session_id`` or ``from_date`` must be provided.
 When ``session_id`` is given, ``full_details`` is auto-enabled.
@@ -86,7 +83,7 @@ def _build_cmt_sessions_search(*, query, knesset_num, date, date_to, top_n):
 
 
 register_search({
-    "entity_key": "committee_sessions",
+    "entity_key": "committees",
     "builder": _build_cmt_sessions_search,
 })
 
@@ -166,7 +163,7 @@ def _fetch_documents(cursor, session_id):
 # ---------------------------------------------------------------------------
 
 @mcp_tool(
-    name="committee_sessions",
+    name="committees",
     description=(
         "Search for Knesset committee sessions. Returns summary info by default; "
         "set full_details=True for agenda items and documents. "
@@ -182,7 +179,7 @@ def _fetch_documents(cursor, session_id):
     },
     is_list=True,
 )
-def committee_sessions(
+def committees(
     session_id: Annotated[int | None, Field(description="Get a specific session by ID (auto-enables full_details)")] = None,
     committee_id: Annotated[int | None, Field(description="Filter by committee ID")] = None,
     committee_name_query: Annotated[str | None, Field(description="Partial match on committee name")] = None,
@@ -349,4 +346,4 @@ def committee_sessions(
     return CmtSessionsResults(items=results)
 
 
-committee_sessions.OUTPUT_MODEL = CmtSessionsResults
+committees.OUTPUT_MODEL = CmtSessionsResults

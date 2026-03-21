@@ -1,6 +1,6 @@
 """Shared Pydantic models and helpers for session items and documents.
 
-Used by both plenum_sessions and committee_sessions views.
+Used by both plenums and committees views.
 """
 
 from __future__ import annotations

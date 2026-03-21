@@ -360,42 +360,6 @@ for _fn in get_all_tools():
 
 
 # ---------------------------------------------------------------------------
-# Schema lookup tool
-# ---------------------------------------------------------------------------
-
-# Build a mapping of tool_name -> JSON schema from OUTPUT_MODEL for the lookup tool.
-_SCHEMA_MAP: dict[str, dict] = {}
-for _fn in get_all_tools():
-    _output_model = getattr(_fn, "OUTPUT_MODEL", None)
-    if _output_model is not None:
-        _SCHEMA_MAP[_fn._mcp_tool["name"]] = _output_model.model_json_schema()
-
-_VALID_TOOL_NAMES = sorted(_SCHEMA_MAP.keys())
-_ToolNameLiteral = Literal[tuple(_VALID_TOOL_NAMES)]  # type: ignore[valid-type]
-
-
-@mcp.tool(
-    name="get_response_schema",
-    description=(
-        "Get the full response schema for any tool. Returns field names, "
-        "types, optionality, descriptions, and nested structure. Use this "
-        "to understand what fields a tool returns before calling it."
-    ),
-)
-async def get_response_schema(
-    tool_name: Annotated[_ToolNameLiteral, Field(description="Name of the tool to get the schema for")],  # type: ignore[valid-type]
-) -> str:
-    """Return the full JSON schema for the given tool's output model."""
-    schema = _SCHEMA_MAP.get(tool_name)
-    if schema is None:
-        return json.dumps({
-            "error": f"Unknown tool: {tool_name!r}",
-            "available_tools": _VALID_TOOL_NAMES,
-        }, ensure_ascii=False)
-    return json.dumps(schema, ensure_ascii=False, indent=2)
-
-
-# ---------------------------------------------------------------------------
 # Health check endpoint
 # ---------------------------------------------------------------------------
 

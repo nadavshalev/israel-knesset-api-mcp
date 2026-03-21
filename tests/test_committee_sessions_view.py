@@ -1,4 +1,4 @@
-"""Tests for committee_sessions unified tool.
+"""Tests for committees unified tool.
 
 Integration tests use the real PostgreSQL database with known historical
 data from Knesset 20 which is stable and won't change.
@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from origins.committees.committee_sessions_view import committee_sessions
+from origins.committees.committee_sessions_view import committees as committee_sessions
 from origins.committees.committee_sessions_models import CmtSessionsResults, CmtSessionResult
 from core.session_models import SessionItem, SessionDocument, ItemVote
 

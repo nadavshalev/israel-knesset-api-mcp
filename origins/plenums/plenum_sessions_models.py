@@ -1,4 +1,4 @@
-"""Pydantic models for plenum_sessions_view outputs."""
+"""Pydantic models for plenums_view outputs."""
 
 from __future__ import annotations
 
@@ -21,5 +21,5 @@ class PlenumSessionResult(KNSBaseModel):
 
 
 class PlenumSessionsResults(KNSBaseModel):
-    """Results from plenum_sessions."""
+    """Results from plenums."""
     items: list[PlenumSessionResult] = Field(description="List of plenum session results sorted by date DESC, session_id DESC")

@@ -1,4 +1,4 @@
-"""Tests for plenum_sessions unified tool.
+"""Tests for plenums unified tool.
 
 Integration tests use the real PostgreSQL database with known historical
 data.  Plenum data from older Knessets (19, 20) is stable.
@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from origins.plenums.plenum_sessions_view import plenum_sessions
+from origins.plenums.plenum_sessions_view import plenums as plenum_sessions
 from origins.plenums.plenum_sessions_models import PlenumSessionsResults, PlenumSessionResult
 from core.session_models import SessionItem, SessionDocument
 

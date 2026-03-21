@@ -10,17 +10,14 @@ if str(ROOT.parent) not in sys.path:
     sys.path.insert(0, str(ROOT.parent))
 
 from core.db import connect_db, ensure_indexes
-from origins.members import search_members_view as members_view
-from origins.members import get_member_view as member_view
-from origins.plenums import plenum_sessions_view
-from origins.committees import committee_sessions_view
+from origins.members import members_view
+from origins.plenums import plenum_sessions_view as plenums_view
+from origins.committees import committee_sessions_view as committees_view
 from origins.bills import bills_view
 from origins.agendas import agendas_view
 from origins.queries import queries_view
-from origins.votes import search_votes_view as votes_view
-from origins.votes import get_vote_view as vote_view
+from origins.votes import votes_view
 from origins.search import search_across_view
-from origins.knesset import get_knesset_dates_view as knesset_dates_view
 from origins.knesset import metadata_view
 
 
@@ -50,15 +47,11 @@ def parse_args() -> argparse.Namespace:
     members_p.add_argument("--party", type=str, default=None, help="Party/faction name contains text")
     members_p.add_argument("--first-name", dest="first_name", type=str, default=None, help="First name contains")
     members_p.add_argument("--last-name", dest="last_name", type=str, default=None, help="Last name contains")
-    members_p.add_argument("--person-id", dest="person_id", type=int, default=None, help="Person ID")
+    members_p.add_argument("--person-id", dest="person_id", type=int, default=None, help="Person ID (auto-enables full detail)")
+    members_p.add_argument("--full-details", dest="full_details", action="store_true", help="Include roles, committees, government positions")
 
-    # --- member (single) ---
-    member_p = sub.add_parser("member", help="Get full detail for a single member (with committees/government)")
-    member_p.add_argument("--member-id", dest="member_id", type=int, required=True, help="Member/Person ID (required)")
-    member_p.add_argument("--knesset", type=int, default=None, help="Knesset number (omit for all terms)")
-
-    # --- committee-sessions ---
-    cmt_p = sub.add_parser("committee-sessions", help="Search committee sessions")
+    # --- committees ---
+    cmt_p = sub.add_parser("committees", help="Search committee sessions")
     cmt_p.add_argument("--knesset", type=int, default=None, help="Knesset number")
     cmt_p.add_argument("--from-date", dest="from_date", type=str, default=None, help="Start of date range (YYYY-MM-DD)")
     cmt_p.add_argument("--to-date", dest="to_date", type=str, default=None, help="End of date range (YYYY-MM-DD)")
@@ -119,24 +112,18 @@ def parse_args() -> argparse.Namespace:
     votes_p.add_argument("--knesset", type=int, default=None, help="Knesset number")
     votes_p.add_argument("--bill-id", dest="bill_id", type=int, default=None, help="Filter votes by bill ID")
     votes_p.add_argument("--name", type=str, default=None, help="Vote title/subject contains text")
-    votes_p.add_argument("--date", type=str, default=None, help="Single date or start of range (YYYY-MM-DD)")
-    votes_p.add_argument("--date-to", dest="date_to", type=str, default=None, help="End of range (YYYY-MM-DD)")
+    votes_p.add_argument("--from-date", dest="from_date", type=str, default=None, help="Start of date range (YYYY-MM-DD)")
+    votes_p.add_argument("--to-date", dest="to_date", type=str, default=None, help="End of date range (YYYY-MM-DD)")
+    votes_p.add_argument("--vote-id", dest="vote_id", type=int, default=None, help="Vote ID (auto-enables full detail)")
     votes_p.add_argument("--accepted", dest="accepted", default=None, action="store_true", help="Accepted votes only")
     votes_p.add_argument("--rejected", dest="rejected", default=None, action="store_true", help="Rejected votes only")
-
-    # --- vote (single) ---
-    vote_p = sub.add_parser("vote", help="Get full detail for a single vote (with members/related)")
-    vote_p.add_argument("--vote-id", dest="vote_id", type=int, required=True, help="Vote ID (required)")
+    votes_p.add_argument("--full-details", dest="full_details", action="store_true", help="Include per-member breakdown and related votes")
 
     # --- search-across ---
     sa_p = sub.add_parser("search-across", help="Search across all entity types (triage tool)")
     sa_p.add_argument("query", type=str, help="Free-text search term")
     sa_p.add_argument("--top-n", dest="top_n", type=int, default=None,
                        help="Max results per entity type (default from config)")
-
-    # --- knesset-dates ---
-    kd_p = sub.add_parser("knesset-dates", help="Look up Knesset terms and plenum periods")
-    kd_p.add_argument("--knesset", type=int, default=None, help="Knesset number")
 
     # --- metadata ---
     meta_p = sub.add_parser("metadata", help="Get Knesset term metadata (assemblies, committees, ministries, factions)")
@@ -157,25 +144,21 @@ def main() -> None:
     conn.close()
 
     if args.command == "members":
-        results = members_view.search_members(
+        results = members_view.members(
             knesset_num=args.knesset,
             first_name=args.first_name,
             last_name=args.last_name,
             role=args.role,
             role_type=args.role_type,
             party=args.party,
-            person_id=args.person_id,
+            member_id=args.person_id,
+            full_details=args.full_details,
         )
         _output(results)
         return
 
-    if args.command == "member":
-        result = member_view.get_member(args.member_id, knesset_num=args.knesset)
-        _output(result)
-        return
-
-    if args.command == "committee-sessions":
-        results = committee_sessions_view.committee_sessions(
+    if args.command == "committees":
+        results = committees_view.committees(
             session_id=args.session_id,
             committee_id=args.committee_id,
             committee_name_query=args.committee_name_query,
@@ -189,7 +172,7 @@ def main() -> None:
         return
 
     if args.command == "plenums":
-        results = plenum_sessions_view.plenum_sessions(
+        results = plenums_view.plenums(
             session_id=args.session_id,
             knesset_num=args.knesset,
             from_date=args.from_date,
@@ -253,29 +236,21 @@ def main() -> None:
         elif getattr(args, "rejected", None):
             accepted = False
 
-        results = votes_view.search_votes(
+        results = votes_view.votes(
+            vote_id=args.vote_id,
             knesset_num=args.knesset,
             bill_id=args.bill_id,
             name=args.name,
-            date=args.date,
-            date_to=args.date_to,
+            from_date=args.from_date,
+            to_date=args.to_date,
             accepted=accepted,
+            full_details=args.full_details,
         )
         _output(results)
         return
 
-    if args.command == "vote":
-        result = vote_view.get_vote(args.vote_id)
-        _output(result)
-        return
-
     if args.command == "search-across":
         result = search_across_view.search_across(args.query, top_n=args.top_n)
-        _output(result)
-        return
-
-    if args.command == "knesset-dates":
-        result = knesset_dates_view.get_knesset_dates(knesset_num=args.knesset)
         _output(result)
         return
 

@@ -1,7 +1,4 @@
-"""Unified plenum sessions tool — search and detail via ``full_details`` flag.
-
-Replaces the old ``search_plenums`` + ``get_plenum`` pair with a single
-``plenum_sessions`` tool.
+"""Unified plenums tool — search and detail via ``full_details`` flag.
 
 Required scoping: either ``session_id`` or ``from_date`` must be provided.
 When ``session_id`` is given, ``full_details`` is auto-enabled.
@@ -151,7 +148,7 @@ def _fetch_documents(cursor, session_id):
 # ---------------------------------------------------------------------------
 
 @mcp_tool(
-    name="plenum_sessions",
+    name="plenums",
     description=(
         "Search for Knesset plenum sessions. Returns summary info by default; "
         "set full_details=True for agenda items and documents. "
@@ -166,7 +163,7 @@ def _fetch_documents(cursor, session_id):
     },
     is_list=True,
 )
-def plenum_sessions(
+def plenums(
     session_id: Annotated[int | None, Field(description="Get a specific session by ID (auto-enables full_details)")] = None,
     knesset_num: Annotated[int | None, Field(description="Filter by Knesset number")] = None,
     from_date: Annotated[str | None, Field(description="Start of date range (YYYY-MM-DD). Required unless session_id is provided. to_date defaults to today if omitted.")] = None,
@@ -279,4 +276,4 @@ def plenum_sessions(
     return PlenumSessionsResults(items=results)
 
 
-plenum_sessions.OUTPUT_MODEL = PlenumSessionsResults
+plenums.OUTPUT_MODEL = PlenumSessionsResults

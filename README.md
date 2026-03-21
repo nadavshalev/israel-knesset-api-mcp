@@ -1,8 +1,10 @@
 # Open Knesset Data API
 
-MCP server for Israeli Knesset (parliament) data. Exposes structured search and detail tools over a local SQLite database via the [Model Context Protocol](https://modelcontextprotocol.io/) (Streamable HTTP transport).
+MCP server exposing Israeli Knesset (parliament) data — members, bills, votes, committee sessions, plenum sessions, agendas, parliamentary queries, and term metadata. Connects AI clients to a PostgreSQL database via the [Model Context Protocol](https://modelcontextprotocol.io/) (Streamable HTTP transport).
 
-Data is sourced from the [Knesset OData V4 API](https://knesset.gov.il/OdataV4/ParliamentInfo/) using a CSV-first strategy via [Open Knesset](https://oknesset.org/), with incremental OData updates.
+Data is sourced from the [Knesset OData V4 API](https://knesset.gov.il/OdataV4/ParliamentInfo/) with a CSV-first bulk-load strategy and incremental OData updates.
+
+---
 
 ## Quick Start
 
@@ -11,12 +13,12 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
-# Create and populate the database
+# Copy and configure environment
+cp .env.example .env
+
+# Initialize DB schema and fetch data
 python core/db_cli.py init-db
 python core/db_cli.py fetch-all
-
-# Copy .env.example and adjust as needed
-cp .env.example .env
 
 # Start the MCP server
 python mcp_server.py
@@ -24,315 +26,248 @@ python mcp_server.py
 
 The server starts at `http://0.0.0.0:8000/mcp` by default.
 
-## Docker Deployment (VPS)
+---
 
-This repository includes Docker Compose for running:
-
-- `mcp`: the MCP HTTP server
-- `updater`: a background worker that runs `update_all.py` on a day/hour schedule
-
-### 1) Configure environment
+## Docker Deployment
 
 ```bash
 cp .env.example .env
-```
-
-Set your external PostgreSQL credentials/host in `.env`:
-
-- `POSTGRES_PATH`
-- `POSTGRES_PORT`
-- `POSTGRES_DB`
-- `POSTGRES_USER`
-- `POSTGRES_PASSWORD`
-
-Set updater cycle:
-
-- `UPDATE_CYCLE_DAYS` (for example `1`)
-- `UPDATE_HOUR_IN_DAY` (0-23, for example `3`)
-- `UPDATE_RUN_ON_START` (`true` or `false`)
-
-### 2) Build and start
-
-```bash
+# Set POSTGRES_* vars and UPDATE_* schedule in .env
 docker compose up -d --build
-```
 
-### 3) Verify
-
-```bash
 docker compose ps
 docker compose logs -f mcp
 docker compose logs -f updater
 ```
 
-MCP endpoint will be available at:
+Two services run:
+- **`mcp`** — the MCP HTTP server
+- **`updater`** — background worker running `update_all.py` on a configured day/hour schedule
 
-`http://<your-vps-ip>:${MCP_PORT}/mcp`
+---
 
-## MCP Server
+## MCP Tools
 
-The server exposes 13 tools over Streamable HTTP (stateless mode, JSON responses). Any MCP-compatible client can connect to it.
+9 tools exposed over Streamable HTTP (stateless, JSON responses). Seven are unified tools that combine search and detail in a single call via a `full_details` flag (auto-enabled when an ID is provided). One is a cross-entity triage tool. One provides term-level reference data.
+
+| Tool | Description |
+|------|-------------|
+| `search_across` | Cross-entity triage — searches members, bills, committees, votes, plenums, agendas, and queries in one call |
+| `members` | Search Knesset members or get full detail (factions, government roles, committees) |
+| `votes` | Search plenum votes or get full detail (per-member breakdown, related votes) |
+| `bills` | Search bills or get full detail (stages, votes, initiators, documents) |
+| `agendas` | Search motions for the agenda or get full detail |
+| `queries` | Search parliamentary queries or get full detail |
+| `plenums` | Search plenum sessions or get full session detail (agenda items, documents) |
+| `committees` | Search committee sessions or get full session detail (agenda items, documents) |
+| `metadata` | Knesset term metadata: assembly dates, committees, ministries, factions, general roles |
 
 ### Connecting
 
-Point your MCP client to the server URL (default `http://<host>:8000/mcp`) using the **Streamable HTTP** transport. The server runs stateless — each request is independent, no session tracking.
-
-Clients must send the `Accept: application/json` header.
-
-#### Testing with MCP Inspector
+Point any MCP-compatible client to `http://<host>:8000/mcp` using the **Streamable HTTP** transport. The server is stateless — no session tracking.
 
 ```bash
+# Test with MCP Inspector
 npx @modelcontextprotocol/inspector
+# Connect to http://localhost:8000/mcp, transport: Streamable HTTP
 ```
-
-Connect to `http://localhost:8000/mcp` with transport type "Streamable HTTP".
-
-### Available Tools
-
-| Tool | Type | Description |
-|------|------|-------------|
-| `search_across` | Search | Cross-entity search (members, bills, committees, votes, plenums) |
-| `search_members` | Search | Search Knesset members by name, party, role, knesset number |
-| `get_member` | Detail | Full member detail: factions, roles, committees |
-| `search_committees` | Search | Search committees by name, type, category, status |
-| `get_committee` | Detail | Full committee detail with optional sessions, members, bills, documents |
-| `search_plenums` | Search | Search plenum sessions by date, name, knesset number |
-| `get_plenum` | Detail | Full session detail with agenda items and documents |
-| `search_bills` | Search | Search bills by name, status, type, date |
-| `get_bill` | Detail | Full bill detail with plenum stages and votes |
-| `search_votes` | Search | Search votes by name, date, outcome, linked bill |
-| `get_vote` | Detail | Full vote detail with per-member breakdown |
-| `get_knesset_dates` | Lookup | Knesset terms with assembly/plenum periods |
-
-Each search tool's description includes record counts and data freshness. Parameter schemas include enum constraints with exact allowed values where applicable. Use `search_across` to find items across all entity types before drilling down with specific tools.
 
 ### Response Size Limits
 
-Responses are capped at `MAX_OUTPUT_TOKENS` characters (configured via `.env`). If a response exceeds this limit, an error is returned instructing the client to add more filters to narrow the results.
+Responses are capped at `MAX_OUTPUT_TOKENS` characters. If exceeded, an error is returned — add more filters and retry.
 
 ### Rate Limiting
 
-Per-IP sliding window rate limiting is applied to all requests. Default: 60 requests/minute, configurable via `RATE_LIMIT_PER_MINUTE` in `.env`.
+Per-IP sliding window: 60 requests/minute by default, configurable via `RATE_LIMIT_PER_MINUTE`.
+
+---
 
 ## Configuration
 
-All configuration is loaded from `.env` (see `.env.example`):
+All config is in `.env` (see `.env.example`):
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DB_PATH` | `data.sqlite` | Path to the SQLite database |
+| `POSTGRES_HOST` | — | PostgreSQL host |
+| `POSTGRES_PORT` | `5432` | PostgreSQL port |
+| `POSTGRES_DB` | — | Database name |
+| `POSTGRES_USER` | — | Database user |
+| `POSTGRES_PASSWORD` | — | Database password |
 | `MCP_HOST` | `0.0.0.0` | Server bind address |
 | `MCP_PORT` | `8000` | Server port |
 | `MCP_ENDPOINT` | `/mcp` | MCP endpoint path |
 | `RATE_LIMIT_PER_MINUTE` | `60` | Max requests per IP per minute |
 | `MAX_OUTPUT_TOKENS` | `50000` | Max response size in characters |
 | `SEARCH_ACROSS_TOP_N` | `5` | Top results per entity in `search_across` |
+| `UPDATE_CYCLE_DAYS` | `1` | Updater schedule: days between runs |
+| `UPDATE_HOUR_IN_DAY` | `3` | Updater schedule: hour of day (0–23) |
+| `UPDATE_RUN_ON_START` | `false` | Run updater immediately on container start |
 
-### Running with uvicorn
-
-```bash
-uvicorn mcp_server:app --host 0.0.0.0 --port 8000
-```
+---
 
 ## Local Query CLI
 
-`local_query.py` is a support tool for querying the same views directly from the command line. All commands output JSON to stdout.
+`scripts/local_query.py` queries the same views from the command line. All output is JSON to stdout.
 
 ```bash
-python local_query.py <command> [options]
+python scripts/local_query.py <command> [options]
 ```
 
 ### Commands
 
-#### `status` -- Database status
-
+#### `search-across`
 ```bash
-python local_query.py status
+python scripts/local_query.py search-across "נתניהו"
+python scripts/local_query.py search-across "חינוך" --top-n 3
 ```
 
-#### `search-across` -- Cross-entity search
-
+#### `members`
 ```bash
-python local_query.py search-across --query "נתניהו"
-python local_query.py search-across --query "חינוך" --top-n 3
+python scripts/local_query.py members --knesset 20
+python scripts/local_query.py members --knesset 20 --party "הליכוד"
+python scripts/local_query.py members --last-name "נתניהו"
+python scripts/local_query.py members --role-type "שר"
 ```
 
-#### `members` -- Search Knesset members
-
+#### `member`
 ```bash
-python local_query.py members --knesset 20
-python local_query.py members --knesset 20 --party "הליכוד"
-python local_query.py members --last-name "נתניהו"
-python local_query.py members --person-id 839 --committees
+python scripts/local_query.py member --member-id 839
+python scripts/local_query.py member --member-id 839 --knesset 20
 ```
 
-| Flag | Description |
-|------|-------------|
-| `--knesset` | Knesset number |
-| `--party` | Party name (Hebrew) |
-| `--role` | Role description text search |
-| `--role-type` | Role type: שר, ח"כ, ראש ממשלה, סגן שר, יו"ר כנסת |
-| `--first-name` | First name |
-| `--last-name` | Last name |
-| `--person-id` | Person ID |
-| `--committees` | Include committee memberships in output |
-
-#### `plenums` -- Search plenum sessions
-
+#### `plenums`
 ```bash
-python local_query.py plenums --knesset 20
-python local_query.py plenums --from-date 2015-03-31 --to-date 2015-04-07
+python scripts/local_query.py plenums --knesset 20 --from-date 2015-03-31 --to-date 2015-04-07
+python scripts/local_query.py plenums --session-id 568294 --full-details
 ```
 
-| Flag | Description |
-|------|-------------|
-| `--knesset` | Knesset number |
-| `--date` | Exact date (YYYY-MM-DD) |
-| `--from-date` | Start date |
-| `--to-date` | End date |
-| `--name` | Session name text search |
-
-#### `plenum` -- Single plenum session detail
-
+#### `committees`
 ```bash
-python local_query.py plenum --session-id 12345
+python scripts/local_query.py committees --knesset 20 --from-date 2016-01-01 --to-date 2016-01-31
+python scripts/local_query.py committees --committee-name "כספים" --from-date 2016-01-01 --to-date 2016-03-31
+python scripts/local_query.py committees --session-id 2064301 --full-details
 ```
 
-#### `bills` -- Search bills
-
+#### `bills`
 ```bash
-python local_query.py bills --knesset 20 --name "חוק-יסוד"
-python local_query.py bills --knesset 20 --sub-type "ממשלתית"
-python local_query.py bills --knesset 20 --status "אושר"
+python scripts/local_query.py bills --knesset 20 --name "חוק-יסוד"
+python scripts/local_query.py bills --knesset 20 --type "ממשלתית" --status "אושר"
+python scripts/local_query.py bills --bill-id 565913
 ```
 
-| Flag | Description |
-|------|-------------|
-| `--knesset` | Knesset number |
-| `--name` | Bill name text search |
-| `--sub-type` | Bill sub-type: פרטית, ממשלתית, ועדה |
-| `--status` | Status description text search |
-| `--date`, `--from-date`, `--to-date` | Date filters |
-
-#### `bill` -- Single bill detail
-
+#### `agendas`
 ```bash
-python local_query.py bill --bill-id 565913
+python scripts/local_query.py agendas --knesset 20 --name "חינוך"
+python scripts/local_query.py agendas --agenda-id 12345
 ```
 
-#### `votes` -- Search plenum votes
-
+#### `queries`
 ```bash
-python local_query.py votes --knesset 20 --date 2015-03-31
-python local_query.py votes --knesset 20 --accepted
-python local_query.py votes --bill-id 565913
+python scripts/local_query.py queries --knesset 20 --name "תקציב"
+python scripts/local_query.py queries --query-id 54321
 ```
 
-| Flag | Description |
-|------|-------------|
-| `--knesset` | Knesset number |
-| `--date` | Exact date |
-| `--from-date`, `--to-date` | Date range |
-| `--name` | Title or subject text search |
-| `--accepted` | Show only accepted votes |
-| `--rejected` | Show only rejected votes |
-| `--bill-id` | Filter to votes for a specific bill |
-
-#### `vote` -- Single vote detail
-
+#### `votes`
 ```bash
-python local_query.py vote --vote-id 26916
+python scripts/local_query.py votes --knesset 20 --date 2015-03-31
+python scripts/local_query.py votes --knesset 20 --accepted
+python scripts/local_query.py votes --bill-id 565913
 ```
 
-#### `knesset-dates` -- Knesset terms and plenum periods
-
+#### `vote`
 ```bash
-python local_query.py knesset-dates
-python local_query.py knesset-dates --knesset 25
+python scripts/local_query.py vote --vote-id 26916
 ```
 
-| Flag | Description |
-|------|-------------|
-| `--knesset` | Knesset number |
+#### `metadata`
+```bash
+python scripts/local_query.py metadata --knesset 25
+python scripts/local_query.py metadata --knesset 20 --committee-heads --ministry-members
+```
 
-## Fetching Data
+---
 
-Populate the local SQLite database (`data.sqlite`) from remote sources:
+## Data Fetching
 
 ```bash
-# Create schema
+# Initialize schema
 python core/db_cli.py init-db
 
-# Fetch all tables
+# Fetch all tables from scratch
 python core/db_cli.py fetch-all
 
-# Incremental update (only rows updated after the given datetime)
+# Incremental update (rows updated after a given datetime)
 python core/db_cli.py fetch-all --since 2025-01-01T00:00:00
-
-# Fetch individual tables
-python core/db_cli.py fetch-persons
-python core/db_cli.py fetch-bills
-python core/db_cli.py fetch-votes
 ```
 
-### Available fetch commands
+### Fetch Commands
 
-| Command | OData Entity | SQLite Table | Strategy |
-|---------|-------------|--------------|----------|
-| `fetch-persons` | KNS_Person | `person_raw` | CSV+OData |
-| `fetch-positions` | KNS_Position | `position_raw` | CSV+OData |
-| `fetch-person-to-position` | KNS_PersonToPosition | `person_to_position_raw` | CSV+OData |
-| `fetch-plenum-sessions` | KNS_PlenumSession | `plenum_session_raw` | CSV+OData |
-| `fetch-plm-session-items` | KNS_PlmSessionItem | `plm_session_item_raw` | CSV+OData |
-| `fetch-document-plenum-sessions` | KNS_DocumentPlenumSession | `document_plenum_session_raw` | CSV+OData |
-| `fetch-status` | KNS_Status | `status_raw` | OData only |
-| `fetch-bills` | KNS_Bill | `bill_raw` | CSV+OData |
-| `fetch-committees` | KNS_Committee | `committee_raw` | CSV+OData |
-| `fetch-votes` | KNS_PlenumVote | `plenum_vote_raw` | CSV+OData |
-| `fetch-vote-results` | KNS_PlenumVoteResult | `plenum_vote_result_raw` | OData only |
-| `fetch-knesset-dates` | KNS_KnessetDates | `knesset_dates_raw` | OData only |
+| Command | OData Entity | DB Table |
+|---------|-------------|----------|
+| `fetch-persons` | KNS_Person | `person_raw` |
+| `fetch-positions` | KNS_Position | `position_raw` |
+| `fetch-person-to-position` | KNS_PersonToPosition | `person_to_position_raw` |
+| `fetch-plenum-sessions` | KNS_PlenumSession | `plenum_session_raw` |
+| `fetch-plm-session-items` | KNS_PlmSessionItem | `plm_session_item_raw` |
+| `fetch-document-plenum-sessions` | KNS_DocumentPlenumSession | `document_plenum_session_raw` |
+| `fetch-status` | KNS_Status | `status_raw` |
+| `fetch-bills` | KNS_Bill | `bill_raw` |
+| `fetch-committees` | KNS_Committee | `committee_raw` |
+| `fetch-committee-sessions` | KNS_CommitteeSession | `committee_session_raw` |
+| `fetch-votes` | KNS_PlenumVote | `plenum_vote_raw` |
+| `fetch-vote-results` | KNS_PlenumVoteResult | `plenum_vote_result_raw` |
+| `fetch-knesset-dates` | KNS_KnessetDates | `knesset_dates_raw` |
+| `fetch-factions` | KNS_Faction | `faction_raw` |
+
+---
 
 ## Architecture
 
 ```
-mcp_server.py             MCP server entry point (13 tools, rate limiting)
-local_query.py            CLI for querying views (13 subcommands, JSON output)
-config.py                 Configuration (loaded from .env)
+mcp_server.py             MCP server entry point — tool registration, rate limiting, size caps
+scripts/local_query.py    CLI for querying views directly (JSON output)
+config.py                 Environment-based configuration
 core/
-  db.py                   SQLite connection (read-only + writable), indexes, metadata
-  mcp_meta.py             @mcp_tool decorator — attaches metadata to view functions
+  db.py                   PostgreSQL connections (read-only + writable), index management
+  mcp_meta.py             @mcp_tool decorator — attaches metadata, drives auto-discovery
+  search_meta.py          register_search() — plugs entity types into search_across
+  session_models.py       Shared models for session items and documents
   rate_limit.py           Per-IP ASGI rate limiting middleware
-  odata_client.py         CSV+OData fetching with pagination
-  db_cli.py               Fetch CLI (13 subcommands)
-views/                    Query views (13 views, structured search/detail layers)
-tables/                   Raw table modules (mirror OData fields exactly)
-tests/                    Integration tests against real data.sqlite
+  odata_client.py         CSV bulk-load + OData incremental fetching
+  db_cli.py               Fetch CLI
+origins/
+  bills/                  bills tool
+  members/                search_members + get_member tools
+  votes/                  search_votes + get_vote tools
+  agendas/                agendas tool
+  queries/                queries tool
+  plenums/                plenums tool
+  committees/             committees tool
+  knesset/                metadata tool
+  search/                 search_across tool
+tests/                    Integration tests against live DB (Knessets 19, 20 — stable data)
 ```
 
-### Data flow
+### How tools are registered
 
-1. **Fetch**: CSV bulk download + OData incremental updates -> raw SQLite tables
-2. **Index**: `ensure_indexes()` creates performance indexes at startup (write access)
-3. **Serve**: MCP tools call view functions -> SQL joins over raw tables -> JSON responses via read-only connections
+Each view function is decorated with `@mcp_tool(name=..., description=..., ...)` from `core/mcp_meta.py`. The decorator registers the function in a global list. At server startup, `mcp_server.py` iterates that list, enriches each description with live DB stats (record count, last-updated date, enum values), and registers the function as an MCP tool with a typed signature.
+
+`search_across` works the same way: each entity view calls `register_search(...)` at import time, and `search_across` queries all registered builders.
 
 ### Key design decisions
 
-- **Read-only queries**: all view functions use `connect_readonly()` (SQLite URI mode `?mode=ro`). Write access is only used once at startup for index creation.
-- **Decorator-driven tools**: each view function is decorated with `@mcp_tool(...)` from `core/mcp_meta.py`, which attaches metadata (name, description, entity, count SQL, enum SQL). The MCP server and `search_across` discover tools by inspecting decorated functions -- no central registry file needed.
-- **Dynamic schema enrichment**: at startup the MCP server queries the database for enum values, entity counts, and data freshness dates. Enum-constrained parameters are exposed as `Literal[...]` types in the JSON schema, and tool descriptions include record counts and last-data dates.
-- **Explicit parameter schemas**: MCP tool handlers have dynamically constructed typed signatures so the MCP Inspector shows proper input fields (not generic kwargs).
-- Raw tables mirror OData fields exactly; views provide the structured query layer.
-- CSV-first fetching: bulk CSV download, then OData for rows newer than the CSV's max `LastUpdatedDate`.
-- List views return summaries; detail views return full nested data.
-- When `IsAccepted` is NULL (OData-origin votes), it is inferred from computed totals (`total_for > total_against`).
-- Bill stage votes show only the final (decisive) vote per session, excluding section and reservation votes.
+- **Stateless / read-only queries**: all view functions use `connect_readonly()`. Write access only happens once at startup for index creation.
+- **Unified tools**: `bills`, `agendas`, `queries`, `plenums`, and `committees` combine search and detail in a single tool — pass an ID to get full detail, or `from_date` to search.
+- **Dynamic schema enrichment**: enum-constrained parameters are exposed as `Literal[...]` types built from live DB values at startup. Tool descriptions include record counts and freshness dates.
+- **CSV-first fetching**: bulk CSV download sets the baseline; OData fetches only rows newer than the CSV's max `LastUpdatedDate`.
+- **Compact responses**: `KNSBaseModel` omits null/empty/default fields. Member strings use compact formatting with date elision.
+
+---
 
 ## Tests
 
-Integration tests run against the real `data.sqlite` with known historical data from Knessets 19 and 20.
+Integration tests run against the live DB using stable historical data from Knessets 19 and 20.
 
 ```bash
-python -m pytest tests/ -v
+.venv/bin/python -m pytest tests/ -v
 ```
-
-237 tests across 11 test files covering all 12 views.

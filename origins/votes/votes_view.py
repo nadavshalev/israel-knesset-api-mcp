@@ -48,8 +48,8 @@ def _build_votes_search(*, query, knesset_num, date, date_to, top_n):
         conditions.append("v.VoteDateTime >= %s AND v.VoteDateTime <= %s")
         params.extend([date, date_to + "T99"])
     elif date:
-        conditions.append("v.VoteDateTime LIKE %s")
-        params.append(f"{date}%")
+        conditions.append("v.VoteDateTime >= %s AND v.VoteDateTime <= %s")
+        params.extend([date, date + "T99"])
 
     where = " AND ".join(conditions) if conditions else "1=1"
 
@@ -208,8 +208,8 @@ def votes(
     vote_id: Annotated[int | None, Field(description="Get a specific vote by ID (auto-enables full_details)")] = None,
     knesset_num: Annotated[int | None, Field(description="Filter by Knesset number (via session join)")] = None,
     name: Annotated[str | None, Field(description="Vote title or subject contains text")] = None,
-    date: Annotated[str | None, Field(description="Single date or start of range (YYYY-MM-DD)")] = None,
-    date_to: Annotated[str | None, Field(description="End of date range (YYYY-MM-DD); use with date for a range")] = None,
+    from_date: Annotated[str | None, Field(description="Start of date range (YYYY-MM-DD). If to_date is omitted, filters to this single day.")] = None,
+    to_date: Annotated[str | None, Field(description="End of date range (YYYY-MM-DD). Requires from_date.")] = None,
     accepted: Annotated[bool | None, Field(description="True=accepted only, False=rejected only, null=both")] = None,
     bill_id: Annotated[int | None, Field(description="Filter to votes linked to a specific bill ID")] = None,
     full_details: Annotated[bool, Field(description="Include per-member breakdown with party and related votes (auto-True when vote_id is set)")] = False,
@@ -219,7 +219,7 @@ def votes(
     Filters (all ANDed):
       - knesset_num: Knesset number (derived via session join)
       - name: vote title or subject contains text
-      - date / date_to: vote date filter (single day or range)
+      - from_date / to_date: vote date filter (single day or range)
       - accepted: True=accepted only, False=rejected only, None=both
       - bill_id: filter to votes linked to a specific bill (via ItemID)
 
@@ -229,8 +229,8 @@ def votes(
     vote_id = normalized["vote_id"]
     knesset_num = normalized["knesset_num"]
     name = normalized["name"]
-    date = normalized["date"]
-    date_to = normalized["date_to"]
+    from_date = normalized["from_date"]
+    to_date = normalized["to_date"]
     accepted = normalized["accepted"]
     bill_id = normalized["bill_id"]
     full_details = normalized["full_details"]
@@ -254,12 +254,12 @@ def votes(
         if name:
             count_conditions.append("(v.VoteTitle LIKE %s OR v.VoteSubject LIKE %s)")
             count_params.extend([f"%{name}%", f"%{name}%"])
-        if date and date_to:
+        if from_date and to_date:
             count_conditions.append("v.VoteDateTime >= %s AND v.VoteDateTime <= %s")
-            count_params.extend([date, date_to + "T99"])
-        elif date:
-            count_conditions.append("v.VoteDateTime LIKE %s")
-            count_params.append(f"{date}%")
+            count_params.extend([from_date, to_date + "T99"])
+        elif from_date:
+            count_conditions.append("v.VoteDateTime >= %s AND v.VoteDateTime <= %s")
+            count_params.extend([from_date, from_date + "T99"])
 
         count_where = " AND ".join(count_conditions) if count_conditions else "1=1"
         check_search_count(
@@ -329,12 +329,12 @@ def votes(
                          COALESCE(v.TotalAgainst, r.comp_against)))
             """
 
-    if date and date_to:
+    if from_date and to_date:
         sql += " AND v.VoteDateTime >= %s AND v.VoteDateTime <= %s"
-        params.extend([date, date_to + "T99"])
-    elif date:
-        sql += " AND v.VoteDateTime LIKE %s"
-        params.append(f"{date}%")
+        params.extend([from_date, to_date + "T99"])
+    elif from_date:
+        sql += " AND v.VoteDateTime >= %s AND v.VoteDateTime <= %s"
+        params.extend([from_date, from_date + "T99"])
 
     sql += " ORDER BY v.VoteDateTime DESC, v.Id DESC"
     cursor.execute(sql, params)

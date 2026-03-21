@@ -1,4 +1,4 @@
-"""Pydantic models for committee_sessions_view outputs."""
+"""Pydantic models for committees_view outputs."""
 
 from __future__ import annotations
 
@@ -31,5 +31,5 @@ class CmtSessionResult(KNSBaseModel):
 
 
 class CmtSessionsResults(KNSBaseModel):
-    """Results from committee_sessions."""
+    """Results from committees."""
     items: list[CmtSessionResult] = Field(description="List of committee session results sorted by date DESC, session_id DESC")
