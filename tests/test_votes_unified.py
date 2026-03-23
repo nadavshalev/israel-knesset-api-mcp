@@ -24,7 +24,7 @@ from origins.votes.votes_models import VotesResults, VoteResultPartial, VoteResu
 class TestSearchMode(unittest.TestCase):
 
     def test_knesset_20_opening_day(self):
-        results = votes(knesset_num=20, date="2015-03-31")
+        results = votes(knesset_num=20, from_date="2015-03-31")
         self.assertIsInstance(results, VotesResults)
         self.assertEqual(len(results.items), 2)
         for v in results.items:
@@ -34,12 +34,12 @@ class TestSearchMode(unittest.TestCase):
 
     def test_partial_has_no_members(self):
         """Partial results should be VoteResultPartial, not VoteResultFull."""
-        results = votes(knesset_num=20, date="2015-03-31")
+        results = votes(knesset_num=20, from_date="2015-03-31")
         for v in results.items:
             self.assertNotIsInstance(v, VoteResultFull)
 
     def test_output_fields(self):
-        results = votes(knesset_num=20, date="2015-03-31")
+        results = votes(knesset_num=20, from_date="2015-03-31")
         for v in results.items:
             self.assertIsNotNone(v.vote_id)
             self.assertIsNotNone(v.knesset_num)
@@ -56,7 +56,7 @@ class TestSearchMode(unittest.TestCase):
 class TestDateFilters(unittest.TestCase):
 
     def test_date_range(self):
-        results = votes(date="2015-03-31", date_to="2015-04-07", knesset_num=20)
+        results = votes(from_date="2015-03-31", to_date="2015-04-07", knesset_num=20)
         self.assertGreater(len(results.items), 0)
         for v in results.items:
             self.assertGreaterEqual(v.date, "2015-03-31")
@@ -78,7 +78,7 @@ class TestNameFilter(unittest.TestCase):
 class TestAcceptedFilter(unittest.TestCase):
 
     def test_accepted_only(self):
-        results = votes(knesset_num=20, date="2015-03-31", accepted=True)
+        results = votes(knesset_num=20, from_date="2015-03-31", accepted=True)
         for v in results.items:
             self.assertTrue(v.is_accepted)
 
@@ -113,7 +113,7 @@ class TestBillIdFilter(unittest.TestCase):
 class TestSortOrder(unittest.TestCase):
 
     def test_sorted_by_date_time_desc(self):
-        results = votes(knesset_num=20, date="2015-03-31")
+        results = votes(knesset_num=20, from_date="2015-03-31")
         for i in range(1, len(results.items)):
             prev = results.items[i - 1]
             curr = results.items[i]
@@ -194,7 +194,7 @@ class TestMembers(unittest.TestCase):
 
     def test_full_details_flag_without_vote_id(self):
         """full_details=True without vote_id also fetches members."""
-        results = votes(knesset_num=20, date="2015-03-31", full_details=True)
+        results = votes(knesset_num=20, from_date="2015-03-31", full_details=True)
         self.assertGreater(len(results.items), 0)
         for v in results.items:
             self.assertIsNotNone(v.members)
@@ -243,17 +243,17 @@ class TestRelatedVotes(unittest.TestCase):
 class TestODataVotes(unittest.TestCase):
 
     def test_odata_is_accepted_inferred(self):
-        results = votes(knesset_num=25, date="2022-12-19")
+        results = votes(knesset_num=25, from_date="2022-12-19")
         for v in results.items:
             self.assertIsNotNone(v.is_accepted, f"vote {v.vote_id} has is_accepted=None")
 
     def test_odata_totals_computed(self):
-        results = votes(knesset_num=25, date="2022-12-19")
+        results = votes(knesset_num=25, from_date="2022-12-19")
         for v in results.items:
             self.assertIsNotNone(v.total_for, f"vote {v.vote_id} has total_for=None")
 
     def test_specific_accepted(self):
-        results = votes(knesset_num=25, date="2022-12-13", accepted=True)
+        results = votes(knesset_num=25, from_date="2022-12-13", accepted=True)
         ids = {v.vote_id for v in results.items}
         self.assertIn(37683, ids)
         v = next(r for r in results.items if r.vote_id == 37683)
@@ -261,7 +261,7 @@ class TestODataVotes(unittest.TestCase):
         self.assertTrue(v.is_accepted)
 
     def test_specific_rejected(self):
-        results = votes(knesset_num=25, date="2022-12-19", accepted=False)
+        results = votes(knesset_num=25, from_date="2022-12-19", accepted=False)
         ids = {v.vote_id for v in results.items}
         self.assertIn(37692, ids)
         v = next(r for r in results.items if r.vote_id == 37692)
