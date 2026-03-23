@@ -5,7 +5,12 @@ import psycopg2
 import psycopg2.extras
 import psycopg2.pool
 
-from config import POSTGRES_HOST, POSTGRES_PORT, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD
+from config import (
+    POSTGRES_HOST, POSTGRES_PORT, 
+    POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD,
+    POOL_MAX_CONN
+)
+
 
 # ---------------------------------------------------------------------------
 # Connection pool (thread-safe, lazily initialised)
@@ -20,7 +25,7 @@ def _get_pool() -> psycopg2.pool.ThreadedConnectionPool:
     if _pool is None or _pool.closed:
         _pool = psycopg2.pool.ThreadedConnectionPool(
             minconn=1,
-            maxconn=10,
+            maxconn=POOL_MAX_CONN,
             host=POSTGRES_HOST,
             port=POSTGRES_PORT,
             dbname=POSTGRES_DB,

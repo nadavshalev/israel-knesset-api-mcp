@@ -15,6 +15,7 @@ import inspect
 import json
 import logging
 import sys
+import time
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -27,6 +28,8 @@ if str(ROOT) not in sys.path:
 from mcp.server.fastmcp import FastMCP
 
 from config import (
+    LOG_FILE,
+    LOG_LEVEL,
     MAX_OUTPUT_TOKENS,
     MCP_ENDPOINT,
     MCP_HOST,
@@ -190,7 +193,18 @@ mcp = FastMCP(
     host=MCP_HOST,
     port=MCP_PORT,
     streamable_http_path=MCP_ENDPOINT,
+    log_level=LOG_LEVEL,
 )
+
+# --- Optional file logging (useful when stderr is captured by a parent process) ---
+if LOG_FILE:
+    _fh = logging.FileHandler(LOG_FILE)
+    _fh.setFormatter(logging.Formatter(
+        "%(asctime)s %(levelname)-8s %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    ))
+    _fh.setLevel(getattr(logging, LOG_LEVEL, logging.INFO))
+    logging.getLogger().addHandler(_fh)
 
 
 # ---------------------------------------------------------------------------
@@ -245,6 +259,7 @@ def _make_handler(view_fn, enum_map: dict[str, list[str]]):
     against that model — producing a proper ``outputSchema`` instead of
     the generic ``{result: string}``.
     """
+    tool_name = view_fn._mcp_tool["name"]
     view_sig = inspect.signature(view_fn)
     new_params: list[inspect.Parameter] = []
 
@@ -309,7 +324,26 @@ def _make_handler(view_fn, enum_map: dict[str, list[str]]):
         handler.__annotations__ = {p.name: p.annotation for p in new_params}
         handler.__annotations__["return"] = str
 
-    return handler
+    # Wrap with logging: tool name, params, duration, errors
+    original_handler = handler
+
+    async def logged_handler(**kwargs):
+        view_kwargs = {k: v for k, v in kwargs.items() if v is not None}
+        logger.info("tool_call: %s  params=%s", tool_name, view_kwargs or "{}")
+        t0 = time.perf_counter()
+        try:
+            result = await original_handler(**kwargs)
+            elapsed = time.perf_counter() - t0
+            logger.info("tool_done: %s  %.3fs", tool_name, elapsed)
+            return result
+        except Exception:
+            elapsed = time.perf_counter() - t0
+            logger.error("tool_error: %s  %.3fs", tool_name, elapsed, exc_info=True)
+            raise
+
+    logged_handler.__signature__ = handler.__signature__
+    logged_handler.__annotations__ = handler.__annotations__
+    return logged_handler
 
 
 def _extract_field(annotation) -> Field:

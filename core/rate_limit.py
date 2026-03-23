@@ -4,8 +4,11 @@ Tracks request counts per client IP using a simple in-memory dict with
 a sliding-window approach (per-minute buckets).  No external dependencies.
 """
 
+import logging
 import time
 from collections import defaultdict
+
+logger = logging.getLogger(__name__)
 
 
 class RateLimitMiddleware:
@@ -60,6 +63,7 @@ class RateLimitMiddleware:
 
         if len(self._requests[ip]) >= self.max_per_minute:
             # Rate limit exceeded — return 429
+            logger.warning("rate_limited: ip=%s", ip)
             response_body = b'{"error": "Rate limit exceeded. Try again later."}'
             await send({
                 "type": "http.response.start",
