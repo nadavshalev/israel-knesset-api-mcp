@@ -25,4 +25,4 @@ Thumbs.db
 .opencode/
 notes.md
 
-.log
+*.log

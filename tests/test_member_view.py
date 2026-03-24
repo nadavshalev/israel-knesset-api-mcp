@@ -1,4 +1,4 @@
-"""Tests for views/member_view.py
+"""Tests for origins/members/members_view.py
 
 Integration tests use the real PostgreSQL database with known historical
 data from older Knessets (19, 20) which are stable and won't change.
@@ -13,11 +13,11 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from core.helpers import simple_date
-from origins.members.get_member_models import MemberDetail, MemberDetailList, MemberRoles
-from origins.members.get_member_view import (
+from origins.members.members_models import MemberResultFull, MembersResults, MemberRoles
+from origins.members.members_view import (
     _is_transition_gov,
     _row_category,
-    get_member,
+    members,
 )
 
 
@@ -101,18 +101,17 @@ class TestIsTransitionGov(unittest.TestCase):
 # ===================================================================
 
 
-class TestGetMemberSingleKnesset(unittest.TestCase):
-    """get_member with a specific knesset_num returns a MemberDetailList with one item."""
+class TestMemberSingleKnesset(unittest.TestCase):
+    """members() with member_id + knesset_num returns one full-detail item."""
 
     def test_netanyahu_knesset_20(self):
         """Netanyahu (965) in Knesset 20: known PM with many portfolios."""
-        result = get_member(965, knesset_num=20)
-        self.assertIsNotNone(result)
-        self.assertIsInstance(result, MemberDetailList)
+        result = members(member_id=965, knesset_num=20)
+        self.assertIsInstance(result, MembersResults)
         self.assertEqual(len(result.items), 1)
 
         m = result.items[0]
-        self.assertIsInstance(m, MemberDetail)
+        self.assertIsInstance(m, MemberResultFull)
         self.assertEqual(m.member_id, 965)
         self.assertEqual(m.name, "בנימין נתניהו")
         self.assertEqual(m.gender, "זכר")
@@ -124,63 +123,55 @@ class TestGetMemberSingleKnesset(unittest.TestCase):
 
     def test_lapid_knesset_20_output_structure(self):
         """Lapid (23594) in Knesset 20: opposition MK with committees."""
-        result = get_member(23594, knesset_num=20)
-        self.assertIsNotNone(result)
-        self.assertIsInstance(result, MemberDetailList)
+        result = members(member_id=23594, knesset_num=20)
+        self.assertIsInstance(result, MembersResults)
         self.assertEqual(len(result.items), 1)
 
         m = result.items[0]
-        # Verify top-level attributes
         for key in ("member_id", "name", "gender", "knesset_num", "faction", "roles"):
             self.assertTrue(hasattr(m, key))
-        # Verify roles sub-attributes — always includes committees
         for key in ("government", "parliamentary", "committees"):
             self.assertTrue(hasattr(m.roles, key))
 
         self.assertEqual(m.faction, ["יש עתיד"])
-        self.assertEqual(len(m.roles.government), 0)  # opposition
+        self.assertEqual(len(m.roles.government), 0)
         self.assertEqual(len(m.roles.parliamentary), 1)
         self.assertEqual(len(m.roles.committees), 3)
 
-        # Verify committee model shape
         c = m.roles.committees[0]
         for key in ("id", "name", "role", "start", "end"):
             self.assertTrue(hasattr(c, key))
 
-        # Verify parliamentary model shape
         p = m.roles.parliamentary[0]
         for key in ("name", "role", "start", "end"):
             self.assertTrue(hasattr(p, key))
 
 
-class TestGetMemberAllKnessets(unittest.TestCase):
-    """get_member without knesset_num returns a MemberDetailList."""
+class TestMemberAllKnessets(unittest.TestCase):
+    """members() with member_id only returns all terms."""
 
     def test_netanyahu_all_terms(self):
         """Netanyahu served in multiple Knessets."""
-        result = get_member(965)
-        self.assertIsNotNone(result)
-        self.assertIsInstance(result, MemberDetailList)
+        result = members(member_id=965)
+        self.assertIsInstance(result, MembersResults)
         self.assertGreater(len(result.items), 1)
-        # Each entry should have a different knesset_num
         knesset_nums = [m.knesset_num for m in result.items]
         self.assertEqual(len(knesset_nums), len(set(knesset_nums)))
 
-    def test_nonexistent_member_returns_none(self):
-        """A non-existent member ID should return None."""
-        result = get_member(999999999)
-        self.assertIsNone(result)
+    def test_nonexistent_member_returns_empty(self):
+        """A non-existent member ID should return empty results."""
+        result = members(member_id=999999999)
+        self.assertIsInstance(result, MembersResults)
+        self.assertEqual(len(result.items), 0)
 
 
 class TestTransitionGovernment(unittest.TestCase):
     def test_netanyahu_knesset_20_transition_flags(self):
         """Gov 33 roles should be marked as transition; gov 34 should not."""
-        result = get_member(965, knesset_num=20)
-        self.assertIsNotNone(result)
+        result = members(member_id=965, knesset_num=20)
         gov_roles = result.items[0].roles.government
         self.assertGreater(len(gov_roles), 0)
 
-        # Find at least one transition and one non-transition
         transition_found = any(r.is_transition for r in gov_roles)
         non_transition_found = any(not r.is_transition for r in gov_roles)
         self.assertTrue(transition_found, "Expected at least one transition gov role")
@@ -190,8 +181,7 @@ class TestTransitionGovernment(unittest.TestCase):
 class TestDateFormatting(unittest.TestCase):
     def test_dates_have_no_time_component(self):
         """Dates in output should be YYYY-MM-DD, not datetime strings."""
-        result = get_member(23594, knesset_num=20)
-        self.assertIsNotNone(result)
+        result = members(member_id=23594, knesset_num=20)
         parl = result.items[0].roles.parliamentary[0]
         self.assertEqual(parl.start, "2015-03-31")
         self.assertEqual(parl.end, "2019-04-30")
@@ -203,26 +193,23 @@ class TestCommitteesAlwaysIncluded(unittest.TestCase):
     """In the detail view, committees are always included."""
 
     def test_committees_always_present(self):
-        """get_member always includes committees in roles."""
-        result = get_member(23594, knesset_num=20)
-        self.assertIsNotNone(result)
+        result = members(member_id=23594, knesset_num=20)
         m = result.items[0]
         self.assertTrue(hasattr(m.roles, "committees"))
         self.assertEqual(len(m.roles.committees), 3)
 
     def test_committees_empty_when_member_has_none(self):
-        """Netanyahu (965) has no committee roles; committees list should be empty."""
-        result = get_member(965, knesset_num=20)
-        self.assertIsNotNone(result)
+        """Netanyahu (965) has no committee roles."""
+        result = members(member_id=965, knesset_num=20)
         m = result.items[0]
         self.assertTrue(hasattr(m.roles, "committees"))
         self.assertEqual(len(m.roles.committees), 0)
 
     def test_detail_roles_keys(self):
-        """Detail view roles should have government, parliamentary, and committees."""
-        result = get_member(23594, knesset_num=20)
-        self.assertIsNotNone(result)
-        self.assertEqual(set(MemberRoles.model_fields.keys()), {"government", "parliamentary", "committees"})
+        self.assertEqual(
+            set(MemberRoles.model_fields.keys()),
+            {"government", "parliamentary", "committees"},
+        )
 
 
 if __name__ == "__main__":

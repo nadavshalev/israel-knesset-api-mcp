@@ -1,6 +1,6 @@
 # Israeli Knesset Data MCP
 
-Israeli Knesset (parliament) data API — members, bills, votes, committee sessions, plenum sessions, agendas, parliamentary queries, and Knesset term metadata.{sync_line}{knesset_line}
+Israeli Knesset (parliament) data API — members, bills, votes, committee sessions, plenum sessions, agendas, parliamentary queries, enacted laws, and Knesset term metadata.{sync_line}{knesset_line}
 
 ## Getting Started
 
@@ -15,7 +15,7 @@ Israeli Knesset (parliament) data API — members, bills, votes, committee sessi
 
 ## Tool Overview
 
-There are **9 tools**. Seven are unified tools that combine search and detail in a single call. One is a cross-entity triage tool. One provides term-level reference data.
+There are **10 tools**. Eight are unified tools that combine search and detail in a single call. One is a cross-entity triage tool. One provides term-level reference data.
 
 | Tool | Purpose |
 |------|---------|
@@ -27,6 +27,7 @@ There are **9 tools**. Seven are unified tools that combine search and detail in
 | `queries` | Search parliamentary queries (שאילתות) or get full detail (documents, ministry, reply dates) |
 | `plenums` | Search plenum sessions or get full session detail (agenda items, documents) |
 | `committees` | Search committee sessions or get full session detail (agenda items, documents) |
+| `laws` | Search enacted Israeli laws or get full detail (classifications, ministries, bindings, corrections, connected bills) |
 | `metadata` | Knesset term metadata: assembly dates, committees, ministries, factions, general roles |
 
 ## How Unified Tools Work
@@ -82,7 +83,7 @@ Uses `from_date` and `to_date`:
 
 ### `search_across` — Cross-entity triage
 
-Searches all 7 entity types (members, bills, committees, votes, plenums, agendas, queries) and returns match counts plus top results per type. At least one filter required.
+Searches all 8 entity types (members, bills, committees, votes, plenums, agendas, queries, laws) and returns match counts plus top results per type. At least one filter required.
 
 **Parameters:** `query` (text), `knesset_num`, `date`, `date_to`, `top_n`
 
@@ -256,6 +257,30 @@ committees(from_date="2016-01-01", to_date="2016-01-31", member_id=839)
 → Sessions where member 839 served on the committee
 ```
 
+### `laws` — Enacted Israeli laws
+
+**Search parameters:** `knesset_num`, `name_query`, `law_type` (חוק יסוד/חוק תקציב/חוק מועדף), `law_validity`, `from_date`, `to_date`
+
+**Detail parameter:** `law_id` (auto-enables full_details)
+
+**Search returns:** law_id, name, knesset_num, law_types, publication_date, latest_publication_date, law_validity
+
+**Detail adds:** validity dates/notes, classifications, ministries, alternative names, israel_law_bindings, law_bindings, corrections (with linked bills), documents, connected bills (partial detail)
+
+```
+laws(knesset_num=25)
+→ All laws enacted in the 25th Knesset
+
+laws(law_type="חוק יסוד")
+→ All basic laws
+
+laws(knesset_num=20, name_query="חינוך")
+→ Education-related laws in the 20th Knesset
+
+laws(law_id=12345)
+→ Full detail with classifications, ministries, corrections, connected bills
+```
+
 ### `metadata` — Knesset term reference data
 
 Returns structured reference data for a single Knesset term. Always includes assembly/plenum dates, committees, ministries, factions, and general roles. Use optional flags to add member lists per section.
@@ -312,6 +337,11 @@ metadata(knesset_num=20, include_faction_members=True)
 **"What queries were submitted about topic Y?"**
 1. `queries(knesset_num=25, name_query="Y")` → find matching queries
 2. `queries(query_id=...)` → full detail with documents and ministry response info
+
+**"What law did bill X become?"**
+1. `bills(name_query="X")` → get `bill_id`
+2. `laws(knesset_num=25, name_query="X")` → find the enacted law
+3. `laws(law_id=...)` → full detail with corrections and connected bills
 
 **"Who are the ministers in the current Knesset?"**
 1. `metadata(knesset_num=25, include_ministry_members=True)` → all ministries with minister/deputy/member lists

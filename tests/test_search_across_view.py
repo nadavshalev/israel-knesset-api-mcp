@@ -30,7 +30,7 @@ class TestSearchAcrossStructure(unittest.TestCase):
         self.assertEqual(self.result.query, "חינוך")
 
     def test_has_all_entity_types(self):
-        expected = {"members", "bills", "committees", "votes", "plenums", "agendas", "queries"}
+        expected = {"members", "bills", "committees", "votes", "plenums", "agendas", "queries", "laws"}
         self.assertEqual(set(self.result.results.keys()), expected)
 
     def test_entity_structure(self):

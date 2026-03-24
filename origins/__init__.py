@@ -29,6 +29,7 @@ _SUB_PACKAGES = [
     "plenums",
     "agendas",
     "queries",
+    "laws",
     "knesset",
     "search",
 ]
