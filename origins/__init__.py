@@ -30,6 +30,7 @@ _SUB_PACKAGES = [
     "agendas",
     "queries",
     "laws",
+    "secondary_laws",
     "knesset",
     "search",
 ]

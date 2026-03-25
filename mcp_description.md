@@ -1,6 +1,6 @@
 # Israeli Knesset Data MCP
 
-Israeli Knesset (parliament) data API — members, bills, votes, committee sessions, plenum sessions, agendas, parliamentary queries, enacted laws, and Knesset term metadata.{sync_line}{knesset_line}
+Israeli Knesset (parliament) data API — members, bills, votes, committee sessions, plenum sessions, agendas, parliamentary queries, enacted laws, secondary legislation, and Knesset term metadata.{sync_line}{knesset_line}
 
 ## Getting Started
 
@@ -15,7 +15,7 @@ Israeli Knesset (parliament) data API — members, bills, votes, committee sessi
 
 ## Tool Overview
 
-There are **10 tools**. Eight are unified tools that combine search and detail in a single call. One is a cross-entity triage tool. One provides term-level reference data.
+There are **11 tools**. Nine are unified tools that combine search and detail in a single call. One is a cross-entity triage tool. One provides term-level reference data.
 
 | Tool | Purpose |
 |------|---------|
@@ -27,12 +27,13 @@ There are **10 tools**. Eight are unified tools that combine search and detail i
 | `queries` | Search parliamentary queries (שאילתות) or get full detail (documents, ministry, reply dates) |
 | `plenums` | Search plenum sessions or get full session detail (agenda items, documents) |
 | `committees` | Search committee sessions or get full session detail (agenda items, documents) |
-| `laws` | Search enacted Israeli laws or get full detail (classifications, ministries, bindings, corrections, connected bills) |
+| `laws` | Search enacted Israeli laws or get full detail (classifications, ministries, changes/amendments, documents) |
+| `secondary_laws` | Search secondary legislation (חקיקת משנה — regulations, orders, rules) or get full detail (regulators, authorizing laws, bindings, documents) |
 | `metadata` | Knesset term metadata: assembly dates, committees, ministries, factions, general roles |
 
 ## How Unified Tools Work
 
-All unified tools (`members`, `votes`, `bills`, `agendas`, `queries`, `plenums`, `committees`) follow the same pattern:
+All unified tools (`members`, `votes`, `bills`, `agendas`, `queries`, `plenums`, `committees`, `laws`, `secondary_laws`) follow the same pattern:
 
 - **Search mode** (default): provide filters like `knesset_num`, `name_query`, date ranges → returns a list of summary results.
 - **Detail mode**: provide an ID parameter (`member_id`, `vote_id`, `bill_id`, `agenda_id`, `query_id`, `session_id`) or set `full_details=True` → returns full nested detail.
@@ -73,7 +74,7 @@ Uses `from_date` and `to_date`:
 
 ## Parameter Types
 
-- **IDs** (`vote_id`, `bill_id`, `member_id`, `session_id`, `agenda_id`, `query_id`) are integers.
+- **IDs** (`vote_id`, `bill_id`, `member_id`, `session_id`, `agenda_id`, `query_id`, `law_id`, `secondary_law_id`) are integers.
 - **`knesset_num`** is an integer.
 - **Boolean flags** (`accepted`, `full_details`, `include_committee_heads`, etc.) accept `true`/`false`.
 - **Text filters** (names, types, statuses) are Hebrew strings with case-insensitive substring matching.
@@ -83,7 +84,7 @@ Uses `from_date` and `to_date`:
 
 ### `search_across` — Cross-entity triage
 
-Searches all 8 entity types (members, bills, committees, votes, plenums, agendas, queries, laws) and returns match counts plus top results per type. At least one filter required.
+Searches all 9 entity types (members, bills, committees, votes, plenums, agendas, queries, laws, secondary_laws) and returns match counts plus top results per type. At least one filter required.
 
 **Parameters:** `query` (text), `knesset_num`, `date`, `date_to`, `top_n`
 
@@ -265,7 +266,7 @@ committees(from_date="2016-01-01", to_date="2016-01-31", member_id=839)
 
 **Search returns:** law_id, name, knesset_num, law_types, publication_date, latest_publication_date, law_validity
 
-**Detail adds:** validity dates/notes, classifications, ministries, alternative names, israel_law_bindings, law_bindings, corrections (with linked bills), documents, connected bills (partial detail)
+**Detail adds:** validity dates/notes, classifications, ministries, alternative names, replaced laws, original bill, changes (bill + amendments + corrections grouped together), documents
 
 ```
 laws(knesset_num=25)
@@ -278,7 +279,31 @@ laws(knesset_num=20, name_query="חינוך")
 → Education-related laws in the 20th Knesset
 
 laws(law_id=12345)
-→ Full detail with classifications, ministries, corrections, connected bills
+→ Full detail with classifications, ministries, changes, documents
+```
+
+### `secondary_laws` — Secondary legislation (חקיקת משנה)
+
+**Search parameters:** `knesset_num`, `name_query`, `type` (תקנות/צו/כללים/etc.), `status`, `classification`, `is_current` (true/false), `authorizing_law_id`, `from_date`, `to_date`
+
+**Detail parameter:** `secondary_law_id` (auto-enables full_details)
+
+**Search returns:** secondary_law_id, name, knesset_num, type, status, is_current, publication_date, committee_name, major_authorizing_law_id, major_authorizing_law_name
+
+**Detail adds:** classification, publication series/page, committee/secretary/plenum dates, regulators (issuing authorities), authorizing primary laws (full partial), sec-to-sec bindings (child/parent/main relationships), documents
+
+```
+secondary_laws(knesset_num=25, type="תקנות")
+→ Regulations in the 25th Knesset
+
+secondary_laws(knesset_num=20, is_current=true)
+→ Current secondary laws from the 20th Knesset
+
+secondary_laws(authorizing_law_id=2000156, knesset_num=20)
+→ Secondary laws authorized by a specific primary law
+
+secondary_laws(secondary_law_id=2067535)
+→ Full detail with regulators, authorizing laws, bindings, documents
 ```
 
 ### `metadata` — Knesset term reference data
@@ -341,7 +366,12 @@ metadata(knesset_num=20, include_faction_members=True)
 **"What law did bill X become?"**
 1. `bills(name_query="X")` → get `bill_id`
 2. `laws(knesset_num=25, name_query="X")` → find the enacted law
-3. `laws(law_id=...)` → full detail with corrections and connected bills
+3. `laws(law_id=...)` → full detail with changes and documents
+
+**"What regulations were issued under law X?"**
+1. `laws(name_query="X")` → get `law_id`
+2. `secondary_laws(authorizing_law_id=..., knesset_num=25)` → regulations authorized by that law
+3. `secondary_laws(secondary_law_id=...)` → full detail with regulators and bindings
 
 **"Who are the ministers in the current Knesset?"**
 1. `metadata(knesset_num=25, include_ministry_members=True)` → all ministries with minister/deputy/member lists
