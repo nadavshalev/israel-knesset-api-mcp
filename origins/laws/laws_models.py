@@ -73,6 +73,7 @@ class LawResultFull(LawResultPartial):
     replaced_laws: list[ReplacedLaw] | None = Field(default=None, description="Laws replaced by this law, with the replacing bill")
     original_bill: "BillResultPartial | None" = Field(default=None, description="Original bill this law is based on. Resolved from a binding with type 'החוק המקורי' if present; otherwise from the common ParentLawID when all bindings share the same one.")
     changes: list[LawChange] | None = Field(default=None, description="Bills that changed this law, each with their amendments and corrections")
+    secondary_laws: "list[SecondaryLawResultPartial] | None" = Field(default=None, description="Secondary legislation (regulations, orders, rules) derived from this law")
     documents: list[SessionDocument] | None = Field(default=None, description="Attached documents")
 
 
@@ -83,6 +84,7 @@ class LawsResults(KNSBaseModel):
 
 # Resolve forward references
 from origins.bills.bills_models import BillResultPartial  # noqa: E402
+from origins.secondary_laws.secondary_laws_models import SecondaryLawResultPartial  # noqa: E402
 ReplacedLaw.model_rebuild()
 LawChange.model_rebuild()
 LawResultFull.model_rebuild()

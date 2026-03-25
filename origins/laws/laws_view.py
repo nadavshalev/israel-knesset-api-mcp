@@ -290,6 +290,34 @@ def _fetch_changes_and_original(cursor, law_id: int):
     return changes or None, original_bill
 
 
+def _fetch_secondary_laws(cursor, law_id: int):
+    from origins.secondary_laws.secondary_laws_models import SecondaryLawResultPartial
+    from origins.secondary_laws.secondary_laws_view import _build_partial as _sec_build_partial
+    cursor.execute(
+        """SELECT DISTINCT s.Id, s.Name, s.KnessetNum, s.TypeDesc, s.StatusName,
+                  s.IsCurrent, s.PublicationDate, s.CommitteeID,
+                  maj.AuthorizingLawID AS majorauthorizinglawid,
+                  c.Name AS committee_name,
+                  il.Name AS major_authorizing_law_name
+        FROM sec_law_authorizing_law_raw sla
+        JOIN secondary_law_raw s ON sla.SecondaryLawID = s.Id
+        LEFT JOIN committee_raw c ON s.CommitteeID = c.Id
+        LEFT JOIN LATERAL (
+            SELECT MIN(AuthorizingLawID) AS AuthorizingLawID
+            FROM sec_law_authorizing_law_raw
+            WHERE SecondaryLawID = s.Id
+        ) maj ON TRUE
+        LEFT JOIN israel_law_raw il ON maj.AuthorizingLawID = il.Id
+        WHERE sla.AuthorizingLawID = %s
+        ORDER BY s.PublicationDate DESC, s.Id DESC""",
+        [law_id],
+    )
+    rows = cursor.fetchall()
+    if not rows:
+        return None
+    return [_sec_build_partial(row) for row in rows]
+
+
 def _fetch_documents(cursor, law_id: int) -> list[SessionDocument] | None:
     cursor.execute(
         """SELECT GroupTypeDesc, ApplicationDesc, FilePath
@@ -316,8 +344,9 @@ def _fetch_full_detail(cursor, row, law_id: int):
     alt_names = _fetch_alternative_names(cursor, law_id, row.get("name"))
     replaced_laws = _fetch_replaced_laws(cursor, law_id)
     changes, original_bill = _fetch_changes_and_original(cursor, law_id)
+    secondary_laws = _fetch_secondary_laws(cursor, law_id)
     documents = _fetch_documents(cursor, law_id)
-    return classifications, ministries, alt_names, replaced_laws, original_bill, changes, documents
+    return classifications, ministries, alt_names, replaced_laws, original_bill, changes, secondary_laws, documents
 
 
 # ---------------------------------------------------------------------------
@@ -496,7 +525,7 @@ def laws(
         for row in rows:
             lid = row["id"]
             (classifications, ministries, alt_names, replaced_laws,
-             original_bill, changes, documents) = \
+             original_bill, changes, secondary_laws, documents) = \
                 _fetch_full_detail(cursor, row, lid)
             results.append(LawResultFull(
                 law_id=lid,
@@ -516,6 +545,7 @@ def laws(
                 replaced_laws=replaced_laws,
                 original_bill=original_bill,
                 changes=changes,
+                secondary_laws=secondary_laws,
                 documents=documents,
             ))
 

@@ -78,6 +78,7 @@ class BillResultFull(BillResultPartial):
     documents: list[SessionDocument] | None = Field(default=None, description="Bill documents")
     split_bills: list[SplitBill] | None = Field(default=None, description="Related bills from splits")
     merged_bills: list[MergedBill] | None = Field(default=None, description="Bills merged with this one")
+    related_laws: "list[LawResultPartial] | None" = Field(default=None, description="Primary enacted laws this bill amended or originated")
 
 
 # Backward-compat alias
@@ -87,3 +88,8 @@ BillResult = BillResultFull
 class BillsResults(KNSBaseModel):
     """Results from bills tool."""
     items: list[BillResultPartial | BillResultFull] = Field(description="List of bill results")
+
+
+# Resolve forward references
+from origins.laws.laws_models import LawResultPartial  # noqa: E402
+BillResultFull.model_rebuild()

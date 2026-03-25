@@ -327,10 +327,27 @@ def _fetch_full_detail(cursor, bill, bill_id):
         for ur in cursor.fetchall()
     ]
 
+    # ----- Related primary laws -----
+    from origins.laws.laws_models import LawResultPartial
+    from origins.laws.laws_view import _law_types, _build_partial as _law_build_partial
+    cursor.execute(
+        """SELECT DISTINCT il.Id, il.Name, il.KnessetNum,
+                  il.IsBasicLaw, il.IsBudgetLaw, il.IsFavoriteLaw,
+                  il.PublicationDate, il.LatestPublicationDate,
+                  il.LawValidityDesc
+        FROM law_binding_raw lb
+        JOIN israel_law_raw il ON lb.IsraelLawID = il.Id
+        WHERE lb.LawID = %s
+        ORDER BY il.PublicationDate DESC, il.Id DESC""",
+        (bill_id,),
+    )
+    related_laws = [_law_build_partial(r) for r in cursor.fetchall()] or None
+
     return (
         stages, initiators,
         name_history or None, documents or None,
         split_bills or None, merged_bills or None,
+        related_laws,
     )
 
 
@@ -525,7 +542,8 @@ def bills(
         results = []
         for row in rows:
             bid = row["id"]
-            stages, initiators_obj, name_history, documents, split_bills, merged_bills = \
+            stages, initiators_obj, name_history, documents, split_bills, merged_bills, \
+                related_laws = \
                 _fetch_full_detail(cursor, row, bid)
 
             # Also get primary initiator names for summary field
@@ -551,6 +569,7 @@ def bills(
                 documents=documents,
                 split_bills=split_bills,
                 merged_bills=merged_bills,
+                related_laws=related_laws,
             ))
 
     conn.close()
