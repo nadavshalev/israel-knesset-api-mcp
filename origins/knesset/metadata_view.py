@@ -3,6 +3,8 @@
 Includes assembly/plenum dates, committees (with heads), government ministries,
 and parliamentary factions. Use the granular include_* flags to add member lists
 per section.
+
+Section fetchers are public so they can be reused by MCP resource handlers.
 """
 
 import sys
@@ -53,34 +55,16 @@ def _fmt_member(
     return " ".join(parts) if len(parts) == 1 else parts[0] + " " + " ".join(parts[1:])
 
 
-@mcp_tool(
-    name="metadata",
-    description=(
-        "Get Knesset term metadata: assembly/plenum dates, committees, government ministries, "
-        "and parliamentary factions. Use include_committee_heads=True, "
-        "include_ministry_members=True, and/or include_faction_members=True to add member "
-        "lists per section. Flags can be combined. "
-        "Always includes general_roles: parliamentary roles not linked to committee/ministry/faction "
-        "(e.g. ראש הממשלה, יו\"ר הכנסת, ראש ממשלה חליפי)."
-    ),
-    entity="Knesset Metadata",
-)
-def metadata(
-    knesset_num: int,
-    include_committee_heads: bool = False,
-    include_ministry_members: bool = False,
-    include_faction_members: bool = False,
-) -> MetadataResult:
-    normalized = normalize_inputs(locals())
-    knesset_num = normalized["knesset_num"]
-    include_committee_heads = normalized["include_committee_heads"]
-    include_ministry_members = normalized["include_ministry_members"]
-    include_faction_members = normalized["include_faction_members"]
+_MINISTER_ROLES = {"שר", "שרה"}
+_DEPUTY_ROLES = {"סגן שר", "סגנית שר"}
 
-    conn = connect_readonly()
-    cursor = conn.cursor()
 
-    # Compute knesset date span for smart date elision
+# ---------------------------------------------------------------------------
+# Section fetchers (reusable by MCP resource handlers)
+# ---------------------------------------------------------------------------
+
+def fetch_knesset_span(cursor, knesset_num: int) -> tuple[str | None, str | None]:
+    """Return (start_date, end_date) for the knesset term."""
     cursor.execute(
         """
         SELECT MIN(PlenumStart) AS kstart, MAX(PlenumFinish) AS kend
@@ -89,10 +73,11 @@ def metadata(
         [knesset_num],
     )
     row = cursor.fetchone()
-    knesset_start = simple_date(row["kstart"]) if row else None
-    knesset_end = simple_date(row["kend"]) if row else None
+    return (simple_date(row["kstart"]) if row else None,
+            simple_date(row["kend"]) if row else None)
 
-    # 1. Knesset assemblies
+
+def fetch_assemblies(cursor, knesset_num: int) -> list[KnessetAssembly]:
     cursor.execute(
         """
         SELECT Id, Assembly, Plenum, PlenumStart, PlenumFinish, IsCurrent
@@ -101,7 +86,7 @@ def metadata(
         """,
         [knesset_num],
     )
-    assemblies = [
+    return [
         KnessetAssembly(
             assembly_year=row["assembly"],
             plenum_number=row["plenum"],
@@ -111,7 +96,11 @@ def metadata(
         for row in cursor.fetchall()
     ]
 
-    # 2. Committees
+
+def fetch_committees(
+    cursor, knesset_num: int, include_heads: bool,
+    knesset_start: str | None, knesset_end: str | None,
+) -> list[CommitteeMeta]:
     cursor.execute(
         """
         SELECT Id, Name, CommitteeTypeDesc, CommitteeParentName, StartDate, FinishDate
@@ -122,9 +111,8 @@ def metadata(
     )
     committee_rows = cursor.fetchall()
 
-    # 3. Committee heads (only when include_committee_heads=True)
     heads_by_committee: dict[int, list[str]] = defaultdict(list)
-    if include_committee_heads:
+    if include_heads:
         cursor.execute(
             """
             SELECT ptp.CommitteeID, ptp.PersonID, p.FirstName, p.LastName,
@@ -139,7 +127,6 @@ def metadata(
             """,
             [knesset_num],
         )
-        # Build a lookup from committee_id → (start, end) for elision
         committee_dates: dict[int, tuple[str | None, str | None]] = {
             row["id"]: (simple_date(row["startdate"]), simple_date(row["finishdate"]))
             for row in committee_rows
@@ -160,7 +147,7 @@ def metadata(
                 )
             )
 
-    committees = [
+    return [
         CommitteeMeta(
             committee_id=row["id"],
             name=row["name"],
@@ -168,12 +155,16 @@ def metadata(
             parent_committee=row["committeeparentname"],
             start_date=simple_date(row["startdate"]),
             end_date=simple_date(row["finishdate"]),
-            heads=heads_by_committee.get(row["id"]) if include_committee_heads else None,
+            heads=heads_by_committee.get(row["id"]) if include_heads else None,
         )
         for row in committee_rows
     ]
 
-    # 4. Gov ministries — only those with members in this knesset
+
+def fetch_ministries(
+    cursor, knesset_num: int, include_members: bool,
+    knesset_start: str | None, knesset_end: str | None,
+) -> list[GovMinistryMeta]:
     cursor.execute(
         """
         SELECT DISTINCT ptp.GovMinistryID, gm.Name
@@ -186,13 +177,10 @@ def metadata(
     )
     ministry_rows = cursor.fetchall()
 
-    # 5. Gov ministry members (only when include_ministry_members=True)
-    _MINISTER_ROLES = {"שר", "שרה"}
-    _DEPUTY_ROLES = {"סגן שר", "סגנית שר"}
     minister_by_ministry: dict[int, list[str]] = defaultdict(list)
     deputy_by_ministry: dict[int, list[str]] = defaultdict(list)
     members_by_ministry: dict[int, list[str]] = defaultdict(list)
-    if include_ministry_members:
+    if include_members:
         cursor.execute(
             """
             SELECT ptp.GovMinistryID, ptp.PersonID, p.FirstName, p.LastName,
@@ -229,18 +217,22 @@ def metadata(
     def _nonempty(lst: list) -> list | None:
         return lst if lst else None
 
-    gov_ministries = [
+    return [
         GovMinistryMeta(
             ministry_id=row["govministryid"],
             name=row["name"],
-            minister=_nonempty(minister_by_ministry.get(row["govministryid"], [])) if include_ministry_members else None,
-            deputy_ministers=_nonempty(deputy_by_ministry.get(row["govministryid"], [])) if include_ministry_members else None,
-            members=_nonempty(members_by_ministry.get(row["govministryid"], [])) if include_ministry_members else None,
+            minister=_nonempty(minister_by_ministry.get(row["govministryid"], [])) if include_members else None,
+            deputy_ministers=_nonempty(deputy_by_ministry.get(row["govministryid"], [])) if include_members else None,
+            members=_nonempty(members_by_ministry.get(row["govministryid"], [])) if include_members else None,
         )
         for row in ministry_rows
     ]
 
-    # 6. Factions
+
+def fetch_factions(
+    cursor, knesset_num: int, include_members: bool,
+    knesset_start: str | None, knesset_end: str | None,
+) -> list[FactionMeta]:
     cursor.execute(
         """
         SELECT Id, Name, StartDate, FinishDate
@@ -251,9 +243,8 @@ def metadata(
     )
     faction_rows = cursor.fetchall()
 
-    # 7. Faction members (only when include_faction_members=True)
     members_by_faction: dict[int, list[str]] = defaultdict(list)
-    if include_faction_members:
+    if include_members:
         cursor.execute(
             """
             SELECT ptp.FactionID, ptp.PersonID, p.FirstName, p.LastName,
@@ -309,18 +300,22 @@ def metadata(
                 )
             )
 
-    factions = [
+    return [
         FactionMeta(
             faction_id=row["id"],
             name=row["name"],
             start_date=simple_date(row["startdate"]),
             end_date=simple_date(row["finishdate"]),
-            members=members_by_faction.get(row["id"]) if include_faction_members else None,
+            members=members_by_faction.get(row["id"]) if include_members else None,
         )
         for row in faction_rows
     ]
 
-    # 8. General roles (always included — no flag)
+
+def fetch_general_roles(
+    cursor, knesset_num: int,
+    knesset_start: str | None, knesset_end: str | None,
+) -> list[GeneralRoleMeta]:
     cursor.execute(
         """
         SELECT ptp.PersonID, p.FirstName, p.LastName, ptp.FactionName,
@@ -335,6 +330,8 @@ def metadata(
           AND ptp.FactionID IS NULL
           AND pos.Description IS NOT NULL
           AND pos.Description NOT LIKE '%%חבר כנסת%%'
+          AND pos.Description NOT LIKE '%%חבר הכנסת%%'
+          AND pos.Description NOT LIKE '%%חברת הכנסת%%'
           AND pos.Description NOT LIKE '%%ח"כ%%'
         ORDER BY pos.Description, p.LastName, p.FirstName
         """,
@@ -381,10 +378,49 @@ def metadata(
             )
         )
 
-    general_roles = [
+    return [
         GeneralRoleMeta(position=pos_desc, holders=holders)
         for pos_desc, holders in sorted(holders_by_position.items())
     ]
+
+
+# ---------------------------------------------------------------------------
+# MCP tool (thin wrapper)
+# ---------------------------------------------------------------------------
+
+@mcp_tool(
+    name="metadata",
+    description=(
+        "Get Knesset term metadata: assembly/plenum dates, committees, government ministries, "
+        "and parliamentary factions. Use include_committee_heads=True, "
+        "include_ministry_members=True, and/or include_faction_members=True to add member "
+        "lists per section. Flags can be combined. "
+        "Always includes general_roles: parliamentary roles not linked to committee/ministry/faction "
+        "(e.g. ראש הממשלה, יו\"ר הכנסת, ראש ממשלה חליפי)."
+    ),
+    entity="Knesset Metadata",
+)
+def metadata(
+    knesset_num: int,
+    include_committee_heads: bool = False,
+    include_ministry_members: bool = False,
+    include_faction_members: bool = False,
+) -> MetadataResult:
+    normalized = normalize_inputs(locals())
+    knesset_num = normalized["knesset_num"]
+    include_committee_heads = normalized["include_committee_heads"]
+    include_ministry_members = normalized["include_ministry_members"]
+    include_faction_members = normalized["include_faction_members"]
+
+    conn = connect_readonly()
+    cursor = conn.cursor()
+
+    knesset_start, knesset_end = fetch_knesset_span(cursor, knesset_num)
+    assemblies = fetch_assemblies(cursor, knesset_num)
+    committees = fetch_committees(cursor, knesset_num, include_committee_heads, knesset_start, knesset_end)
+    gov_ministries = fetch_ministries(cursor, knesset_num, include_ministry_members, knesset_start, knesset_end)
+    factions = fetch_factions(cursor, knesset_num, include_faction_members, knesset_start, knesset_end)
+    general_roles = fetch_general_roles(cursor, knesset_num, knesset_start, knesset_end)
 
     conn.close()
 

@@ -394,6 +394,146 @@ for _fn in get_all_tools():
 
 
 # ---------------------------------------------------------------------------
+# MCP Resources — Knesset term metadata (slowly-changing reference data)
+# ---------------------------------------------------------------------------
+
+from origins.knesset.metadata_view import (
+    fetch_knesset_span,
+    fetch_assemblies,
+    fetch_committees,
+    fetch_ministries,
+    fetch_factions,
+    fetch_general_roles,
+)
+
+
+def _log_resource(resource_name: str, knesset_num: int):
+    logger.info("resource_call: %s  knesset_num=%s", resource_name, knesset_num)
+
+
+def _log_resource_done(resource_name: str, t0: float):
+    logger.info("resource_done: %s  %.3fs", resource_name, time.perf_counter() - t0)
+
+
+def _log_resource_error(resource_name: str, t0: float):
+    logger.error("resource_error: %s  %.3fs", resource_name, time.perf_counter() - t0, exc_info=True)
+
+
+@mcp.resource(
+    "knesset://knesset/{knesset_num}/assemblies",
+    name="Knesset Assemblies",
+    description="Assembly/plenum periods for a Knesset term",
+    mime_type="application/json",
+)
+def resource_assemblies(knesset_num: int) -> list[dict]:
+    knesset_num = int(knesset_num)
+    _log_resource("assemblies", knesset_num)
+    t0 = time.perf_counter()
+    try:
+        conn = connect_readonly()
+        cursor = conn.cursor()
+        result = fetch_assemblies(cursor, knesset_num)
+        conn.close()
+        _log_resource_done("assemblies", t0)
+        return [r.model_dump(exclude_none=True) for r in result]
+    except Exception:
+        _log_resource_error("assemblies", t0)
+        raise
+
+
+@mcp.resource(
+    "knesset://knesset/{knesset_num}/committees",
+    name="Knesset Committees",
+    description="Committees with chairs for a Knesset term",
+    mime_type="application/json",
+)
+def resource_committees(knesset_num: int) -> list[dict]:
+    knesset_num = int(knesset_num)
+    _log_resource("committees", knesset_num)
+    t0 = time.perf_counter()
+    try:
+        conn = connect_readonly()
+        cursor = conn.cursor()
+        kstart, kend = fetch_knesset_span(cursor, knesset_num)
+        result = fetch_committees(cursor, knesset_num, include_heads=True, knesset_start=kstart, knesset_end=kend)
+        conn.close()
+        _log_resource_done("committees", t0)
+        return [r.model_dump(exclude_none=True) for r in result]
+    except Exception:
+        _log_resource_error("committees", t0)
+        raise
+
+
+@mcp.resource(
+    "knesset://knesset/{knesset_num}/ministries",
+    name="Government Ministries",
+    description="Government ministries with ministers, deputies, and members for a Knesset term",
+    mime_type="application/json",
+)
+def resource_ministries(knesset_num: int) -> list[dict]:
+    knesset_num = int(knesset_num)
+    _log_resource("ministries", knesset_num)
+    t0 = time.perf_counter()
+    try:
+        conn = connect_readonly()
+        cursor = conn.cursor()
+        kstart, kend = fetch_knesset_span(cursor, knesset_num)
+        result = fetch_ministries(cursor, knesset_num, include_members=True, knesset_start=kstart, knesset_end=kend)
+        conn.close()
+        _log_resource_done("ministries", t0)
+        return [r.model_dump(exclude_none=True) for r in result]
+    except Exception:
+        _log_resource_error("ministries", t0)
+        raise
+
+
+@mcp.resource(
+    "knesset://knesset/{knesset_num}/factions",
+    name="Parliamentary Factions",
+    description="Factions with member lists for a Knesset term",
+    mime_type="application/json",
+)
+def resource_factions(knesset_num: int) -> list[dict]:
+    knesset_num = int(knesset_num)
+    _log_resource("factions", knesset_num)
+    t0 = time.perf_counter()
+    try:
+        conn = connect_readonly()
+        cursor = conn.cursor()
+        kstart, kend = fetch_knesset_span(cursor, knesset_num)
+        result = fetch_factions(cursor, knesset_num, include_members=True, knesset_start=kstart, knesset_end=kend)
+        conn.close()
+        _log_resource_done("factions", t0)
+        return [r.model_dump(exclude_none=True) for r in result]
+    except Exception:
+        _log_resource_error("factions", t0)
+        raise
+
+
+@mcp.resource(
+    "knesset://knesset/{knesset_num}/roles",
+    name="General Parliamentary Roles",
+    description="Parliamentary roles not linked to committees/ministries/factions (e.g. Prime Minister, Knesset Speaker)",
+    mime_type="application/json",
+)
+def resource_roles(knesset_num: int) -> list[dict]:
+    knesset_num = int(knesset_num)
+    _log_resource("roles", knesset_num)
+    t0 = time.perf_counter()
+    try:
+        conn = connect_readonly()
+        cursor = conn.cursor()
+        kstart, kend = fetch_knesset_span(cursor, knesset_num)
+        result = fetch_general_roles(cursor, knesset_num, knesset_start=kstart, knesset_end=kend)
+        conn.close()
+        _log_resource_done("roles", t0)
+        return [r.model_dump(exclude_none=True) for r in result]
+    except Exception:
+        _log_resource_error("roles", t0)
+        raise
+
+
+# ---------------------------------------------------------------------------
 # Health check endpoint
 # ---------------------------------------------------------------------------
 

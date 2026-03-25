@@ -6,7 +6,7 @@ Israeli Knesset (parliament) data API — members, bills, votes, committee sessi
 
 1. Use `search_across` for broad discovery — it searches all entity types at once and returns the top matches per type.
 2. Each tool's description includes the number of records and data freshness date. Parameter schemas include the exact allowed values where applicable — use those values verbatim.
-3. Use the `metadata` tool to look up Knesset term dates, committees, ministries, factions, and general roles for a given Knesset number.
+3. For slowly-changing reference data (assembly dates, committees, ministries, factions, roles), use the **MCP resources** below instead of the `metadata` tool — resources can be cached by clients.
 
 ## Notes
 
@@ -30,6 +30,22 @@ There are **11 tools**. Nine are unified tools that combine search and detail in
 | `laws` | Search enacted Israeli laws or get full detail (classifications, ministries, changes/amendments, documents) |
 | `secondary_laws` | Search secondary legislation (חקיקת משנה — regulations, orders, rules) or get full detail (regulators, authorizing laws, bindings, documents) |
 | `metadata` | Knesset term metadata: assembly dates, committees, ministries, factions, general roles |
+
+## Resources
+
+Five MCP resources expose per-Knesset-term reference data. Resources are readable and cacheable — prefer them over `metadata` when you need this data repeatedly.
+
+| Resource URI | Content |
+|---|---|
+| `knesset://knesset/{{knesset_num}}/assemblies` | Assembly/plenum periods with start and end dates |
+| `knesset://knesset/{{knesset_num}}/committees` | Committees with type, parent, dates, and chair list |
+| `knesset://knesset/{{knesset_num}}/ministries` | Government ministries with minister, deputies, and members |
+| `knesset://knesset/{{knesset_num}}/factions` | Parliamentary factions with member lists |
+| `knesset://knesset/{{knesset_num}}/roles` | General roles not tied to a committee/ministry/faction (e.g. Prime Minister, Knesset Speaker) |
+
+Replace `{{knesset_num}}` with the Knesset term number (e.g. `25` for the current term).
+
+Member strings in resources use compact format: `{{id}}: {{name}} ({{party}}) [from {{start}}] [to {{end}}]`. Dates matching the parent entity's span are elided for brevity.
 
 ## How Unified Tools Work
 
@@ -308,7 +324,7 @@ secondary_laws(secondary_law_id=2067535)
 
 ### `metadata` — Knesset term reference data
 
-Returns structured reference data for a single Knesset term. Always includes assembly/plenum dates, committees, ministries, factions, and general roles. Use optional flags to add member lists per section.
+Returns structured reference data for a single Knesset term in one call. Prefer the individual **MCP resources** (`knesset://knesset/{{knesset_num}}/...`) when you only need one section or want cached data. Use `metadata` when you need everything at once.
 
 **Required parameter:** `knesset_num`
 
