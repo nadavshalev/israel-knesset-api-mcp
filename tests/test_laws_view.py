@@ -13,7 +13,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from origins.laws.laws_view import laws
-from origins.laws.laws_models import LawResultPartial, LawResultFull, LawsResults
+from origins.laws.laws_models import LawResultPartial, LawResultFull, LawsResults, LawChange
 
 
 class TestSearchMode(unittest.TestCase):
@@ -154,37 +154,67 @@ class TestFullDetailFields(unittest.TestCase):
         for c in self.law.classifications:
             self.assertIsInstance(c, str)
 
-    def test_has_connected_bills(self):
-        self.assertIsNotNone(self.law.bills)
-        self.assertGreater(len(self.law.bills), 0)
+    def test_has_changes(self):
+        self.assertIsNotNone(self.law.changes)
+        self.assertGreater(len(self.law.changes), 0)
 
-    def test_bills_have_id_and_name(self):
-        for bill in self.law.bills:
-            self.assertIsNotNone(bill.bill_id)
-            self.assertIsNotNone(bill.name)
+    def test_changes_have_bill(self):
+        for change in self.law.changes:
+            self.assertIsInstance(change, LawChange)
+            self.assertIsNotNone(change.bill)
+            self.assertIsNotNone(change.bill.bill_id)
+            self.assertIsNotNone(change.bill.name)
 
 
-class TestCorrections(unittest.TestCase):
-    """Law 2001386 (חוק שירות ביטחון) has corrections."""
+class TestChanges(unittest.TestCase):
+    """Law 2001386 (חוק שירות ביטחון) has changes (amendments and corrections)."""
 
     @classmethod
     def setUpClass(cls):
         result = laws(law_id=2001386)
         cls.law = result.items[0]
 
-    def test_has_corrections(self):
-        self.assertIsNotNone(self.law.corrections)
-        self.assertGreater(len(self.law.corrections), 0)
+    def test_has_changes(self):
+        self.assertIsNotNone(self.law.changes)
+        self.assertGreater(len(self.law.changes), 0)
+
+    def test_each_change_has_bill(self):
+        for change in self.law.changes:
+            self.assertIsNotNone(change.bill)
+            self.assertIsNotNone(change.bill.bill_id)
+            self.assertIsNotNone(change.bill.name)
+
+    def test_has_corrections_in_changes(self):
+        """At least one change has corrections."""
+        with_corrections = [c for c in self.law.changes if c.corrections]
+        self.assertGreater(len(with_corrections), 0)
 
     def test_correction_fields(self):
-        c = self.law.corrections[0]
-        self.assertIsNotNone(c.correction_type)
-        self.assertIsNotNone(c.status)
+        """Corrections have correction_type and status (no bill_id/bill_name)."""
+        for change in self.law.changes:
+            if change.corrections:
+                c = change.corrections[0]
+                self.assertIsNotNone(c.correction_type)
+                self.assertIsNotNone(c.status)
+                self.assertFalse(hasattr(c, "bill_id"))
+                self.assertFalse(hasattr(c, "bill_name"))
+                return
+        self.fail("No corrections found in any change")
 
-    def test_correction_has_bill_link(self):
-        """At least one correction links to a bill."""
-        bills = [c for c in self.law.corrections if c.bill_id is not None]
-        self.assertGreater(len(bills), 0)
+    def test_has_amendments_in_changes(self):
+        """At least one change has amendments."""
+        with_amendments = [c for c in self.law.changes if c.amendments]
+        self.assertGreater(len(with_amendments), 0)
+
+    def test_amendment_has_no_bill_fields(self):
+        """Amendments have no bill_id/bill_name (bill is on LawChange)."""
+        for change in self.law.changes:
+            if change.amendments:
+                a = change.amendments[0]
+                self.assertFalse(hasattr(a, "bill_id"))
+                self.assertFalse(hasattr(a, "bill_name"))
+                return
+        self.fail("No amendments found in any change")
 
 
 class TestReplacedLaws(unittest.TestCase):
@@ -219,40 +249,33 @@ class TestReplacedLaws(unittest.TestCase):
         self.assertFalse(hasattr(self.law, "israel_law_bindings"))
 
 
-class TestBindings(unittest.TestCase):
-    """Law bindings for law 2001386."""
+class TestChangesStructure(unittest.TestCase):
+    """Verify changes structure for law 2001386."""
 
     @classmethod
     def setUpClass(cls):
         result = laws(law_id=2001386)
         cls.law = result.items[0]
 
-    def test_has_bindings(self):
-        self.assertIsNotNone(self.law.bindings)
-        self.assertGreater(len(self.law.bindings), 0)
+    def test_changes_bill_has_id_and_name(self):
+        for change in self.law.changes:
+            self.assertIsNotNone(change.bill.bill_id)
+            self.assertIsNotNone(change.bill.name)
 
-    def test_binding_has_bill_name(self):
-        """Bindings include bill name."""
-        named = [b for b in self.law.bindings if b.bill_name is not None]
-        self.assertGreater(len(named), 0)
+    def test_amendments_have_date(self):
+        """Amendments include date."""
+        for change in self.law.changes:
+            if change.amendments:
+                dated = [a for a in change.amendments if a.date is not None]
+                if dated:
+                    return
+        self.fail("No amendments with date found")
 
-    def test_binding_has_date(self):
-        """Bindings include date."""
-        dated = [b for b in self.law.bindings if b.date is not None]
-        self.assertGreater(len(dated), 0)
-
-    def test_no_parent_law_field(self):
-        """parent_law_id removed from binding model."""
-        for b in self.law.bindings:
-            data = b.model_dump(exclude_none=True)
-            self.assertNotIn("parent_law_id", data)
-
-    def test_no_israel_law_fields(self):
-        """israel_law_id/name not in binding model."""
-        for b in self.law.bindings:
-            data = b.model_dump(exclude_none=True)
-            self.assertNotIn("israel_law_id", data)
-            self.assertNotIn("israel_law_name", data)
+    def test_no_old_bindings_field(self):
+        """Old bindings/corrections/bills fields should not exist."""
+        self.assertFalse(hasattr(self.law, "bindings"))
+        self.assertFalse(hasattr(self.law, "corrections"))
+        self.assertFalse(hasattr(self.law, "bills"))
 
 
 class TestOriginalBill(unittest.TestCase):

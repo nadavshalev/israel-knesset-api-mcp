@@ -25,7 +25,7 @@ from core.session_models import SessionDocument
 from origins.bills.bills_models import BillResultPartial
 from origins.laws.laws_models import (
     LawResultPartial, LawResultFull, LawsResults,
-    ReplacedLaw, LawBinding, LawCorrection,
+    ReplacedLaw, LawAmendment, LawCorrection, LawChange,
 )
 
 
@@ -172,92 +172,122 @@ def _fetch_bill_partial(cursor, bill_id: int) -> BillResultPartial | None:
     return _build_bill_partial_from_row(r) if r else None
 
 
-def _fetch_law_bindings_and_original(cursor, law_id: int):
-    """Fetch law bindings and resolve a single original_bill.
+def _fetch_changes_and_original(cursor, law_id: int):
+    """Fetch all changes (amendments + corrections) grouped by bill, and resolve original_bill.
 
-    Priority:
-    1. Binding with BindingTypeDesc = 'החוק המקורי' — use its LawID.
-    2. All bindings share the same ParentLawID (excluding self) — use that.
-    If both apply, prefer (1).
-
-    Returns (bindings, original_bill).
+    Returns (changes, original_bill).
     """
+    # Fetch all binding rows
     cursor.execute(
         """SELECT lb.LawID, lb.ParentLawID, lb.BindingTypeDesc,
                   lb.AmendmentTypeDesc, lb.PageNumber,
                   lb.ParagraphNumber, lb.CorrectionNumber,
                   lb.LastUpdatedDate,
-                  b.Name AS bill_name
+                  b.Id AS b_id, b.Name AS b_name, b.KnessetNum AS b_knessetnum,
+                  b.SubTypeDesc AS b_subtypedesc,
+                  st."Desc" AS b_statusdesc,
+                  b.PublicationDate AS b_publicationdate
         FROM law_binding_raw lb
         LEFT JOIN bill_raw b ON lb.LawID = b.Id
+        LEFT JOIN status_raw st ON b.StatusID = st.Id
         WHERE lb.IsraelLawID = %s""",
         [law_id],
     )
-    rows = cursor.fetchall()
-    if not rows:
+    binding_rows = cursor.fetchall()
+
+    # Fetch all correction rows
+    cursor.execute(
+        """SELECT lc.CorrectionTypeDesc, lc.CorrectionStatusDesc,
+                  lc.PublicationDate, lc.MagazineNumber, lc.PageNumber,
+                  lc.IsKnessetInvolvement, lc.BillID,
+                  b.Id AS b_id, b.Name AS b_name, b.KnessetNum AS b_knessetnum,
+                  b.SubTypeDesc AS b_subtypedesc,
+                  st."Desc" AS b_statusdesc,
+                  b.PublicationDate AS b_publicationdate
+        FROM israel_law_law_corrections_raw illc
+        JOIN law_corrections_raw lc ON illc.LawCorrectionID = lc.Id
+        LEFT JOIN bill_raw b ON lc.BillID = b.Id
+        LEFT JOIN status_raw st ON b.StatusID = st.Id
+        WHERE illc.IsraelLawID = %s
+        ORDER BY lc.PublicationDate DESC""",
+        [law_id],
+    )
+    correction_rows = cursor.fetchall()
+
+    if not binding_rows and not correction_rows:
         return None, None
 
-    bindings = [
-        LawBinding(
-            bill_id=r["lawid"],
-            bill_name=r["bill_name"],
+    # Group amendments by bill_id
+    amendments_by_bill: dict[int, tuple] = {}
+    for r in binding_rows:
+        bill_id = r.get("lawid")
+        if bill_id is None:
+            continue
+        if bill_id not in amendments_by_bill:
+            amendments_by_bill[bill_id] = (_build_bill_partial_from_row(r), [])
+        amendments_by_bill[bill_id][1].append(LawAmendment(
             binding_type=r["bindingtypedesc"],
             amendment_type=r["amendmenttypedesc"],
             date=simple_date(r.get("lastupdateddate")),
             page_number=r["pagenumber"],
             paragraph_number=str(r["paragraphnumber"]) if r.get("paragraphnumber") is not None else None,
-            correction_number=str(r["correctionnumber"]) if r.get("correctionnumber") is not None else None,
-        )
-        for r in rows
-    ]
+            amendment_number=str(r["correctionnumber"]) if r.get("correctionnumber") is not None else None,
+        ))
 
-    # Priority 1: explicit "החוק המקורי" binding
-    original_bill_id = next(
-        (r["lawid"] for r in rows if r.get("bindingtypedesc") == "החוק המקורי"),
-        None,
-    )
-
-    # Priority 2 (fallback): all bindings share the same ParentLawID
-    if original_bill_id is None:
-        parent_ids = {
-            r["parentlawid"] for r in rows
-            if r.get("parentlawid") is not None and r["parentlawid"] != law_id
-        }
-        if len(parent_ids) == 1:
-            original_bill_id = parent_ids.pop()
-
-    original_bill = _fetch_bill_partial(cursor, original_bill_id) if original_bill_id else None
-    return bindings or None, original_bill
-
-
-def _fetch_corrections(cursor, law_id: int) -> list[LawCorrection] | None:
-    cursor.execute(
-        """SELECT lc.CorrectionTypeDesc, lc.CorrectionStatusDesc,
-                  lc.PublicationDate, lc.MagazineNumber, lc.PageNumber,
-                  lc.IsKnessetInvolvement, lc.BillID, b.Name AS bill_name
-        FROM israel_law_law_corrections_raw illc
-        JOIN law_corrections_raw lc ON illc.LawCorrectionID = lc.Id
-        LEFT JOIN bill_raw b ON lc.BillID = b.Id
-        WHERE illc.IsraelLawID = %s
-        ORDER BY lc.PublicationDate DESC""",
-        [law_id],
-    )
-    rows = cursor.fetchall()
-    if not rows:
-        return None
-    return [
-        LawCorrection(
+    # Group corrections by bill_id
+    corrections_by_bill: dict[int, tuple] = {}
+    for r in correction_rows:
+        bill_id = r.get("billid")
+        if bill_id is None:
+            continue
+        if bill_id not in corrections_by_bill:
+            corrections_by_bill[bill_id] = (_build_bill_partial_from_row(r), [])
+        corrections_by_bill[bill_id][1].append(LawCorrection(
             correction_type=r["correctiontypedesc"],
             status=r["correctionstatusdesc"],
             publication_date=simple_date(r.get("publicationdate")),
             magazine_number=r.get("magazinenumber"),
             page_number=r.get("pagenumber"),
             is_knesset_involvement=bool(r["isknessetinvolvement"]) if r.get("isknessetinvolvement") is not None else None,
-            bill_id=r["billid"],
-            bill_name=r["bill_name"],
-        )
-        for r in rows
-    ]
+        ))
+
+    # Merge by bill_id, preserving insertion order
+    seen: dict[int, None] = {}
+    for bill_id in amendments_by_bill:
+        seen[bill_id] = None
+    for bill_id in corrections_by_bill:
+        seen[bill_id] = None
+
+    changes = []
+    for bill_id in seen:
+        bill = None
+        if bill_id in amendments_by_bill:
+            bill = amendments_by_bill[bill_id][0]
+        if bill is None and bill_id in corrections_by_bill:
+            bill = corrections_by_bill[bill_id][0]
+        if bill is None:
+            continue
+        changes.append(LawChange(
+            bill=bill,
+            amendments=amendments_by_bill[bill_id][1] if bill_id in amendments_by_bill else None,
+            corrections=corrections_by_bill[bill_id][1] if bill_id in corrections_by_bill else None,
+        ))
+
+    # Resolve original_bill from binding rows
+    original_bill_id = next(
+        (r["lawid"] for r in binding_rows if r.get("bindingtypedesc") == "\u05d4\u05d7\u05d5\u05e7 \u05d4\u05de\u05e7\u05d5\u05e8\u05d9"),
+        None,
+    )
+    if original_bill_id is None:
+        parent_ids = {
+            r["parentlawid"] for r in binding_rows
+            if r.get("parentlawid") is not None and r["parentlawid"] != law_id
+        }
+        if len(parent_ids) == 1:
+            original_bill_id = parent_ids.pop()
+
+    original_bill = _fetch_bill_partial(cursor, original_bill_id) if original_bill_id else None
+    return changes or None, original_bill
 
 
 def _fetch_documents(cursor, law_id: int) -> list[SessionDocument] | None:
@@ -280,47 +310,14 @@ def _fetch_documents(cursor, law_id: int) -> list[SessionDocument] | None:
     ]
 
 
-def _fetch_connected_bills(cursor, law_id: int) -> list[BillResultPartial] | None:
-    cursor.execute(
-        """SELECT DISTINCT b.Id, b.Name, b.KnessetNum, b.SubTypeDesc,
-               st."Desc" AS StatusDesc, b.PublicationDate,
-               b.PublicationSeriesDesc, b.SummaryLaw
-        FROM israel_law_law_corrections_raw illc
-        JOIN law_corrections_raw lc ON illc.LawCorrectionID = lc.Id
-        JOIN bill_raw b ON lc.BillID = b.Id
-        LEFT JOIN status_raw st ON b.StatusID = st.Id
-        WHERE illc.IsraelLawID = %s
-        ORDER BY b.PublicationDate DESC""",
-        [law_id],
-    )
-    rows = cursor.fetchall()
-    if not rows:
-        return None
-    return [
-        BillResultPartial(
-            bill_id=r["id"],
-            name=r["name"],
-            knesset_num=r["knessetnum"],
-            type=r["subtypedesc"],
-            status=r["statusdesc"],
-            publication_date=simple_date(r.get("publicationdate")),
-            publication_series=r.get("publicationseriesdesc"),
-            summary=r.get("summarylaw"),
-        )
-        for r in rows
-    ]
-
-
 def _fetch_full_detail(cursor, row, law_id: int):
     classifications = _fetch_classifications(cursor, law_id)
     ministries = _fetch_ministries(cursor, law_id)
     alt_names = _fetch_alternative_names(cursor, law_id, row.get("name"))
     replaced_laws = _fetch_replaced_laws(cursor, law_id)
-    bindings, original_bill = _fetch_law_bindings_and_original(cursor, law_id)
-    corrections = _fetch_corrections(cursor, law_id)
+    changes, original_bill = _fetch_changes_and_original(cursor, law_id)
     documents = _fetch_documents(cursor, law_id)
-    bills = _fetch_connected_bills(cursor, law_id)
-    return classifications, ministries, alt_names, replaced_laws, original_bill, bindings, corrections, documents, bills
+    return classifications, ministries, alt_names, replaced_laws, original_bill, changes, documents
 
 
 # ---------------------------------------------------------------------------
@@ -499,7 +496,7 @@ def laws(
         for row in rows:
             lid = row["id"]
             (classifications, ministries, alt_names, replaced_laws,
-             original_bill, bindings, corrections, documents, bills) = \
+             original_bill, changes, documents) = \
                 _fetch_full_detail(cursor, row, lid)
             results.append(LawResultFull(
                 law_id=lid,
@@ -518,10 +515,8 @@ def laws(
                 alternative_names=alt_names,
                 replaced_laws=replaced_laws,
                 original_bill=original_bill,
-                bindings=bindings,
-                corrections=corrections,
+                changes=changes,
                 documents=documents,
-                bills=bills,
             ))
 
     conn.close()

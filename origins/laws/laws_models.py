@@ -19,28 +19,31 @@ class ReplacedLaw(KNSBaseModel):
     bill: "BillResultPartial | None" = Field(default=None, description="Bill that replaced the law")
 
 
-class LawBinding(KNSBaseModel):
-    """A cross-type binding record (KNS_LawBinding)."""
-    bill_id: int | None = Field(default=None, description="Bill ID (LawID)")
-    bill_name: str | None = Field(default=None, description="Bill name")
+class LawAmendment(KNSBaseModel):
+    """A single amendment entry from KNS_LawBinding (without bill info — bill is on LawChange)."""
     binding_type: str | None = Field(default=None, description="Binding type description")
     amendment_type: str | None = Field(default=None, description="Amendment type description")
     date: str | None = Field(default=None, description="Binding date (YYYY-MM-DD)")
     page_number: str | None = Field(default=None, description="Page number")
     paragraph_number: str | None = Field(default=None, description="Paragraph number")
-    correction_number: str | None = Field(default=None, description="Correction number")
+    amendment_number: str | None = Field(default=None, description="Amendment number")
 
 
 class LawCorrection(KNSBaseModel):
-    """A law correction record (KNS_LawCorrections via junction)."""
+    """A law correction record (KNS_LawCorrections via junction — without bill info)."""
     correction_type: str | None = Field(default=None, description="Correction type")
     status: str | None = Field(default=None, description="Correction status")
     publication_date: str | None = Field(default=None, description="Publication date")
     magazine_number: str | None = Field(default=None, description="Magazine number")
     page_number: str | None = Field(default=None, description="Page number")
     is_knesset_involvement: bool | None = Field(default=None, description="Whether Knesset was involved")
-    bill_id: int | None = Field(default=None, description="Connected bill ID")
-    bill_name: str | None = Field(default=None, description="Connected bill name")
+
+
+class LawChange(KNSBaseModel):
+    """A change record grouping a bill with its amendments and corrections."""
+    bill: "BillResultPartial" = Field(description="The bill that caused this change")
+    amendments: list[LawAmendment] | None = Field(default=None, description="Amendment bindings from this bill")
+    corrections: list[LawCorrection] | None = Field(default=None, description="Corrections from this bill")
 
 
 # ---------------------------------------------------------------------------
@@ -69,10 +72,8 @@ class LawResultFull(LawResultPartial):
     alternative_names: list[str] | None = Field(default=None, description="Alternative/historical names (excluding current name)")
     replaced_laws: list[ReplacedLaw] | None = Field(default=None, description="Laws replaced by this law, with the replacing bill")
     original_bill: "BillResultPartial | None" = Field(default=None, description="Original bill this law is based on. Resolved from a binding with type 'החוק המקורי' if present; otherwise from the common ParentLawID when all bindings share the same one.")
-    bindings: list[LawBinding] | None = Field(default=None, description="Cross-type binding records (bill/law linkage, amendment info)")
-    corrections: list[LawCorrection] | None = Field(default=None, description="Law corrections with linked bills")
+    changes: list[LawChange] | None = Field(default=None, description="Bills that changed this law, each with their amendments and corrections")
     documents: list[SessionDocument] | None = Field(default=None, description="Attached documents")
-    bills: list | None = Field(default=None, description="Connected bills (partial detail)")
 
 
 class LawsResults(KNSBaseModel):
@@ -83,4 +84,5 @@ class LawsResults(KNSBaseModel):
 # Resolve forward references
 from origins.bills.bills_models import BillResultPartial  # noqa: E402
 ReplacedLaw.model_rebuild()
+LawChange.model_rebuild()
 LawResultFull.model_rebuild()
