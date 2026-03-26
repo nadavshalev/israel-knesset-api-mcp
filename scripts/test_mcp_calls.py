@@ -41,6 +41,27 @@ def call(method: str, params: dict | None = None):
         print("... (truncated)")
     return data
 
+def tool_call(name: str, arguments: dict | None = None):
+    return call("tools/call", {"name": name, "arguments": arguments or {}})
+
+def tool_from_str(call_str: str):
+    """Parse a call from a string like "metadata knesset_num=25".
+        Example: "INFO     tool_call: committees  params={'from_date': '2024-10-01', 'to_date': '2024-10-31', 'member_id': 30106, 'full_details': False}                         mcp_server.py:332"
+        Format: INFO    tool_call: <tool_name>  params={<arg1>: <value1>, <arg2>: <value2>, ...}                         not-releant-part
+    """
+    prefix = "tool_call: "
+    suffix = "}"
+    if prefix not in call_str:
+        raise ValueError(f"Invalid call string: {call_str}")
+    after_prefix = call_str.split(prefix, 1)[1].strip()
+    tool_name, params_part = after_prefix.split("  params=", 1)
+    tool_name = tool_name.strip()
+    if suffix not in params_part:
+        raise ValueError(f"Invalid call string: {call_str}")
+    params_str = params_part.split(suffix, 1)[0].strip() + suffix
+    arguments = json.loads(params_str.replace("'", '"'))  # Convert single quotes to double for JSON parsing
+    print(f"Parsed tool call - Name: {tool_name}, Params: {params_str}")
+    return tool_call(tool_name, arguments)
 
 # %% 1. Initialize
 call("initialize", {
