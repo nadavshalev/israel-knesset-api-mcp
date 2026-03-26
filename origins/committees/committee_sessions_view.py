@@ -181,8 +181,7 @@ def _fetch_documents(cursor, session_id):
     count_sql="SELECT COUNT(*) FROM committee_session_raw",
     most_recent_date_sql="SELECT MAX(StartDate) FROM committee_session_raw",
     enum_sql={
-        "session_type": "SELECT DISTINCT TypeDesc FROM committee_session_raw WHERE TypeDesc IS NOT NULL ORDER BY TypeDesc",
-        "status": "SELECT DISTINCT StatusDesc FROM committee_session_raw WHERE StatusDesc IS NOT NULL ORDER BY StatusDesc",
+        "session_type": "SELECT DISTINCT TypeDesc FROM committee_session_raw WHERE TypeDesc IS NOT NULL ORDER BY TypeDesc"
     },
     is_list=True,
 )
@@ -197,7 +196,6 @@ def committees(
     item_type: Annotated[str | None, Field(description="Filter to sessions with items of this type")] = None,
     member_id: Annotated[int | None, Field(description="Filter to sessions where this member served on the committee")] = None,
     session_type: Annotated[str | None, Field(description="Session type (e.g. פתוחה, חסויה)")] = None,
-    status: Annotated[str | None, Field(description="Session status")] = None,
     full_details: Annotated[bool, Field(description="Include agenda items and documents (auto-True when session_id is set)")] = False,
     top: Annotated[int | None, Field(description="Max results to return (default 50, max 200)")] = None,
     offset: Annotated[int | None, Field(description="Number of results to skip for pagination")] = None,
@@ -217,7 +215,6 @@ def committees(
     item_type = normalized["item_type"]
     member_id = normalized["member_id"]
     session_type = normalized["session_type"]
-    status = normalized["status"]
     full_details = normalized["full_details"]
     top, offset = resolve_pagination(normalized["top"], normalized["offset"])
 
@@ -295,10 +292,6 @@ def committees(
     if session_type:
         conditions.append("cs.TypeDesc LIKE %s")
         params.append(f"%{session_type}%")
-
-    if status:
-        conditions.append("cs.StatusDesc LIKE %s")
-        params.append(f"%{status}%")
 
     where = " AND ".join(conditions) if conditions else "1=1"
 
