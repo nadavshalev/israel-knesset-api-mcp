@@ -6,7 +6,7 @@ import time
 
 import requests
 
-from config import BASE_URL, DEFAULT_PAGE_SIZE
+from config import BASE_URL, ODATA_PAGE_SIZE
 
 # ---------------------------------------------------------------------------
 # Retry configuration
@@ -127,7 +127,7 @@ def fetch_odata_table(
     table: str,
     select: Optional[str] = None,
     expand: Optional[str] = None,
-    page_size: int = DEFAULT_PAGE_SIZE,
+    page_size: int = ODATA_PAGE_SIZE,
     since: Optional[str] = None,
     orderby: Optional[str] = None,
     since_field: str = "LastUpdatedDate",
@@ -246,7 +246,7 @@ def fetch_odata_range(
     id_field: str,
     range_start: int,
     range_end: int,
-    page_size: int = DEFAULT_PAGE_SIZE,
+    page_size: int = ODATA_PAGE_SIZE,
 ) -> List[Dict[str, Any]]:
     """Fetch all rows where ``range_start < id_field <= range_end``.
 
@@ -295,7 +295,7 @@ def fetch_table_with_csv_first(
     *,
     select: Optional[str] = None,
     expand: Optional[str] = None,
-    page_size: int = DEFAULT_PAGE_SIZE,
+    page_size: int = ODATA_PAGE_SIZE,
     orderby: Optional[str] = None,
 ) -> Iterable[Dict[str, Any]]:
     """Yield CSV rows first, then OData rows since the CSV's latest update.

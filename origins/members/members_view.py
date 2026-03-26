@@ -23,7 +23,7 @@ from typing import Annotated
 from pydantic import Field
 
 from core.db import connect_readonly
-from core.helpers import simple_date, format_person_name, normalize_inputs, check_search_count
+from core.helpers import simple_date, format_person_name, normalize_inputs, check_search_count, resolve_pagination
 from core.mcp_meta import mcp_tool
 from core.search_meta import register_search
 from origins.members.members_models import (
@@ -161,10 +161,11 @@ def _build_members_where(*, knesset_num=None, first_name=None, last_name=None,
 
 def _fetch_members_bulk(cursor, *, knesset_num=None, first_name=None,
                         last_name=None, role=None, role_ids=None,
-                        party=None, member_id=None):
-    """Fetch all matching (PersonID, KnessetNum) pairs and group in Python.
+                        party=None, member_id=None, top=50, offset=0):
+    """Fetch matching (PersonID, KnessetNum) pairs via SQL GROUP BY.
 
-    Returns a list of summary dicts sorted by (knesset_num DESC, member_id).
+    Returns a list of summary dicts sorted by (knesset_num DESC, member_id),
+    paginated via LIMIT/OFFSET.
     """
     where, params = _build_members_where(
         knesset_num=knesset_num, first_name=first_name, last_name=last_name,
@@ -172,45 +173,38 @@ def _fetch_members_bulk(cursor, *, knesset_num=None, first_name=None,
     )
     sql = f"""
     SELECT p.PersonID, p.FirstName, p.LastName, p.GenderDesc,
-           ptp.KnessetNum, ptp.FactionName,
-           pos.Description AS OfficialPositionTitle,
-           ptp.StartDate
+           ptp.KnessetNum,
+           array_agg(DISTINCT ptp.FactionName)
+               FILTER (WHERE ptp.FactionName IS NOT NULL AND ptp.FactionName != '') AS factions,
+           array_agg(DISTINCT pos.Description)
+               FILTER (WHERE pos.Description IS NOT NULL AND pos.Description != '') AS role_types
     FROM person_raw p
     JOIN person_to_position_raw ptp ON p.PersonID = ptp.PersonID
     LEFT JOIN position_raw pos ON ptp.PositionID = pos.Id
     WHERE {where}
-    ORDER BY ptp.KnessetNum DESC, p.PersonID, ptp.StartDate ASC
+    GROUP BY p.PersonID, p.FirstName, p.LastName, p.GenderDesc, ptp.KnessetNum
+    ORDER BY ptp.KnessetNum DESC, p.PersonID
+    LIMIT %s OFFSET %s
     """
-    cursor.execute(sql, params)
+    cursor.execute(sql, params + [top, offset])
     rows = cursor.fetchall()
 
-    members: dict[tuple, dict] = {}
-    order: list[tuple] = []
+    result = []
     for row in rows:
         pid = row["personid"]
         kns = row["knessetnum"]
         if not pid or not isinstance(kns, int):
             continue
-        key = (pid, kns)
-        if key not in members:
-            members[key] = {
-                "member_id": pid,
-                "name": format_person_name(row["firstname"], row["lastname"]),
-                "gender": row["genderdesc"],
-                "knesset_num": kns,
-                "faction": [],
-                "role_types": [],
-            }
-            order.append(key)
-        m = members[key]
-        fn = row["factionname"]
-        if fn and fn not in m["faction"]:
-            m["faction"].append(fn)
-        title = row["officialpositiontitle"] or ""
-        if title and title not in m["role_types"]:
-            m["role_types"].append(title)
+        result.append({
+            "member_id": pid,
+            "name": format_person_name(row["firstname"], row["lastname"]),
+            "gender": row["genderdesc"],
+            "knesset_num": kns,
+            "faction": row["factions"] or [],
+            "role_types": row["role_types"] or [],
+        })
 
-    return [members[k] for k in order]
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -343,6 +337,8 @@ def members(
     role_type: Annotated[str | None, Field(description="Position category")] = None,
     party: Annotated[str | None, Field(description="Party/faction name contains text")] = None,
     full_details: Annotated[bool, Field(description="Include government roles, committee memberships, parliamentary roles (auto-True when member_id is set)")] = False,
+    top: Annotated[int | None, Field(description="Max results to return (default 50, max 200)")] = None,
+    offset: Annotated[int | None, Field(description="Number of results to skip for pagination")] = None,
 ) -> MembersResults:
     """Search for Knesset members or get full detail for a single member.
 
@@ -364,6 +360,7 @@ def members(
     role_type = normalized["role_type"]
     party = normalized["party"]
     full_details = normalized["full_details"]
+    top, offset = resolve_pagination(normalized["top"], normalized["offset"])
 
     if member_id is not None:
         full_details = True
@@ -377,15 +374,15 @@ def members(
         role_ids = _resolve_role_ids(cursor, role_type)
         if not role_ids:
             conn.close()
-            return MembersResults(items=[])
+            return MembersResults(total_count=0, items=[])
 
-    # Count guard (skip when fetching by member_id)
+    # Count (skip when fetching by member_id)
     if member_id is None:
         where, count_params = _build_members_where(
             knesset_num=knesset_num, first_name=first_name, last_name=last_name,
             role=role, role_ids=role_ids, party=party, member_id=member_id,
         )
-        check_search_count(
+        total_count = check_search_count(
             cursor,
             f"""SELECT COUNT(*) FROM (
                 SELECT DISTINCT p.PersonID, ptp.KnessetNum
@@ -396,7 +393,10 @@ def members(
             ) _cnt""",
             count_params,
             entity_name="members",
+            paginated=True,
         )
+    else:
+        total_count = None
 
     raw = _fetch_members_bulk(
         cursor,
@@ -407,6 +407,8 @@ def members(
         role_ids=role_ids,
         party=party,
         member_id=member_id,
+        top=top,
+        offset=offset,
     )
 
     items = []
@@ -433,7 +435,9 @@ def members(
             ))
 
     conn.close()
-    return MembersResults(items=items)
+    if total_count is None:
+        total_count = len(items)
+    return MembersResults(total_count=total_count, items=items)
 
 
 members.OUTPUT_MODEL = MembersResults

@@ -21,7 +21,7 @@ from typing import Annotated
 from pydantic import Field
 
 from core.db import connect_readonly
-from core.helpers import simple_date, simple_time, normalize_inputs, check_search_count
+from core.helpers import simple_date, simple_time, normalize_inputs, check_search_count, resolve_pagination
 from core.mcp_meta import mcp_tool
 from core.search_meta import register_search
 from origins.votes.votes_models import VoteResultPartial, VoteResultFull, VotesResults, VoteMember, RelatedVote
@@ -219,6 +219,8 @@ def votes(
     accepted: Annotated[bool | None, Field(description="True=accepted only, False=rejected only, null=both")] = None,
     bill_id: Annotated[int | None, Field(description="Filter to votes linked to a specific bill ID")] = None,
     full_details: Annotated[bool, Field(description="Include per-member breakdown with party and related votes (auto-True when vote_id is set)")] = False,
+    top: Annotated[int | None, Field(description="Max results to return (default 50, max 200)")] = None,
+    offset: Annotated[int | None, Field(description="Number of results to skip for pagination")] = None,
 ) -> VotesResults:
     """Search for plenum votes or get full detail for a single vote.
 
@@ -240,6 +242,7 @@ def votes(
     accepted = normalized["accepted"]
     bill_id = normalized["bill_id"]
     full_details = normalized["full_details"]
+    top, offset = resolve_pagination(normalized["top"], normalized["offset"])
 
     if vote_id is not None:
         full_details = True
@@ -247,8 +250,8 @@ def votes(
     conn = connect_readonly()
     cursor = conn.cursor()
 
-    # Count guard (skip for single vote_id or specific bill_id lookup)
-    if vote_id is None and bill_id is None:
+    # Count (skip only for single vote_id lookup)
+    if vote_id is None:
         count_conditions = []
         count_params = []
         if bill_id is not None:
@@ -268,14 +271,17 @@ def votes(
             count_params.extend([from_date, from_date + "T99"])
 
         count_where = " AND ".join(count_conditions) if count_conditions else "1=1"
-        check_search_count(
+        total_count = check_search_count(
             cursor,
             f"SELECT COUNT(*) FROM plenum_vote_raw v"
             f" LEFT JOIN plenum_session_raw s ON v.SessionID = s.Id"
             f" WHERE {count_where}",
             count_params,
             entity_name="votes",
+            paginated=True,
         )
+    else:
+        total_count = None
 
     # Main query with computed totals for OData-origin votes
     sql = """
@@ -343,6 +349,8 @@ def votes(
         params.extend([from_date, from_date + "T99"])
 
     sql += " ORDER BY v.VoteDateTime DESC, v.Id DESC"
+    sql += " LIMIT %s OFFSET %s"
+    params.extend([top, offset])
     cursor.execute(sql, params)
     rows = cursor.fetchall()
 
@@ -382,7 +390,9 @@ def votes(
             results.append(VoteResultPartial(**partial_kwargs))
 
     conn.close()
-    return VotesResults(items=results)
+    if total_count is None:
+        total_count = len(results)
+    return VotesResults(total_count=total_count, items=results)
 
 
 votes.OUTPUT_MODEL = VotesResults

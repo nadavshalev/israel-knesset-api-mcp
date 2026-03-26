@@ -16,7 +16,7 @@ POSTGRES_USER = os.getenv("POSTGRES_USER", "postgres")
 POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "")
 
 BASE_URL = "https://knesset.gov.il/OdataV4/ParliamentInfo/"
-DEFAULT_PAGE_SIZE = 200
+ODATA_PAGE_SIZE = 200
 
 # MCP Server
 MCP_HOST = os.getenv("MCP_HOST", "0.0.0.0")
@@ -30,6 +30,8 @@ RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "60"))
 MAX_OUTPUT_TOKENS = int(os.getenv("MAX_OUTPUT_TOKENS", "50000"))
 SEARCH_ACROSS_TOP_N = int(os.getenv("SEARCH_ACROSS_TOP_N", "5"))
 MAX_SEARCH_RESULTS = int(os.getenv("MAX_SEARCH_RESULTS", "300"))
+DEFAULT_PAGE_SIZE = int(os.getenv("DEFAULT_PAGE_SIZE", "50"))
+MAX_PAGE_SIZE = int(os.getenv("MAX_PAGE_SIZE", "200"))
 
 # Connection pool
 POOL_MAX_CONN = int(os.getenv("POOL_MAX_CONN", "10"))

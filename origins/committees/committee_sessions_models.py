@@ -39,4 +39,5 @@ CmtSessionResult = CmtSessionResultFull
 
 class CmtSessionsResults(KNSBaseModel):
     """Results from committees."""
+    total_count: int = Field(description="Total matching results (before pagination)")
     items: list[CmtSessionResultPartial | CmtSessionResultFull] = Field(description="List of committee session results sorted by date DESC, session_id DESC")

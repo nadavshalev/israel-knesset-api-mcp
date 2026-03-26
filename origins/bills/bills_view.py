@@ -21,7 +21,7 @@ from typing import Annotated
 from pydantic import Field
 
 from core.db import connect_readonly
-from core.helpers import simple_date, normalize_inputs, check_search_count
+from core.helpers import simple_date, normalize_inputs, check_search_count, resolve_pagination
 from core.mcp_meta import mcp_tool
 from core.search_meta import register_search
 from core.session_models import (
@@ -423,6 +423,8 @@ def bills(
     from_date: Annotated[str | None, Field(description="Start of date range (YYYY-MM-DD) — filters by session date (plenum or committee)")] = None,
     to_date: Annotated[str | None, Field(description="End of date range (YYYY-MM-DD) — use with from_date")] = None,
     full_details: Annotated[bool, Field(description="Include stages, votes, initiators, documents (auto-True when bill_id is set)")] = False,
+    top: Annotated[int | None, Field(description="Max results to return (default 50, max 200)")] = None,
+    offset: Annotated[int | None, Field(description="Number of results to skip for pagination")] = None,
 ) -> BillsResults:
     """Search for bills or get full detail for a single bill.
 
@@ -444,6 +446,7 @@ def bills(
     from_date = normalized["from_date"]
     to_date = normalized["to_date"]
     full_details = normalized["full_details"]
+    top, offset = resolve_pagination(normalized["top"], normalized["offset"])
 
     # Auto-enable full_details when bill_id is given
     if bill_id is not None:
@@ -493,14 +496,17 @@ def bills(
     where = " AND ".join(conditions) if conditions else "1=1"
 
     if not bill_id:
-        check_search_count(
+        total_count = check_search_count(
             cursor,
             f"SELECT COUNT(*) FROM bill_raw b"
             f" LEFT JOIN status_raw st ON b.StatusID = st.Id"
             f" WHERE {where}",
             params,
             entity_name="bills",
+            paginated=True,
         )
+    else:
+        total_count = None
 
     cursor.execute(
         f"""SELECT b.Id, b.Name, b.KnessetNum, b.SubTypeDesc,
@@ -511,8 +517,9 @@ def bills(
         LEFT JOIN status_raw st ON b.StatusID = st.Id
         LEFT JOIN committee_raw c ON b.CommitteeID = c.Id
         WHERE {where}
-        ORDER BY b.PublicationDate DESC, b.Id DESC""",
-        params,
+        ORDER BY b.PublicationDate DESC, b.Id DESC
+        LIMIT %s OFFSET %s""",
+        params + [top, offset],
     )
     rows = cursor.fetchall()
 
@@ -573,7 +580,9 @@ def bills(
             ))
 
     conn.close()
-    return BillsResults(items=results)
+    if total_count is None:
+        total_count = len(results)
+    return BillsResults(total_count=total_count, items=results)
 
 
 bills.OUTPUT_MODEL = BillsResults

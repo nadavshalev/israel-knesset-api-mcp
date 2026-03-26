@@ -13,7 +13,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from origins.members.members_view import members
-from origins.members.members_models import MemberResultPartial, MemberResultFull
+from origins.members.members_models import MemberResultPartial, MemberResultFull, MembersResults
 
 
 # ===================================================================
@@ -149,10 +149,12 @@ class TestRoleType(unittest.TestCase):
 
 
 class TestNoFilters(unittest.TestCase):
-    def test_no_filters_raises(self):
-        """With no filters, the count guard should reject the broad query."""
-        with self.assertRaises(ValueError):
-            members()
+    def test_no_filters_returns_paginated(self):
+        """With no filters, pagination limits results instead of raising."""
+        result = members()
+        self.assertIsInstance(result, MembersResults)
+        self.assertGreater(result.total_count, 0)
+        self.assertLessEqual(len(result.items), 50)  # DEFAULT_PAGE_SIZE
 
 
 class TestRoleTypesField(unittest.TestCase):

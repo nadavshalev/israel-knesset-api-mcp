@@ -87,6 +87,7 @@ BillResult = BillResultFull
 
 class BillsResults(KNSBaseModel):
     """Results from bills tool."""
+    total_count: int = Field(description="Total matching results (before pagination)")
     items: list[BillResultPartial | BillResultFull] = Field(description="List of bill results")
 
 

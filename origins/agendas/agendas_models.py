@@ -42,4 +42,5 @@ AgendaResult = AgendaResultFull
 
 class AgendasResults(KNSBaseModel):
     """Results from agendas tool."""
+    total_count: int = Field(description="Total matching results (before pagination)")
     items: list[AgendaResultPartial | AgendaResultFull] = Field(description="List of agenda results")

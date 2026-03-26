@@ -67,4 +67,5 @@ VoteResult = VoteResultFull
 
 class VotesResults(KNSBaseModel):
     """Results from votes tool."""
+    total_count: int = Field(description="Total matching results (before pagination)")
     items: list[VoteResultPartial | VoteResultFull] = Field(description="List of vote results sorted by date DESC, vote_id DESC")

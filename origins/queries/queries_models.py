@@ -37,4 +37,5 @@ QueryResult = QueryResultFull
 
 class QueriesResults(KNSBaseModel):
     """Results from queries tool."""
+    total_count: int = Field(description="Total matching results (before pagination)")
     items: list[QueryResultPartial | QueryResultFull] = Field(description="List of query results")

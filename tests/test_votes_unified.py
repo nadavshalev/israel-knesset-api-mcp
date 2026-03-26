@@ -90,18 +90,19 @@ class TestAcceptedFilter(unittest.TestCase):
             self.assertFalse(v.is_accepted)
 
     def test_accepted_plus_rejected_equals_total(self):
-        """bill_id bypasses count guard — verify partition sums to total."""
-        all_v = votes(bill_id=565913)
-        acc = votes(bill_id=565913, accepted=True)
-        rej = votes(bill_id=565913, accepted=False)
-        self.assertEqual(len(acc.items) + len(rej.items), len(all_v.items))
+        """Verify accepted + rejected partition sums to total via total_count."""
+        all_v = votes(bill_id=565913, top=200)
+        acc = votes(bill_id=565913, accepted=True, top=200)
+        rej = votes(bill_id=565913, accepted=False, top=200)
+        self.assertEqual(len(acc.items) + len(rej.items), all_v.total_count)
 
 
 class TestBillIdFilter(unittest.TestCase):
 
     def test_filter_by_bill_id(self):
-        results = votes(bill_id=565913)
-        self.assertEqual(len(results.items), 202)
+        results = votes(bill_id=565913, top=200)
+        self.assertEqual(results.total_count, 202)
+        self.assertEqual(len(results.items), 200)  # capped at MAX_PAGE_SIZE
         for v in results.items:
             self.assertEqual(v.bill_id, 565913)
 

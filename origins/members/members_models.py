@@ -69,4 +69,5 @@ MemberResult = MemberResultFull
 
 class MembersResults(KNSBaseModel):
     """Results from members tool."""
+    total_count: int = Field(description="Total matching results (before pagination)")
     items: list[MemberResultPartial | MemberResultFull] = Field(description="List of member results")

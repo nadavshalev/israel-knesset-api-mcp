@@ -284,20 +284,37 @@ def _caller_param_annotations() -> dict[str, object]:
 
 
 # ---------------------------------------------------------------------------
+# Pagination
+# ---------------------------------------------------------------------------
+
+def resolve_pagination(top: int | None, offset: int | None) -> tuple[int, int]:
+    """Clamp *top* and *offset* to safe ranges, applying defaults."""
+    from config import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
+    if top is None:
+        top = DEFAULT_PAGE_SIZE
+    top = max(1, min(top, MAX_PAGE_SIZE))
+    offset = max(0, offset or 0)
+    return top, offset
+
+
+# ---------------------------------------------------------------------------
 # Search count guard
 # ---------------------------------------------------------------------------
 
-def check_search_count(cursor, count_sql: str, params: list, entity_name: str = "results") -> int:
-    """Run count_sql and raise ValueError if result exceeds MAX_SEARCH_RESULTS.
+def check_search_count(cursor, count_sql: str, params: list, entity_name: str = "results",
+                       paginated: bool = False) -> int:
+    """Run count_sql and return the total count.
 
-    Returns the count so the caller can use it if needed.
-    Call this BEFORE the main SELECT to fail fast on broad queries.
+    When *paginated* is False (legacy behaviour), raises ``ValueError``
+    if the count exceeds ``MAX_SEARCH_RESULTS``.  When *paginated* is
+    True the count is returned unconditionally so the caller can include
+    it in the paginated response.
     """
     from config import MAX_SEARCH_RESULTS
     cursor.execute(count_sql, params)
     count = cursor.fetchone()
     count = list(count.values())[0] if count else 0
-    if count > MAX_SEARCH_RESULTS:
+    if not paginated and count > MAX_SEARCH_RESULTS:
         raise ValueError(
             f"Too many {entity_name} ({count:,} matches). "
             "Add more filters (e.g. date, knesset_num, or a search query) to narrow results."

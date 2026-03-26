@@ -79,6 +79,7 @@ class LawResultFull(LawResultPartial):
 
 class LawsResults(KNSBaseModel):
     """Results from laws tool."""
+    total_count: int = Field(description="Total matching results (before pagination)")
     items: list[LawResultPartial | LawResultFull] = Field(description="List of law results")
 
 

@@ -18,7 +18,7 @@ from typing import Annotated
 from pydantic import Field
 
 from core.db import connect_readonly
-from core.helpers import simple_date, simple_time, normalize_inputs, check_search_count
+from core.helpers import simple_date, simple_time, normalize_inputs, check_search_count, resolve_pagination
 from core.mcp_meta import mcp_tool
 from core.search_meta import register_search
 from core.session_models import SessionItem, SessionDocument, get_item_votes
@@ -199,6 +199,8 @@ def committees(
     session_type: Annotated[str | None, Field(description="Session type (e.g. פתוחה, חסויה)")] = None,
     status: Annotated[str | None, Field(description="Session status")] = None,
     full_details: Annotated[bool, Field(description="Include agenda items and documents (auto-True when session_id is set)")] = False,
+    top: Annotated[int | None, Field(description="Max results to return (default 50, max 200)")] = None,
+    offset: Annotated[int | None, Field(description="Number of results to skip for pagination")] = None,
 ) -> CmtSessionsResults:
     """Search for committee sessions with optional full detail.
 
@@ -217,6 +219,7 @@ def committees(
     session_type = normalized["session_type"]
     status = normalized["status"]
     full_details = normalized["full_details"]
+    top, offset = resolve_pagination(normalized["top"], normalized["offset"])
 
     # --- Validation ---
     if to_date and not from_date:
@@ -300,13 +303,16 @@ def committees(
     where = " AND ".join(conditions) if conditions else "1=1"
 
     if not session_id:
-        check_search_count(
+        total_count = check_search_count(
             cursor,
             f"SELECT COUNT(*) FROM committee_session_raw cs"
             f" JOIN committee_raw c ON c.Id = cs.CommitteeID WHERE {where}",
             params,
             entity_name="committee sessions",
+            paginated=True,
         )
+    else:
+        total_count = None
 
     # Partial query: summary fields + item_count
     cursor.execute(
@@ -319,8 +325,9 @@ def committees(
         FROM committee_session_raw cs
         JOIN committee_raw c ON c.Id = cs.CommitteeID
         WHERE {where}
-        ORDER BY cs.StartDate DESC, cs.Id DESC""",
-        params,
+        ORDER BY cs.StartDate DESC, cs.Id DESC
+        LIMIT %s OFFSET %s""",
+        params + [top, offset],
     )
     rows = cursor.fetchall()
 
@@ -355,7 +362,9 @@ def committees(
         results.append(result)
 
     conn.close()
-    return CmtSessionsResults(items=results)
+    if total_count is None:
+        total_count = len(results)
+    return CmtSessionsResults(total_count=total_count, items=results)
 
 
 committees.OUTPUT_MODEL = CmtSessionsResults

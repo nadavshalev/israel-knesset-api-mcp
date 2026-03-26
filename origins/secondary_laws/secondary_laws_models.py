@@ -80,6 +80,7 @@ class SecondaryLawResultFull(SecondaryLawResultPartial):
 
 class SecondaryLawsResults(KNSBaseModel):
     """Results from secondary_laws tool."""
+    total_count: int = Field(description="Total matching results (before pagination)")
     items: list[SecondaryLawResultPartial | SecondaryLawResultFull] = Field(description="List of secondary law results")
 
 

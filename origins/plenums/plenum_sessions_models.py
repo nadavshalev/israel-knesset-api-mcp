@@ -29,4 +29,5 @@ PlenumSessionResult = PlenumSessionResultFull
 
 class PlenumSessionsResults(KNSBaseModel):
     """Results from plenums."""
+    total_count: int = Field(description="Total matching results (before pagination)")
     items: list[PlenumSessionResultPartial | PlenumSessionResultFull] = Field(description="List of plenum session results sorted by date DESC, session_id DESC")

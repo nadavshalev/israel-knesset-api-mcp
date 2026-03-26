@@ -17,7 +17,7 @@ if str(ROOT.parent) not in sys.path:
     sys.path.insert(0, str(ROOT.parent))
 
 from core.db import connect_readonly
-from core.helpers import simple_date, normalize_inputs, check_search_count
+from core.helpers import simple_date, normalize_inputs, check_search_count, resolve_pagination
 from core.mcp_meta import mcp_tool
 from core.search_meta import register_search
 from core.session_models import SessionDocument
@@ -314,6 +314,8 @@ def secondary_laws(
     from_date: Annotated[str | None, Field(description="Start of publication date range (YYYY-MM-DD)")] = None,
     to_date: Annotated[str | None, Field(description="End of publication date range (YYYY-MM-DD)")] = None,
     full_details: Annotated[bool, Field(description="Include regulators, authorizing laws, bindings, documents (auto-True when secondary_law_id is set)")] = False,
+    top: Annotated[int | None, Field(description="Max results to return (default 50, max 200)")] = None,
+    offset: Annotated[int | None, Field(description="Number of results to skip for pagination")] = None,
 ) -> SecondaryLawsResults:
     """Search for secondary legislation or get full detail for a single secondary law."""
     normalized = normalize_inputs(locals())
@@ -328,6 +330,7 @@ def secondary_laws(
     from_date = normalized["from_date"]
     to_date = normalized["to_date"]
     full_details = normalized["full_details"]
+    top, offset = resolve_pagination(normalized["top"], normalized["offset"])
 
     if secondary_law_id is not None:
         full_details = True
@@ -384,12 +387,15 @@ def secondary_laws(
     where = " AND ".join(conditions) if conditions else "1=1"
 
     if secondary_law_id is None:
-        check_search_count(
+        total_count = check_search_count(
             cursor,
             f"SELECT COUNT(*) FROM secondary_law_raw s WHERE {where}",
             params,
             entity_name="secondary_laws",
+            paginated=True,
         )
+    else:
+        total_count = None
 
     cursor.execute(
         f"""SELECT s.Id, s.Name, s.KnessetNum, s.TypeDesc, s.StatusName,
@@ -414,8 +420,9 @@ def secondary_laws(
         ) maj ON TRUE
         LEFT JOIN israel_law_raw il ON maj.AuthorizingLawID = il.Id
         WHERE {where}
-        ORDER BY s.PublicationDate DESC, s.Id DESC""",
-        params,
+        ORDER BY s.PublicationDate DESC, s.Id DESC
+        LIMIT %s OFFSET %s""",
+        params + [top, offset],
     )
     rows = cursor.fetchall()
 
@@ -459,7 +466,9 @@ def secondary_laws(
             ))
 
     conn.close()
-    return SecondaryLawsResults(items=results)
+    if total_count is None:
+        total_count = len(results)
+    return SecondaryLawsResults(total_count=total_count, items=results)
 
 
 secondary_laws.OUTPUT_MODEL = SecondaryLawsResults
