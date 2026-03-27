@@ -375,7 +375,7 @@ def members(
     full_details: Annotated[bool, Field(description="Include government roles, committee memberships, parliamentary roles (auto-True when member_id is set)")] = False,
     top: Annotated[int | None, Field(description="Max results (default 50, max 200). Results are sorted newest-first (date DESC) or by count DESC for count_by — so top=N gives the N most recent or highest.")] = None,
     offset: Annotated[int | None, Field(description="Results to skip for pagination. To get the oldest/smallest N: use offset=total_count-N (total_count is in every response).")] = None,
-    count_by: Annotated[Literal["knesset_num", "party", "role_type"] | None, Field(description="Group and count matching results by field, sorted by count DESC. Returns counts instead of items. Use top=N to get the top N groups, or offset+top to get the lowest.")] = None,
+    count_by: Annotated[Literal["all", "knesset_num", "party", "role_type"] | None, Field(description='Group and count results. "all" returns only total_count (no items). Other values group by field (sorted by count DESC).')] = None,
 ) -> MembersResults:
     """Search for Knesset members or get full detail for a single member.
 
@@ -417,13 +417,23 @@ def members(
     if count_by_val:
         if member_id is not None:
             raise ValueError("count_by cannot be used with single-entity lookup (member_id)")
-        config = _COUNT_BY_OPTIONS.get(count_by_val)
-        if config is None:
-            raise ValueError(f"count_by must be one of: {', '.join(_COUNT_BY_OPTIONS)}")
         where, cb_params = _build_members_where(
             knesset_num=knesset_num, first_name=first_name, last_name=last_name,
             role=role, role_ids=role_ids, party=party, member_id=None,
         )
+        if count_by_val == "all":
+            count_sql = f"""SELECT COUNT(*) FROM (
+                SELECT DISTINCT p.PersonID, ptp.KnessetNum
+                FROM {_CB_BASE_FROM}
+                {_CB_BASE_JOINS}
+                WHERE {where}
+            ) _cnt"""
+            total_count = check_search_count(cursor, count_sql, cb_params, paginated=True)
+            conn.close()
+            return MembersResults(total_count=total_count, items=[], counts=[])
+        config = _COUNT_BY_OPTIONS.get(count_by_val)
+        if config is None:
+            raise ValueError(f"count_by must be one of: {', '.join(_COUNT_BY_OPTIONS)}")
         groups_count_sql, group_sql = build_count_by_query(
             base_from=_CB_BASE_FROM, base_joins=_CB_BASE_JOINS, where=where, config=config,
         )

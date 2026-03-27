@@ -355,7 +355,7 @@ def secondary_laws(
     full_details: Annotated[bool, Field(description="Include regulators, authorizing laws, bindings, documents (auto-True when secondary_law_id is set)")] = False,
     top: Annotated[int | None, Field(description="Max results (default 50, max 200). Results are sorted newest-first (date DESC) or by count DESC for count_by — so top=N gives the N most recent or highest.")] = None,
     offset: Annotated[int | None, Field(description="Results to skip for pagination. To get the oldest/smallest N: use offset=total_count-N (total_count is in every response).")] = None,
-    count_by: Annotated[Literal["type", "status", "classification", "knesset_num"] | None, Field(description="Group and count matching results by field, sorted by count DESC. Returns counts instead of items. Use top=N to get the top N groups, or offset+top to get the lowest.")] = None,
+    count_by: Annotated[Literal["all", "type", "status", "classification", "knesset_num"] | None, Field(description='Group and count results. "all" returns only total_count (no items). Other values group by field (sorted by count DESC).')] = None,
 ) -> SecondaryLawsResults:
     """Search for secondary legislation or get full detail for a single secondary law."""
     normalized = normalize_inputs(locals())
@@ -425,11 +425,16 @@ def secondary_laws(
         params.append(to_date)
 
     where = " AND ".join(conditions) if conditions else "1=1"
+    count_sql = f"SELECT COUNT(*) FROM {_CB_BASE_FROM} {_CB_BASE_JOINS} WHERE {where}"
 
     count_by_val = normalized.get("count_by")
     if count_by_val:
         if secondary_law_id is not None:
             raise ValueError("count_by cannot be used with single-entity lookup (secondary_law_id)")
+        if count_by_val == "all":
+            total_count = check_search_count(cursor, count_sql, params, paginated=True)
+            conn.close()
+            return SecondaryLawsResults(total_count=total_count, items=[], counts=[])
         config = _COUNT_BY_OPTIONS.get(count_by_val)
         if config is None:
             raise ValueError(f"count_by must be one of: {', '.join(_COUNT_BY_OPTIONS)}")
@@ -445,11 +450,7 @@ def secondary_laws(
 
     if secondary_law_id is None:
         total_count = check_search_count(
-            cursor,
-            f"SELECT COUNT(*) FROM secondary_law_raw s WHERE {where}",
-            params,
-            entity_name="secondary_laws",
-            paginated=True,
+            cursor, count_sql, params, entity_name="secondary_laws", paginated=True,
         )
     else:
         total_count = None

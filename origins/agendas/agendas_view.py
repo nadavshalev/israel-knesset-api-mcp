@@ -236,7 +236,7 @@ def agendas(
     full_details: Annotated[bool, Field(description="Include documents, committee details, minister info, stages (auto-True when agenda_id is set)")] = False,
     top: Annotated[int | None, Field(description="Max results (default 50, max 200). Results are sorted newest-first (date DESC) or by count DESC for count_by — so top=N gives the N most recent or highest.")] = None,
     offset: Annotated[int | None, Field(description="Results to skip for pagination. To get the oldest/smallest N: use offset=total_count-N (total_count is in every response).")] = None,
-    count_by: Annotated[Literal["initiator", "status", "type", "knesset_num"] | None, Field(description="Group and count matching results by field, sorted by count DESC. Returns counts instead of items. Use top=N to get the top N groups, or offset+top to get the lowest.")] = None,
+    count_by: Annotated[Literal["all", "initiator", "status", "type", "knesset_num"] | None, Field(description='Group and count results. "all" returns only total_count (no items). Other values group by field (sorted by count DESC).')] = None,
 ) -> AgendasResults:
     """Search for agendas or get full detail for a single agenda.
 
@@ -302,11 +302,16 @@ def agendas(
         params.extend(date_params)
 
     where = " AND ".join(conditions) if conditions else "1=1"
+    count_sql = f"SELECT COUNT(*) FROM {_CB_BASE_FROM} {_CB_BASE_JOINS} WHERE {where}"
 
     count_by_val = normalized.get("count_by")
     if count_by_val:
         if agenda_id is not None:
             raise ValueError("count_by cannot be used with single-entity lookup (agenda_id)")
+        if count_by_val == "all":
+            total_count = check_search_count(cursor, count_sql, params, paginated=True)
+            conn.close()
+            return AgendasResults(total_count=total_count, items=[], counts=[])
         config = _COUNT_BY_OPTIONS.get(count_by_val)
         if config is None:
             raise ValueError(f"count_by must be one of: {', '.join(_COUNT_BY_OPTIONS)}")
@@ -322,13 +327,7 @@ def agendas(
 
     if not agenda_id:
         total_count = check_search_count(
-            cursor,
-            f"SELECT COUNT(*) FROM agenda_raw a"
-            f" LEFT JOIN status_raw st ON a.StatusID = st.Id"
-            f" WHERE {where}",
-            params,
-            entity_name="agendas",
-            paginated=True,
+            cursor, count_sql, params, entity_name="agendas", paginated=True,
         )
     else:
         total_count = None

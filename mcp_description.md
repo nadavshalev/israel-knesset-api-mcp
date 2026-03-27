@@ -93,9 +93,12 @@ bills(knesset_num=25, offset=3195, top=5)
 
 All nine list tools support `count_by`, which answers "how many per X?" in a single call. Instead of returning `items`, it returns a `counts` list sorted by count DESC. All other filters still apply.
 
-**Response shape when count_by is set:**
+Use `count_by="all"` to get only the total count (no items or group breakdown) — the fastest way to answer "how many records match these filters?".
+
+**Response shapes:**
 ```
-{ total_count: <number of distinct groups>, items: [], counts: [{id, value, count}, …] }
+count_by="all"   → {{ total_count: N, items: [], counts: [] }}
+count_by="field" → {{ total_count: <number of groups>, items: [], counts: [{{id, value, count}}, …] }}
 ```
 - `id`: the group's entity ID (when applicable, e.g. PersonID for initiator)
 - `value`: display name of the group
@@ -118,9 +121,12 @@ All nine list tools support `count_by`, which answers "how many per X?" in a sin
 Since `counts` is sorted by count DESC, `top=N` gives the top N groups. To get the bottom N, use `offset=total_count-N, top=N`.
 
 ```
+queries(knesset_num=25, count_by="all")
+→ {{ total_count: 1872, items: [], counts: [] }}  — how many queries in Knesset 25, no items fetched
+
 queries(knesset_num=25, count_by="initiator", top=1)
 → The member who submitted the most queries in Knesset 25
-  e.g. {id: 965, value: "יאיר לפיד", count: 87}
+  e.g. {{id: 965, value: "יאיר לפיד", count: 87}}
 
 queries(knesset_num=25, count_by="ministry")
 → Which ministries received the most queries, ranked
@@ -466,7 +472,7 @@ metadata(knesset_num=20, include_faction_members=True)
 2. Or: `members(knesset_num=25, role_type="שר")` → all ministers with their factions
 
 **"Which MK submitted the most queries in Knesset 25?"**
-1. `queries(knesset_num=25, count_by="initiator", top=1)` → single call, returns `{id, value, count}` for the top submitter
+1. `queries(knesset_num=25, count_by="initiator", top=1)` → single call, returns `{{id, value, count}}` for the top submitter
 
 **"How are bills distributed by status in Knesset 25?"**
 1. `bills(knesset_num=25, count_by="status")` → all statuses with counts, ranked highest first
