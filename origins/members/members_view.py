@@ -19,11 +19,15 @@ if str(ROOT) not in sys.path:
 if str(ROOT.parent) not in sys.path:
     sys.path.insert(0, str(ROOT.parent))
 
-from typing import Annotated
+from typing import Annotated, Literal
 from pydantic import Field
 
 from core.db import connect_readonly
-from core.helpers import simple_date, format_person_name, normalize_inputs, check_search_count, resolve_pagination
+from core.helpers import (
+    simple_date, format_person_name, normalize_inputs, check_search_count, resolve_pagination,
+    CountByConfig, build_count_by_query,
+)
+from core.models import CountItem
 from core.mcp_meta import mcp_tool
 from core.search_meta import register_search
 from origins.members.members_models import (
@@ -308,6 +312,38 @@ def _resolve_role_ids(cursor, role_type: str) -> list:
 
 
 # ---------------------------------------------------------------------------
+# count_by configuration
+# ---------------------------------------------------------------------------
+
+_CB_BASE_FROM = "person_raw p"
+_CB_BASE_JOINS = (
+    "JOIN person_to_position_raw ptp ON p.PersonID = ptp.PersonID\n"
+    "    LEFT JOIN position_raw pos ON ptp.PositionID = pos.Id"
+)
+
+_COUNT_BY_OPTIONS: dict[str, CountByConfig] = {
+    "knesset_num": CountByConfig(
+        group_by="ptp.KnessetNum",
+        id_select=None,
+        value_select="ptp.KnessetNum::text",
+        extra_where="ptp.KnessetNum IS NOT NULL",
+    ),
+    "party": CountByConfig(
+        group_by="ptp.FactionName",
+        id_select=None,
+        value_select="ptp.FactionName",
+        extra_where="ptp.FactionName IS NOT NULL AND ptp.FactionName != ''",
+    ),
+    "role_type": CountByConfig(
+        group_by="pos.Description",
+        id_select=None,
+        value_select="pos.Description",
+        extra_where="pos.Description IS NOT NULL AND pos.Description != ''",
+    ),
+}
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -339,6 +375,7 @@ def members(
     full_details: Annotated[bool, Field(description="Include government roles, committee memberships, parliamentary roles (auto-True when member_id is set)")] = False,
     top: Annotated[int | None, Field(description="Max results to return (default 50, max 200)")] = None,
     offset: Annotated[int | None, Field(description="Number of results to skip for pagination")] = None,
+    count_by: Annotated[Literal["knesset_num", "party", "role_type"] | None, Field(description="Group and count results by field. Returns counts instead of items.")] = None,
 ) -> MembersResults:
     """Search for Knesset members or get full detail for a single member.
 
@@ -375,6 +412,27 @@ def members(
         if not role_ids:
             conn.close()
             return MembersResults(total_count=0, items=[])
+
+    count_by_val = normalized.get("count_by")
+    if count_by_val:
+        if member_id is not None:
+            raise ValueError("count_by cannot be used with single-entity lookup (member_id)")
+        config = _COUNT_BY_OPTIONS.get(count_by_val)
+        if config is None:
+            raise ValueError(f"count_by must be one of: {', '.join(_COUNT_BY_OPTIONS)}")
+        where, cb_params = _build_members_where(
+            knesset_num=knesset_num, first_name=first_name, last_name=last_name,
+            role=role, role_ids=role_ids, party=party, member_id=None,
+        )
+        groups_count_sql, group_sql = build_count_by_query(
+            base_from=_CB_BASE_FROM, base_joins=_CB_BASE_JOINS, where=where, config=config,
+        )
+        total_count = check_search_count(cursor, groups_count_sql, cb_params, paginated=True)
+        cursor.execute(group_sql, cb_params + [top, offset])
+        counts = [CountItem(id=row.get("id"), value=row.get("value"), count=row["count"])
+                  for row in cursor.fetchall()]
+        conn.close()
+        return MembersResults(total_count=total_count, items=[], counts=counts)
 
     # Count (skip when fetching by member_id)
     if member_id is None:

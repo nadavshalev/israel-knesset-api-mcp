@@ -10,7 +10,7 @@ import inspect
 import logging
 import re
 import types
-from typing import Annotated, get_args, get_origin, Union
+from typing import Annotated, get_args, get_origin, NamedTuple, Union
 
 logger = logging.getLogger(__name__)
 
@@ -281,6 +281,58 @@ def _caller_param_annotations() -> dict[str, object]:
         return {name: p.annotation for name, p in sig.parameters.items()}
     finally:
         del frame
+
+
+# ---------------------------------------------------------------------------
+# count_by aggregation helpers
+# ---------------------------------------------------------------------------
+
+class CountByConfig(NamedTuple):
+    """Configuration for a count_by GROUP BY query."""
+    group_by: str          # SQL GROUP BY expression
+    id_select: str | None  # SQL expression for the id column, or None
+    value_select: str      # SQL expression for the display value
+    extra_joins: str = ""  # Additional JOINs beyond base_joins
+    extra_where: str = ""  # Additional WHERE conditions (ANDed to main WHERE)
+
+
+def build_count_by_query(*, base_from: str, base_joins: str, where: str,
+                         config: "CountByConfig") -> tuple[str, str]:
+    """Build SQL for a count_by GROUP BY aggregation.
+
+    Returns ``(groups_count_sql, group_sql)`` where:
+    - ``groups_count_sql``: counts distinct groups (caller passes same WHERE params).
+    - ``group_sql``: GROUP BY query ordered by count DESC with LIMIT/OFFSET
+      (caller appends ``[top, offset]`` to params).
+    """
+    joins_parts = [base_joins, config.extra_joins]
+    joins = "\n    ".join(j for j in joins_parts if j)
+
+    full_where = f"({where}) AND {config.extra_where}" if config.extra_where else where
+
+    id_col = f"{config.id_select} AS id, " if config.id_select else ""
+
+    groups_count_sql = f"""
+        SELECT COUNT(*) FROM (
+            SELECT 1
+            FROM {base_from}
+            {joins}
+            WHERE {full_where}
+            GROUP BY {config.group_by}
+        ) _cnt
+    """
+
+    group_sql = f"""
+        SELECT {id_col}{config.value_select} AS value, COUNT(*) AS count
+        FROM {base_from}
+        {joins}
+        WHERE {full_where}
+        GROUP BY {config.group_by}
+        ORDER BY count DESC
+        LIMIT %s OFFSET %s
+    """
+
+    return groups_count_sql, group_sql
 
 
 # ---------------------------------------------------------------------------

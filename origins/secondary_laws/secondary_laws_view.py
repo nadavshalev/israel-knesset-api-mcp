@@ -6,7 +6,7 @@ returns full detail including regulators, authorizing laws, bindings, and docume
 
 import sys
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import Field
 
@@ -17,7 +17,11 @@ if str(ROOT.parent) not in sys.path:
     sys.path.insert(0, str(ROOT.parent))
 
 from core.db import connect_readonly
-from core.helpers import simple_date, normalize_inputs, check_search_count, resolve_pagination
+from core.helpers import (
+    simple_date, normalize_inputs, check_search_count, resolve_pagination,
+    CountByConfig, build_count_by_query,
+)
+from core.models import CountItem
 from core.mcp_meta import mcp_tool
 from core.search_meta import register_search
 from core.session_models import SessionDocument
@@ -281,6 +285,41 @@ register_search({
 
 
 # ---------------------------------------------------------------------------
+# count_by configuration
+# ---------------------------------------------------------------------------
+
+_CB_BASE_FROM = "secondary_law_raw s"
+_CB_BASE_JOINS = "LEFT JOIN committee_raw c ON s.CommitteeID = c.Id"
+
+_COUNT_BY_OPTIONS: dict[str, CountByConfig] = {
+    "type": CountByConfig(
+        group_by="s.TypeDesc",
+        id_select=None,
+        value_select="s.TypeDesc",
+        extra_where="s.TypeDesc IS NOT NULL AND s.TypeDesc != ''",
+    ),
+    "status": CountByConfig(
+        group_by="s.StatusName",
+        id_select=None,
+        value_select="s.StatusName",
+        extra_where="s.StatusName IS NOT NULL AND s.StatusName != ''",
+    ),
+    "classification": CountByConfig(
+        group_by="s.ClassificationDesc",
+        id_select=None,
+        value_select="s.ClassificationDesc",
+        extra_where="s.ClassificationDesc IS NOT NULL AND s.ClassificationDesc != ''",
+    ),
+    "knesset_num": CountByConfig(
+        group_by="s.KnessetNum",
+        id_select=None,
+        value_select="s.KnessetNum::text",
+        extra_where="s.KnessetNum IS NOT NULL",
+    ),
+}
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -316,6 +355,7 @@ def secondary_laws(
     full_details: Annotated[bool, Field(description="Include regulators, authorizing laws, bindings, documents (auto-True when secondary_law_id is set)")] = False,
     top: Annotated[int | None, Field(description="Max results to return (default 50, max 200)")] = None,
     offset: Annotated[int | None, Field(description="Number of results to skip for pagination")] = None,
+    count_by: Annotated[Literal["type", "status", "classification", "knesset_num"] | None, Field(description="Group and count results by field. Returns counts instead of items.")] = None,
 ) -> SecondaryLawsResults:
     """Search for secondary legislation or get full detail for a single secondary law."""
     normalized = normalize_inputs(locals())
@@ -385,6 +425,23 @@ def secondary_laws(
         params.append(to_date)
 
     where = " AND ".join(conditions) if conditions else "1=1"
+
+    count_by_val = normalized.get("count_by")
+    if count_by_val:
+        if secondary_law_id is not None:
+            raise ValueError("count_by cannot be used with single-entity lookup (secondary_law_id)")
+        config = _COUNT_BY_OPTIONS.get(count_by_val)
+        if config is None:
+            raise ValueError(f"count_by must be one of: {', '.join(_COUNT_BY_OPTIONS)}")
+        groups_count_sql, group_sql = build_count_by_query(
+            base_from=_CB_BASE_FROM, base_joins=_CB_BASE_JOINS, where=where, config=config,
+        )
+        total_count = check_search_count(cursor, groups_count_sql, params, paginated=True)
+        cursor.execute(group_sql, params + [top, offset])
+        counts = [CountItem(id=row.get("id"), value=row.get("value"), count=row["count"])
+                  for row in cursor.fetchall()]
+        conn.close()
+        return SecondaryLawsResults(total_count=total_count, items=[], counts=counts)
 
     if secondary_law_id is None:
         total_count = check_search_count(

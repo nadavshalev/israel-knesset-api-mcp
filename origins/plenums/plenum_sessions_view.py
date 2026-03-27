@@ -14,11 +14,15 @@ if str(ROOT) not in sys.path:
 if str(ROOT.parent) not in sys.path:
     sys.path.insert(0, str(ROOT.parent))
 
-from typing import Annotated
+from typing import Annotated, Literal
 from pydantic import Field
 
 from core.db import connect_readonly
-from core.helpers import simple_date, normalize_inputs, check_search_count, resolve_pagination
+from core.helpers import (
+    simple_date, normalize_inputs, check_search_count, resolve_pagination,
+    CountByConfig, build_count_by_query,
+)
+from core.models import CountItem
 from core.mcp_meta import mcp_tool
 from core.search_meta import register_search
 from core.session_models import SessionItem, SessionDocument, get_item_votes
@@ -150,6 +154,23 @@ def _fetch_documents(cursor, session_id):
 
 
 # ---------------------------------------------------------------------------
+# count_by configuration
+# ---------------------------------------------------------------------------
+
+_CB_BASE_FROM = "plenum_session_raw s"
+_CB_BASE_JOINS = ""
+
+_COUNT_BY_OPTIONS: dict[str, CountByConfig] = {
+    "knesset_num": CountByConfig(
+        group_by="s.KnessetNum",
+        id_select=None,
+        value_select="s.KnessetNum::text",
+        extra_where="s.KnessetNum IS NOT NULL",
+    ),
+}
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -179,6 +200,7 @@ def plenums(
     full_details: Annotated[bool, Field(description="Include agenda items and documents (auto-True when session_id is set)")] = False,
     top: Annotated[int | None, Field(description="Max results to return (default 50, max 200)")] = None,
     offset: Annotated[int | None, Field(description="Number of results to skip for pagination")] = None,
+    count_by: Annotated[Literal["knesset_num"] | None, Field(description="Group and count results by field. Returns counts instead of items.")] = None,
 ) -> PlenumSessionsResults:
     """Search for plenum sessions with optional full detail.
 
@@ -246,6 +268,23 @@ def plenums(
         params.append(f"%{item_type}%")
 
     where = " AND ".join(conditions) if conditions else "1=1"
+
+    count_by_val = normalized.get("count_by")
+    if count_by_val:
+        if session_id is not None:
+            raise ValueError("count_by cannot be used with single-entity lookup (session_id)")
+        config = _COUNT_BY_OPTIONS.get(count_by_val)
+        if config is None:
+            raise ValueError(f"count_by must be one of: {', '.join(_COUNT_BY_OPTIONS)}")
+        groups_count_sql, group_sql = build_count_by_query(
+            base_from=_CB_BASE_FROM, base_joins=_CB_BASE_JOINS, where=where, config=config,
+        )
+        total_count = check_search_count(cursor, groups_count_sql, params, paginated=True)
+        cursor.execute(group_sql, params + [top, offset])
+        counts = [CountItem(id=row.get("id"), value=row.get("value"), count=row["count"])
+                  for row in cursor.fetchall()]
+        conn.close()
+        return PlenumSessionsResults(total_count=total_count, items=[], counts=counts)
 
     if not session_id:
         total_count = check_search_count(

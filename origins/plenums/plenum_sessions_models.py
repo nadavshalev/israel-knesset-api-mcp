@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import Field
 
-from core.models import KNSBaseModel
+from core.models import CountItem, KNSBaseModel
 from core.session_models import SessionItem, SessionDocument
 
 
@@ -31,3 +31,4 @@ class PlenumSessionsResults(KNSBaseModel):
     """Results from plenums."""
     total_count: int = Field(description="Total matching results (before pagination)")
     items: list[PlenumSessionResultPartial | PlenumSessionResultFull] = Field(description="List of plenum session results sorted by date DESC, session_id DESC")
+    counts: list[CountItem] | None = Field(default=None, description="Grouped counts (when count_by is set)")

@@ -7,7 +7,7 @@ corrections, documents, and connected bills.
 
 import sys
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import Field
 
@@ -18,7 +18,11 @@ if str(ROOT.parent) not in sys.path:
     sys.path.insert(0, str(ROOT.parent))
 
 from core.db import connect_readonly
-from core.helpers import simple_date, normalize_inputs, check_search_count, resolve_pagination
+from core.helpers import (
+    simple_date, normalize_inputs, check_search_count, resolve_pagination,
+    CountByConfig, build_count_by_query,
+)
+from core.models import CountItem
 from core.mcp_meta import mcp_tool
 from core.search_meta import register_search
 from core.session_models import SessionDocument
@@ -407,6 +411,29 @@ register_search({
 
 
 # ---------------------------------------------------------------------------
+# count_by configuration
+# ---------------------------------------------------------------------------
+
+_CB_BASE_FROM = "israel_law_raw l"
+_CB_BASE_JOINS = ""
+
+_COUNT_BY_OPTIONS: dict[str, CountByConfig] = {
+    "knesset_num": CountByConfig(
+        group_by="l.KnessetNum",
+        id_select=None,
+        value_select="l.KnessetNum::text",
+        extra_where="l.KnessetNum IS NOT NULL",
+    ),
+    "validity": CountByConfig(
+        group_by="l.LawValidityDesc",
+        id_select=None,
+        value_select="l.LawValidityDesc",
+        extra_where="l.LawValidityDesc IS NOT NULL AND l.LawValidityDesc != ''",
+    ),
+}
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -439,6 +466,7 @@ def laws(
     full_details: Annotated[bool, Field(description="Include classifications, ministries, bindings, corrections, documents, connected bills (auto-True when law_id is set)")] = False,
     top: Annotated[int | None, Field(description="Max results to return (default 50, max 200)")] = None,
     offset: Annotated[int | None, Field(description="Number of results to skip for pagination")] = None,
+    count_by: Annotated[Literal["knesset_num", "validity"] | None, Field(description="Group and count results by field. Returns counts instead of items.")] = None,
 ) -> LawsResults:
     """Search for enacted Israeli laws or get full detail for a single law."""
     normalized = normalize_inputs(locals())
@@ -498,6 +526,23 @@ def laws(
         params.extend([to_date, to_date])
 
     where = " AND ".join(conditions) if conditions else "1=1"
+
+    count_by_val = normalized.get("count_by")
+    if count_by_val:
+        if law_id is not None:
+            raise ValueError("count_by cannot be used with single-entity lookup (law_id)")
+        config = _COUNT_BY_OPTIONS.get(count_by_val)
+        if config is None:
+            raise ValueError(f"count_by must be one of: {', '.join(_COUNT_BY_OPTIONS)}")
+        groups_count_sql, group_sql = build_count_by_query(
+            base_from=_CB_BASE_FROM, base_joins=_CB_BASE_JOINS, where=where, config=config,
+        )
+        total_count = check_search_count(cursor, groups_count_sql, params, paginated=True)
+        cursor.execute(group_sql, params + [top, offset])
+        counts = [CountItem(id=row.get("id"), value=row.get("value"), count=row["count"])
+                  for row in cursor.fetchall()]
+        conn.close()
+        return LawsResults(total_count=total_count, items=[], counts=counts)
 
     if law_id is None:
         total_count = check_search_count(

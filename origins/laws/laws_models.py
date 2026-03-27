@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import Field
 
-from core.models import KNSBaseModel
+from core.models import CountItem, KNSBaseModel
 from core.session_models import SessionDocument  # noqa: F401 — re-exported for convenience
 
 
@@ -81,6 +81,7 @@ class LawsResults(KNSBaseModel):
     """Results from laws tool."""
     total_count: int = Field(description="Total matching results (before pagination)")
     items: list[LawResultPartial | LawResultFull] = Field(description="List of law results")
+    counts: list[CountItem] | None = Field(default=None, description="Grouped counts (when count_by is set)")
 
 
 # Resolve forward references

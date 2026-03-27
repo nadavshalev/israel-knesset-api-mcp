@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import Field
 
-from core.models import KNSBaseModel
+from core.models import CountItem, KNSBaseModel
 
 
 # ---------------------------------------------------------------------------
@@ -69,3 +69,4 @@ class VotesResults(KNSBaseModel):
     """Results from votes tool."""
     total_count: int = Field(description="Total matching results (before pagination)")
     items: list[VoteResultPartial | VoteResultFull] = Field(description="List of vote results sorted by date DESC, vote_id DESC")
+    counts: list[CountItem] | None = Field(default=None, description="Grouped counts (when count_by is set)")

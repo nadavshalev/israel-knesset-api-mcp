@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import Field
 
-from core.models import KNSBaseModel
+from core.models import CountItem, KNSBaseModel
 from core.session_models import SessionDocument, ItemStage
 
 
@@ -89,6 +89,7 @@ class BillsResults(KNSBaseModel):
     """Results from bills tool."""
     total_count: int = Field(description="Total matching results (before pagination)")
     items: list[BillResultPartial | BillResultFull] = Field(description="List of bill results")
+    counts: list[CountItem] | None = Field(default=None, description="Grouped counts (when count_by is set)")
 
 
 # Resolve forward references

@@ -17,11 +17,15 @@ if str(ROOT) not in sys.path:
 if str(ROOT.parent) not in sys.path:
     sys.path.insert(0, str(ROOT.parent))
 
-from typing import Annotated
+from typing import Annotated, Literal
 from pydantic import Field
 
 from core.db import connect_readonly
-from core.helpers import simple_date, normalize_inputs, check_search_count, resolve_pagination
+from core.helpers import (
+    simple_date, normalize_inputs, check_search_count, resolve_pagination,
+    CountByConfig, build_count_by_query,
+)
+from core.models import CountItem
 from core.mcp_meta import mcp_tool
 from core.search_meta import register_search
 from core.session_models import (
@@ -394,6 +398,51 @@ def _fetch_primary_initiators_batch(cursor, bill_ids):
 
 
 # ---------------------------------------------------------------------------
+# count_by configuration
+# ---------------------------------------------------------------------------
+
+_CB_BASE_FROM = "bill_raw b"
+_CB_BASE_JOINS = (
+    "LEFT JOIN status_raw st ON b.StatusID = st.Id\n"
+    "    LEFT JOIN committee_raw c ON b.CommitteeID = c.Id"
+)
+
+_COUNT_BY_OPTIONS: dict[str, CountByConfig] = {
+    "initiator": CountByConfig(
+        group_by="bi.PersonID, p.FirstName, p.LastName",
+        id_select="bi.PersonID",
+        value_select="p.FirstName || ' ' || p.LastName",
+        extra_joins="JOIN bill_initiator_raw bi ON bi.BillID = b.Id JOIN person_raw p ON p.PersonID = bi.PersonID",
+        extra_where="bi.PersonID IS NOT NULL",
+    ),
+    "status": CountByConfig(
+        group_by='st."Desc"',
+        id_select=None,
+        value_select='st."Desc"',
+        extra_where='st."Desc" IS NOT NULL',
+    ),
+    "type": CountByConfig(
+        group_by="b.SubTypeDesc",
+        id_select=None,
+        value_select="b.SubTypeDesc",
+        extra_where="b.SubTypeDesc IS NOT NULL",
+    ),
+    "committee": CountByConfig(
+        group_by="c.Id, c.Name",
+        id_select="c.Id",
+        value_select="c.Name",
+        extra_where="c.Id IS NOT NULL",
+    ),
+    "knesset_num": CountByConfig(
+        group_by="b.KnessetNum",
+        id_select=None,
+        value_select="b.KnessetNum::text",
+        extra_where="b.KnessetNum IS NOT NULL",
+    ),
+}
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -425,6 +474,7 @@ def bills(
     full_details: Annotated[bool, Field(description="Include stages, votes, initiators, documents (auto-True when bill_id is set)")] = False,
     top: Annotated[int | None, Field(description="Max results to return (default 50, max 200)")] = None,
     offset: Annotated[int | None, Field(description="Number of results to skip for pagination")] = None,
+    count_by: Annotated[Literal["initiator", "status", "type", "committee", "knesset_num"] | None, Field(description="Group and count results by field. Returns counts instead of items.")] = None,
 ) -> BillsResults:
     """Search for bills or get full detail for a single bill.
 
@@ -494,6 +544,23 @@ def bills(
         params.extend(date_params)
 
     where = " AND ".join(conditions) if conditions else "1=1"
+
+    count_by_val = normalized.get("count_by")
+    if count_by_val:
+        if bill_id is not None:
+            raise ValueError("count_by cannot be used with single-entity lookup (bill_id)")
+        config = _COUNT_BY_OPTIONS.get(count_by_val)
+        if config is None:
+            raise ValueError(f"count_by must be one of: {', '.join(_COUNT_BY_OPTIONS)}")
+        groups_count_sql, group_sql = build_count_by_query(
+            base_from=_CB_BASE_FROM, base_joins=_CB_BASE_JOINS, where=where, config=config,
+        )
+        total_count = check_search_count(cursor, groups_count_sql, params, paginated=True)
+        cursor.execute(group_sql, params + [top, offset])
+        counts = [CountItem(id=row.get("id"), value=row.get("value"), count=row["count"])
+                  for row in cursor.fetchall()]
+        conn.close()
+        return BillsResults(total_count=total_count, items=[], counts=counts)
 
     if not bill_id:
         total_count = check_search_count(

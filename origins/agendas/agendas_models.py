@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import Field
 
-from core.models import KNSBaseModel
+from core.models import CountItem, KNSBaseModel
 from core.session_models import SessionDocument, ItemStage
 
 
@@ -44,3 +44,4 @@ class AgendasResults(KNSBaseModel):
     """Results from agendas tool."""
     total_count: int = Field(description="Total matching results (before pagination)")
     items: list[AgendaResultPartial | AgendaResultFull] = Field(description="List of agenda results")
+    counts: list[CountItem] | None = Field(default=None, description="Grouped counts (when count_by is set)")

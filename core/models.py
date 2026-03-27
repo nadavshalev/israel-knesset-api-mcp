@@ -9,9 +9,16 @@ output is always clean.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, model_serializer
+from pydantic import BaseModel, Field, model_serializer
 
 from core.helpers import clean
+
+
+class CountItem(BaseModel):
+    """A single count_by group result."""
+    id: int | None = Field(default=None, description="ID of the grouped entity (when applicable)")
+    value: str | None = Field(default=None, description="Display value of the grouped field")
+    count: int = Field(description="Number of matching records in this group")
 
 
 class KNSBaseModel(BaseModel):
