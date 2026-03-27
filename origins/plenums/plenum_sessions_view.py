@@ -179,8 +179,7 @@ _COUNT_BY_OPTIONS: dict[str, CountByConfig] = {
     description=(
         "Search for Knesset plenum sessions. Returns summary info by default; "
         "set full_details=True for agenda items and documents. "
-        "Provide session_id for a single session (auto-enables full_details) "
-        "or from_date to search by date range."
+        "Use session_id to filter to a specific session, or from_date to search by date range."
     ),
     entity="Plenum Sessions",
     count_sql="SELECT COUNT(*) FROM plenum_session_raw",
@@ -191,13 +190,13 @@ _COUNT_BY_OPTIONS: dict[str, CountByConfig] = {
     is_list=True,
 )
 def plenums(
-    session_id: Annotated[int | None, Field(description="Get a specific session by ID (auto-enables full_details)")] = None,
+    session_id: Annotated[int | None, Field(description="Filter by session ID")] = None,
     knesset_num: Annotated[int | None, Field(description="Filter by Knesset number")] = None,
     from_date: Annotated[str | None, Field(description="Start of date range (YYYY-MM-DD). Required unless session_id is provided. to_date defaults to today if omitted.")] = None,
     to_date: Annotated[str | None, Field(description="End of date range (YYYY-MM-DD). Requires from_date.")] = None,
     query_items: Annotated[str | None, Field(description="Session name or agenda item name contains text")] = None,
     item_type: Annotated[str | None, Field(description="Filter to sessions with items of this type")] = None,
-    full_details: Annotated[bool, Field(description="Include agenda items and documents (auto-True when session_id is set)")] = False,
+    full_details: Annotated[bool, Field(description="Include agenda items and documents")] = False,
     top: Annotated[int | None, Field(description="Max results (default 50, max 200). Results are sorted newest-first (date DESC) or by count DESC for count_by — so top=N gives the N most recent or highest.")] = None,
     offset: Annotated[int | None, Field(description="Results to skip for pagination. To get the oldest/smallest N: use offset=total_count-N (total_count is in every response).")] = None,
     count_by: Annotated[Literal["all", "knesset_num"] | None, Field(description='Group and count results. "all" returns only total_count (no items). Other values group by field (sorted by count DESC).')] = None,
@@ -221,10 +220,6 @@ def plenums(
         raise ValueError("to_date requires from_date. Provide from_date or use session_id instead.")
     if not session_id and not from_date:
         raise ValueError("Provide session_id or from_date to scope the query.")
-
-    # Auto-enable full_details when session_id is given
-    if session_id:
-        full_details = True
 
     # Default to_date to today when from_date is provided alone
     if from_date and not to_date:
@@ -272,8 +267,6 @@ def plenums(
 
     count_by_val = normalized.get("count_by")
     if count_by_val:
-        if session_id is not None:
-            raise ValueError("count_by cannot be used with single-entity lookup (session_id)")
         if count_by_val == "all":
             total_count = check_search_count(cursor, count_sql, params, paginated=True)
             conn.close()
@@ -291,12 +284,7 @@ def plenums(
         conn.close()
         return PlenumSessionsResults(total_count=total_count, items=[], counts=counts)
 
-    if not session_id:
-        total_count = check_search_count(
-            cursor, count_sql, params, entity_name="plenum sessions", paginated=True,
-        )
-    else:
-        total_count = None
+    total_count = check_search_count(cursor, count_sql, params, entity_name="plenum sessions", paginated=True)
 
     cursor.execute(
         f"""SELECT DISTINCT s.Id, s.KnessetNum, s.Name, s.StartDate,
@@ -331,8 +319,6 @@ def plenums(
         results.append(result)
 
     conn.close()
-    if total_count is None:
-        total_count = len(results)
     return PlenumSessionsResults(total_count=total_count, items=results)
 
 

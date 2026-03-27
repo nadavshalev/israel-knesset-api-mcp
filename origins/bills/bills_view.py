@@ -450,8 +450,7 @@ _COUNT_BY_OPTIONS: dict[str, CountByConfig] = {
     name="bills",
     description=(
         "Search for Knesset bills (legislation). Returns summary info by default; "
-        "set full_details=True for plenum stages, votes, initiators, documents. "
-        "Provide bill_id for a single bill (auto-enables full_details)."
+        "set full_details=True for plenum stages, votes, initiators, documents."
     ),
     entity="Bills",
     count_sql="SELECT COUNT(*) FROM bill_raw",
@@ -463,7 +462,7 @@ _COUNT_BY_OPTIONS: dict[str, CountByConfig] = {
     is_list=True,
 )
 def bills(
-    bill_id: Annotated[int | None, Field(description="Get a specific bill by ID (auto-enables full_details)")] = None,
+    bill_id: Annotated[int | None, Field(description="Filter by bill ID")] = None,
     knesset_num: Annotated[int | None, Field(description="Filter by Knesset number")] = None,
     name_query: Annotated[str | None, Field(description="Bill name contains text")] = None,
     status: Annotated[str | None, Field(description="Bill status")] = None,
@@ -471,7 +470,7 @@ def bills(
     initiator_id: Annotated[int | None, Field(description="Filter by initiator's member/person ID")] = None,
     from_date: Annotated[str | None, Field(description="Start of date range (YYYY-MM-DD) — filters by session date (plenum or committee)")] = None,
     to_date: Annotated[str | None, Field(description="End of date range (YYYY-MM-DD) — use with from_date")] = None,
-    full_details: Annotated[bool, Field(description="Include stages, votes, initiators, documents (auto-True when bill_id is set)")] = False,
+    full_details: Annotated[bool, Field(description="Include stages, votes, initiators, documents")] = False,
     top: Annotated[int | None, Field(description="Max results (default 50, max 200). Results are sorted newest-first (date DESC) or by count DESC for count_by — so top=N gives the N most recent or highest.")] = None,
     offset: Annotated[int | None, Field(description="Results to skip for pagination. To get the oldest/smallest N: use offset=total_count-N (total_count is in every response).")] = None,
     count_by: Annotated[Literal["all", "initiator", "status", "type", "committee", "knesset_num"] | None, Field(description='Group and count results. "all" returns only total_count (no items). Other values group by field (sorted by count DESC).')] = None,
@@ -497,10 +496,6 @@ def bills(
     to_date = normalized["to_date"]
     full_details = normalized["full_details"]
     top, offset = resolve_pagination(normalized["top"], normalized["offset"])
-
-    # Auto-enable full_details when bill_id is given
-    if bill_id is not None:
-        full_details = True
 
     conn = connect_readonly()
     cursor = conn.cursor()
@@ -548,8 +543,6 @@ def bills(
 
     count_by_val = normalized.get("count_by")
     if count_by_val:
-        if bill_id is not None:
-            raise ValueError("count_by cannot be used with single-entity lookup (bill_id)")
         if count_by_val == "all":
             total_count = check_search_count(cursor, count_sql, params, paginated=True)
             conn.close()
@@ -567,12 +560,7 @@ def bills(
         conn.close()
         return BillsResults(total_count=total_count, items=[], counts=counts)
 
-    if not bill_id:
-        total_count = check_search_count(
-            cursor, count_sql, params, entity_name="bills", paginated=True,
-        )
-    else:
-        total_count = None
+    total_count = check_search_count(cursor, count_sql, params, entity_name="bills", paginated=True)
 
     cursor.execute(
         f"""SELECT b.Id, b.Name, b.KnessetNum, b.SubTypeDesc,
@@ -646,8 +634,6 @@ def bills(
             ))
 
     conn.close()
-    if total_count is None:
-        total_count = len(results)
     return BillsResults(total_count=total_count, items=results)
 
 

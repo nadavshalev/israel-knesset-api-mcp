@@ -235,8 +235,7 @@ _COUNT_BY_OPTIONS: dict[str, CountByConfig] = {
     description=(
         "Search for Knesset parliamentary queries (שאילתות) to ministers. "
         "Returns summary info by default; set full_details=True for documents, "
-        "ministry info, reply dates, and session stages. "
-        "Provide query_id for a single query (auto-enables full_details)."
+        "ministry info, reply dates, and session stages."
     ),
     entity="Queries",
     count_sql="SELECT COUNT(*) FROM query_raw",
@@ -248,7 +247,7 @@ _COUNT_BY_OPTIONS: dict[str, CountByConfig] = {
     is_list=True,
 )
 def queries(
-    query_id: Annotated[int | None, Field(description="Get a specific query by ID (auto-enables full_details)")] = None,
+    query_id: Annotated[int | None, Field(description="Filter by query ID")] = None,
     knesset_num: Annotated[int | None, Field(description="Filter by Knesset number")] = None,
     name_query: Annotated[str | None, Field(description="Query name/subject contains text")] = None,
     status: Annotated[str | None, Field(description="Query status")] = None,
@@ -256,7 +255,7 @@ def queries(
     initiator_id: Annotated[int | None, Field(description="Filter by submitter person ID")] = None,
     from_date: Annotated[str | None, Field(description="Start of date range (YYYY-MM-DD) — filters by session date (plenum)")] = None,
     to_date: Annotated[str | None, Field(description="End of date range (YYYY-MM-DD) — use with from_date")] = None,
-    full_details: Annotated[bool, Field(description="Include documents, ministry info, reply dates, stages (auto-True when query_id is set)")] = False,
+    full_details: Annotated[bool, Field(description="Include documents, ministry info, reply dates, stages")] = False,
     top: Annotated[int | None, Field(description="Max results (default 50, max 200). Results are sorted newest-first (date DESC) or by count DESC for count_by — so top=N gives the N most recent or highest.")] = None,
     offset: Annotated[int | None, Field(description="Results to skip for pagination. To get the oldest/smallest N: use offset=total_count-N (total_count is in every response).")] = None,
     count_by: Annotated[Literal["all", "initiator", "status", "type", "ministry", "knesset_num"] | None, Field(description='Group and count results. "all" returns only total_count (no items). Other values group by field (sorted by count DESC).')] = None,
@@ -282,9 +281,6 @@ def queries(
     to_date = normalized["to_date"]
     full_details = normalized["full_details"]
     top, offset = resolve_pagination(normalized["top"], normalized["offset"])
-
-    if query_id is not None:
-        full_details = True
 
     conn = connect_readonly()
     cursor = conn.cursor()
@@ -346,8 +342,6 @@ def queries(
 
     count_by_val = normalized.get("count_by")
     if count_by_val:
-        if query_id is not None:
-            raise ValueError("count_by cannot be used with single-entity lookup (query_id)")
         if count_by_val == "all":
             total_count = check_search_count(cursor, count_sql, params, paginated=True)
             conn.close()
@@ -365,12 +359,7 @@ def queries(
         conn.close()
         return QueriesResults(total_count=total_count, items=[], counts=counts)
 
-    if not query_id:
-        total_count = check_search_count(
-            cursor, count_sql, params, entity_name="queries", paginated=True,
-        )
-    else:
-        total_count = None
+    total_count = check_search_count(cursor, count_sql, params, entity_name="queries", paginated=True)
 
     cursor.execute(
         f"""SELECT q.QueryID, q.Name, q.KnessetNum, q.TypeDesc,
@@ -469,8 +458,6 @@ def queries(
             ))
 
     conn.close()
-    if total_count is None:
-        total_count = len(results)
     return QueriesResults(total_count=total_count, items=results)
 
 

@@ -230,10 +230,9 @@ _COUNT_BY_OPTIONS: dict[str, CountByConfig] = {
 @mcp_tool(
     name="votes",
     description=(
-        "Search for Knesset plenum votes or get full detail for a single vote. "
+        "Search for Knesset plenum votes. "
         "Returns summary info by default (title, subject, date, totals, accepted/rejected). "
-        "Set full_details=True or provide vote_id for full detail including "
-        "per-member breakdown with party and related votes from the same session."
+        "Set full_details=True for per-member breakdown with party and related votes from the same session."
     ),
     entity="Plenum Votes",
     count_sql="SELECT COUNT(*) FROM plenum_vote_raw",
@@ -241,14 +240,14 @@ _COUNT_BY_OPTIONS: dict[str, CountByConfig] = {
     is_list=True,
 )
 def votes(
-    vote_id: Annotated[int | None, Field(description="Get a specific vote by ID (auto-enables full_details)")] = None,
+    vote_id: Annotated[int | None, Field(description="Filter by vote ID")] = None,
     knesset_num: Annotated[int | None, Field(description="Filter by Knesset number (via session join)")] = None,
     name: Annotated[str | None, Field(description="Vote title or subject contains text")] = None,
     from_date: Annotated[str | None, Field(description="Start of date range (YYYY-MM-DD). If to_date is omitted, filters to this single day.")] = None,
     to_date: Annotated[str | None, Field(description="End of date range (YYYY-MM-DD). Requires from_date.")] = None,
     accepted: Annotated[bool | None, Field(description="True=accepted only, False=rejected only, null=both")] = None,
     bill_id: Annotated[int | None, Field(description="Filter to votes linked to a specific bill ID")] = None,
-    full_details: Annotated[bool, Field(description="Include per-member breakdown with party and related votes (auto-True when vote_id is set)")] = False,
+    full_details: Annotated[bool, Field(description="Include per-member breakdown with party and related votes")] = False,
     top: Annotated[int | None, Field(description="Max results (default 50, max 200). Results are sorted newest-first (date DESC) or by count DESC for count_by — so top=N gives the N most recent or highest.")] = None,
     offset: Annotated[int | None, Field(description="Results to skip for pagination. To get the oldest/smallest N: use offset=total_count-N (total_count is in every response).")] = None,
     count_by: Annotated[Literal["all", "bill", "knesset_num"] | None, Field(description='Group and count results. "all" returns only total_count (no items). Other values group by field (sorted by count DESC).')] = None,
@@ -275,15 +274,15 @@ def votes(
     full_details = normalized["full_details"]
     top, offset = resolve_pagination(normalized["top"], normalized["offset"])
 
-    if vote_id is not None:
-        full_details = True
-
     conn = connect_readonly()
     cursor = conn.cursor()
 
     # Build simple WHERE conditions (used for count, count_by, and base of main query)
     count_conditions = []
     count_params = []
+    if vote_id is not None:
+        count_conditions.append("v.Id = %s")
+        count_params.append(vote_id)
     if bill_id is not None:
         count_conditions.append("v.ItemID = %s")
         count_params.append(bill_id)
@@ -304,8 +303,6 @@ def votes(
 
     count_by_val = normalized.get("count_by")
     if count_by_val:
-        if vote_id is not None:
-            raise ValueError("count_by cannot be used with single-entity lookup (vote_id)")
         if count_by_val == "all":
             total_count = check_search_count(cursor, count_sql, count_params, paginated=True)
             conn.close()
@@ -323,13 +320,7 @@ def votes(
         conn.close()
         return VotesResults(total_count=total_count, items=[], counts=counts)
 
-    # Count (skip only for single vote_id lookup)
-    if vote_id is None:
-        total_count = check_search_count(
-            cursor, count_sql, count_params, entity_name="votes", paginated=True,
-        )
-    else:
-        total_count = None
+    total_count = check_search_count(cursor, count_sql, count_params, entity_name="votes", paginated=True)
 
     # Main query with computed totals for OData-origin votes
     sql = """
@@ -438,8 +429,6 @@ def votes(
             results.append(VoteResultPartial(**partial_kwargs))
 
     conn.close()
-    if total_count is None:
-        total_count = len(results)
     return VotesResults(total_count=total_count, items=results)
 
 

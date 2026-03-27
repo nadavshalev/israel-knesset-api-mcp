@@ -212,8 +212,7 @@ _COUNT_BY_OPTIONS: dict[str, CountByConfig] = {
     description=(
         "Search for Knesset agendas (motions for the agenda / הצעות לסדר היום). "
         "Returns summary info by default; set full_details=True for documents, "
-        "committee details, minister info, and session stages. "
-        "Provide agenda_id for a single agenda (auto-enables full_details)."
+        "committee details, minister info, and session stages."
     ),
     entity="Agendas",
     count_sql="SELECT COUNT(*) FROM agenda_raw",
@@ -225,7 +224,7 @@ _COUNT_BY_OPTIONS: dict[str, CountByConfig] = {
     is_list=True,
 )
 def agendas(
-    agenda_id: Annotated[int | None, Field(description="Get a specific agenda by ID (auto-enables full_details)")] = None,
+    agenda_id: Annotated[int | None, Field(description="Filter by agenda ID")] = None,
     knesset_num: Annotated[int | None, Field(description="Filter by Knesset number")] = None,
     name_query: Annotated[str | None, Field(description="Agenda name contains text")] = None,
     status: Annotated[str | None, Field(description="Agenda status")] = None,
@@ -233,7 +232,7 @@ def agendas(
     initiator_id: Annotated[int | None, Field(description="Filter by initiator person ID")] = None,
     from_date: Annotated[str | None, Field(description="Start of date range (YYYY-MM-DD) — filters by session date (plenum or committee)")] = None,
     to_date: Annotated[str | None, Field(description="End of date range (YYYY-MM-DD) — use with from_date")] = None,
-    full_details: Annotated[bool, Field(description="Include documents, committee details, minister info, stages (auto-True when agenda_id is set)")] = False,
+    full_details: Annotated[bool, Field(description="Include documents, committee details, minister info, stages")] = False,
     top: Annotated[int | None, Field(description="Max results (default 50, max 200). Results are sorted newest-first (date DESC) or by count DESC for count_by — so top=N gives the N most recent or highest.")] = None,
     offset: Annotated[int | None, Field(description="Results to skip for pagination. To get the oldest/smallest N: use offset=total_count-N (total_count is in every response).")] = None,
     count_by: Annotated[Literal["all", "initiator", "status", "type", "knesset_num"] | None, Field(description='Group and count results. "all" returns only total_count (no items). Other values group by field (sorted by count DESC).')] = None,
@@ -259,9 +258,6 @@ def agendas(
     to_date = normalized["to_date"]
     full_details = normalized["full_details"]
     top, offset = resolve_pagination(normalized["top"], normalized["offset"])
-
-    if agenda_id is not None:
-        full_details = True
 
     conn = connect_readonly()
     cursor = conn.cursor()
@@ -306,8 +302,6 @@ def agendas(
 
     count_by_val = normalized.get("count_by")
     if count_by_val:
-        if agenda_id is not None:
-            raise ValueError("count_by cannot be used with single-entity lookup (agenda_id)")
         if count_by_val == "all":
             total_count = check_search_count(cursor, count_sql, params, paginated=True)
             conn.close()
@@ -325,12 +319,7 @@ def agendas(
         conn.close()
         return AgendasResults(total_count=total_count, items=[], counts=counts)
 
-    if not agenda_id:
-        total_count = check_search_count(
-            cursor, count_sql, params, entity_name="agendas", paginated=True,
-        )
-    else:
-        total_count = None
+    total_count = check_search_count(cursor, count_sql, params, entity_name="agendas", paginated=True)
 
     cursor.execute(
         f"""SELECT a.Id, a.Name, a.KnessetNum, a.ClassificationDesc,
@@ -450,8 +439,6 @@ def agendas(
             ))
 
     conn.close()
-    if total_count is None:
-        total_count = len(results)
     return AgendasResults(total_count=total_count, items=results)
 
 

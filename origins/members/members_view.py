@@ -352,9 +352,7 @@ _COUNT_BY_OPTIONS: dict[str, CountByConfig] = {
     description=(
         "Search for Knesset members or get full detail for a single member. "
         "Returns summary info by default (name, gender, factions, role types). "
-        "Set full_details=True or provide member_id for full detail including "
-        "government roles, committee memberships, and parliamentary roles. "
-        "When member_id is given without knesset_num, all terms are returned."
+        "Set full_details=True for government roles, committee memberships, and parliamentary roles."
     ),
     entity="Knesset Members",
     count_sql="SELECT COUNT(DISTINCT PersonID) FROM person_to_position_raw",
@@ -365,14 +363,14 @@ _COUNT_BY_OPTIONS: dict[str, CountByConfig] = {
     is_list=True,
 )
 def members(
-    member_id: Annotated[int | None, Field(description="Get a specific member by ID (auto-enables full_details; returns all terms unless knesset_num is set)")] = None,
+    member_id: Annotated[int | None, Field(description="Filter by member/person ID")] = None,
     knesset_num: Annotated[int | None, Field(description="Filter by Knesset number")] = None,
     first_name: Annotated[str | None, Field(description="First name contains text")] = None,
     last_name: Annotated[str | None, Field(description="Last name contains text")] = None,
     role: Annotated[str | None, Field(description="Free text search across roles, ministries, and committees")] = None,
     role_type: Annotated[str | None, Field(description="Position category")] = None,
     party: Annotated[str | None, Field(description="Party/faction name contains text")] = None,
-    full_details: Annotated[bool, Field(description="Include government roles, committee memberships, parliamentary roles (auto-True when member_id is set)")] = False,
+    full_details: Annotated[bool, Field(description="Include government roles, committee memberships, parliamentary roles")] = False,
     top: Annotated[int | None, Field(description="Max results (default 50, max 200). Results are sorted newest-first (date DESC) or by count DESC for count_by — so top=N gives the N most recent or highest.")] = None,
     offset: Annotated[int | None, Field(description="Results to skip for pagination. To get the oldest/smallest N: use offset=total_count-N (total_count is in every response).")] = None,
     count_by: Annotated[Literal["all", "knesset_num", "party", "role_type"] | None, Field(description='Group and count results. "all" returns only total_count (no items). Other values group by field (sorted by count DESC).')] = None,
@@ -399,9 +397,6 @@ def members(
     full_details = normalized["full_details"]
     top, offset = resolve_pagination(normalized["top"], normalized["offset"])
 
-    if member_id is not None:
-        full_details = True
-
     conn = connect_readonly()
     cursor = conn.cursor()
 
@@ -413,22 +408,21 @@ def members(
             conn.close()
             return MembersResults(total_count=0, items=[])
 
+    where, params = _build_members_where(
+        knesset_num=knesset_num, first_name=first_name, last_name=last_name,
+        role=role, role_ids=role_ids, party=party, member_id=member_id,
+    )
+    count_sql = f"""SELECT COUNT(*) FROM (
+        SELECT DISTINCT p.PersonID, ptp.KnessetNum
+        FROM {_CB_BASE_FROM}
+        {_CB_BASE_JOINS}
+        WHERE {where}
+    ) _cnt"""
+
     count_by_val = normalized.get("count_by")
     if count_by_val:
-        if member_id is not None:
-            raise ValueError("count_by cannot be used with single-entity lookup (member_id)")
-        where, cb_params = _build_members_where(
-            knesset_num=knesset_num, first_name=first_name, last_name=last_name,
-            role=role, role_ids=role_ids, party=party, member_id=None,
-        )
         if count_by_val == "all":
-            count_sql = f"""SELECT COUNT(*) FROM (
-                SELECT DISTINCT p.PersonID, ptp.KnessetNum
-                FROM {_CB_BASE_FROM}
-                {_CB_BASE_JOINS}
-                WHERE {where}
-            ) _cnt"""
-            total_count = check_search_count(cursor, count_sql, cb_params, paginated=True)
+            total_count = check_search_count(cursor, count_sql, params, paginated=True)
             conn.close()
             return MembersResults(total_count=total_count, items=[], counts=[])
         config = _COUNT_BY_OPTIONS.get(count_by_val)
@@ -437,34 +431,14 @@ def members(
         groups_count_sql, group_sql = build_count_by_query(
             base_from=_CB_BASE_FROM, base_joins=_CB_BASE_JOINS, where=where, config=config,
         )
-        total_count = check_search_count(cursor, groups_count_sql, cb_params, paginated=True)
-        cursor.execute(group_sql, cb_params + [top, offset])
+        total_count = check_search_count(cursor, groups_count_sql, params, paginated=True)
+        cursor.execute(group_sql, params + [top, offset])
         counts = [CountItem(id=row.get("id"), value=row.get("value"), count=row["count"])
                   for row in cursor.fetchall()]
         conn.close()
         return MembersResults(total_count=total_count, items=[], counts=counts)
 
-    # Count (skip when fetching by member_id)
-    if member_id is None:
-        where, count_params = _build_members_where(
-            knesset_num=knesset_num, first_name=first_name, last_name=last_name,
-            role=role, role_ids=role_ids, party=party, member_id=member_id,
-        )
-        total_count = check_search_count(
-            cursor,
-            f"""SELECT COUNT(*) FROM (
-                SELECT DISTINCT p.PersonID, ptp.KnessetNum
-                FROM person_raw p
-                JOIN person_to_position_raw ptp ON p.PersonID = ptp.PersonID
-                LEFT JOIN position_raw pos ON ptp.PositionID = pos.Id
-                WHERE {where}
-            ) _cnt""",
-            count_params,
-            entity_name="members",
-            paginated=True,
-        )
-    else:
-        total_count = None
+    total_count = check_search_count(cursor, count_sql, params, entity_name="members", paginated=True)
 
     raw = _fetch_members_bulk(
         cursor,
@@ -503,8 +477,6 @@ def members(
             ))
 
     conn.close()
-    if total_count is None:
-        total_count = len(items)
     return MembersResults(total_count=total_count, items=items)
 
 

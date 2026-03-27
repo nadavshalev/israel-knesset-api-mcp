@@ -52,8 +52,7 @@ Member strings in resources use compact format: `{{id}}: {{name}} ({{party}}) [f
 All unified tools (`members`, `votes`, `bills`, `agendas`, `queries`, `plenums`, `committees`, `laws`, `secondary_laws`) follow the same pattern:
 
 - **Search mode** (default): provide filters like `knesset_num`, `name_query`, date ranges → returns a list of summary results.
-- **Detail mode**: provide an ID parameter (`member_id`, `vote_id`, `bill_id`, `agenda_id`, `query_id`, `session_id`) or set `full_details=True` → returns full nested detail.
-- Providing an ID **auto-enables** `full_details=True` — no need to set both.
+- **Detail mode**: set `full_details=True` → returns full nested detail. ID parameters (`member_id`, `vote_id`, `bill_id`, etc.) are plain filters — combine with `full_details=True` to get full detail for a specific record.
 
 ## Filtering and Response Limits
 
@@ -170,7 +169,7 @@ Uses `from_date` and `to_date`:
 
 - **IDs** (`vote_id`, `bill_id`, `member_id`, `session_id`, `agenda_id`, `query_id`, `law_id`, `secondary_law_id`) are integers.
 - **`knesset_num`** is an integer.
-- **Boolean flags** (`accepted`, `full_details`, `include_committee_heads`, etc.) accept `true`/`false`.
+- **Boolean flags** (`accepted`, `full_details`, `include_assemblies`, etc.) accept `true`/`false`.
 - **Text filters** (names, types, statuses) are Hebrew strings with case-insensitive substring matching.
 - **Enum parameters** list exact allowed values in their schema — use those values verbatim (they are in Hebrew).
 
@@ -197,7 +196,7 @@ search_across(knesset_num=25, query="תקציב")
 
 **Search parameters:** `knesset_num`, `first_name`, `last_name`, `role` (free text across all roles), `role_type` (position category), `party`
 
-**Detail parameter:** `member_id` (auto-enables full_details; omit `knesset_num` for all terms)
+**Detail parameter:** `member_id` 
 
 **Search returns:** member_id, name, gender, knesset_num, factions, role_types
 
@@ -221,7 +220,7 @@ members(member_id=839)
 
 **Search parameters:** `knesset_num`, `name`, `from_date`, `to_date`, `accepted` (true/false/omit), `bill_id`
 
-**Detail parameter:** `vote_id` (auto-enables full_details)
+**Detail parameter:** `vote_id`
 
 **Search returns:** vote_id, bill_id, title, subject, date, totals (for/against/abstain), is_accepted
 
@@ -245,7 +244,7 @@ votes(vote_id=26916)
 
 **Search parameters:** `knesset_num`, `name_query`, `status`, `type` (פרטית/ממשלתית/ועדה), `initiator_id`, `from_date`, `to_date`
 
-**Detail parameter:** `bill_id` (auto-enables full_details)
+**Detail parameter:** `bill_id`
 
 **Search returns:** bill_id, name, knesset_num, type, status, committee, publication_date, primary_initiators
 
@@ -269,7 +268,7 @@ bills(knesset_num=20, from_date="2016-01-01", to_date="2016-06-30")
 
 **Search parameters:** `knesset_num`, `name_query`, `status`, `type`, `initiator_id`, `from_date`, `to_date`
 
-**Detail parameter:** `agenda_id` (auto-enables full_details)
+**Detail parameter:** `agenda_id`
 
 **Search returns:** agenda_id, name, knesset_num, classification, type, status, initiator_name
 
@@ -290,7 +289,7 @@ agendas(agenda_id=12345)
 
 **Search parameters:** `knesset_num`, `name_query`, `status`, `type`, `initiator_id`, `from_date`, `to_date`
 
-**Detail parameter:** `query_id` (auto-enables full_details)
+**Detail parameter:** `query_id`
 
 **Search returns:** query_id, name, knesset_num, type, status, submitter_name, gov_ministry_name
 
@@ -311,7 +310,7 @@ queries(query_id=54321)
 
 **Search parameters:** `knesset_num`, `from_date` (required unless session_id), `to_date`, `query_items` (text search in session/item names), `item_type`
 
-**Detail parameter:** `session_id` (auto-enables full_details)
+**Detail parameter:** `session_id`
 
 **Search returns:** session_id, knesset_num, name, date, item_count
 
@@ -332,7 +331,7 @@ plenums(session_id=568294)
 
 **Search parameters:** `knesset_num`, `from_date` (required unless session_id), `to_date`, `committee_id`, `committee_name_query`, `query_items`, `item_type`, `member_id`, `session_type`, `status`
 
-**Detail parameter:** `session_id` (auto-enables full_details)
+**Detail parameter:** `session_id`
 
 **Search returns:** session_id, committee_id, committee_name, knesset_num, date, item_count
 
@@ -356,7 +355,7 @@ committees(from_date="2016-01-01", to_date="2016-01-31", member_id=839)
 
 **Search parameters:** `knesset_num`, `name_query`, `law_type` (חוק יסוד/חוק תקציב/חוק מועדף), `law_validity`, `from_date`, `to_date`
 
-**Detail parameter:** `law_id` (auto-enables full_details)
+**Detail parameter:** `law_id`
 
 **Search returns:** law_id, name, knesset_num, law_types, publication_date, latest_publication_date, law_validity
 
@@ -380,7 +379,7 @@ laws(law_id=12345)
 
 **Search parameters:** `knesset_num`, `name_query`, `type` (תקנות/צו/כללים/etc.), `status`, `classification`, `is_current` (true/false), `authorizing_law_id`, `from_date`, `to_date`
 
-**Detail parameter:** `secondary_law_id` (auto-enables full_details)
+**Detail parameter:** `secondary_law_id`
 
 **Search returns:** secondary_law_id, name, knesset_num, type, status, is_current, publication_date, committee_name, major_authorizing_law_id, major_authorizing_law_name
 
@@ -406,29 +405,23 @@ Returns structured reference data for a single Knesset term in one call. Prefer 
 
 **Required parameter:** `knesset_num`
 
-**Optional flags:** `include_committee_heads`, `include_ministry_members`, `include_faction_members`
+**Optional section flags:** `include_assemblies`, `include_committees`, `include_ministries`, `include_factions`, `include_roles` (all default True — set to False to skip sections you don't need)
 
 **Returns:**
 - `knesset_assemblies`: assembly/plenum periods with start/end dates
-- `committees`: committee_id, name, type, parent, dates. With `include_committee_heads=True`: chair list.
-- `gov_ministries`: ministry_id, name. With `include_ministry_members=True`: separate `minister`, `deputy_ministers`, and `members` lists (empty fields omitted).
-- `factions`: faction_id, name, dates. With `include_faction_members=True`: member list.
-- `general_roles`: always present — parliamentary roles not linked to committees/ministries/factions (e.g. Prime Minister, Knesset Speaker). Each role has a `position` title and `holders` list. Excludes generic "חבר כנסת" role.
+- `committees`: committee_id, name, type, parent, dates, chair list
+- `gov_ministries`: ministry_id, name, `minister`, `deputy_ministers`, and `members` lists (empty fields omitted)
+- `factions`: faction_id, name, dates, member list
+- `general_roles`: parliamentary roles not linked to committees/ministries/factions (e.g. Prime Minister, Knesset Speaker). Each role has a `position` title and `holders` list. Excludes generic "חבר כנסת" role.
 
 Member strings use compact format: `{{id}}: {{name}} ({{party}}) [from {{start}}] [to {{end}}]`. Dates matching the parent entity's span are elided for brevity.
 
 ```
 metadata(knesset_num=25)
-→ Assembly dates, committees, ministries, factions, general roles
+→ All sections: assembly dates, committees (with chairs), ministries (with members), factions (with members), general roles
 
-metadata(knesset_num=20, include_committee_heads=True)
-→ Same, plus committee chairs
-
-metadata(knesset_num=20, include_ministry_members=True)
-→ Same, plus ministry members split by minister / deputy / other
-
-metadata(knesset_num=20, include_faction_members=True)
-→ Same, plus faction member lists
+metadata(knesset_num=25, include_committees=False, include_roles=False)
+→ Only assemblies, ministries, factions
 ```
 
 ## Multi-step Research Patterns
@@ -468,7 +461,7 @@ metadata(knesset_num=20, include_faction_members=True)
 3. `secondary_laws(secondary_law_id=...)` → full detail with regulators and bindings
 
 **"Who are the ministers in the current Knesset?"**
-1. `metadata(knesset_num=25, include_ministry_members=True)` → all ministries with minister/deputy/member lists
+1. `metadata(knesset_num=25, include_ministries=True)` → all ministries with minister/deputy/member lists
 2. Or: `members(knesset_num=25, role_type="שר")` → all ministers with their factions
 
 **"Which MK submitted the most queries in Knesset 25?"**

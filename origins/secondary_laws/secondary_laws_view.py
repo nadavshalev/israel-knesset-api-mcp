@@ -329,7 +329,7 @@ _COUNT_BY_OPTIONS: dict[str, CountByConfig] = {
         "Search secondary legislation (חקיקת משנה — regulations, orders, rules) "
         "or get full detail for one secondary law. Returns summary info by default; "
         "set full_details=True for regulators, authorizing laws, bindings, and documents. "
-        "Provide secondary_law_id for a single law (auto-enables full_details)."
+        "Use full_details=True for complete detail."
     ),
     entity="Secondary Laws",
     count_sql="SELECT COUNT(*) FROM secondary_law_raw",
@@ -342,7 +342,7 @@ _COUNT_BY_OPTIONS: dict[str, CountByConfig] = {
     is_list=True,
 )
 def secondary_laws(
-    secondary_law_id: Annotated[int | None, Field(description="Get a specific secondary law by ID (auto-enables full_details)")] = None,
+    secondary_law_id: Annotated[int | None, Field(description="Filter by secondary law ID")] = None,
     knesset_num: Annotated[int | None, Field(description="Filter by Knesset number")] = None,
     name_query: Annotated[str | None, Field(description="Secondary law name contains text")] = None,
     type: Annotated[str | None, Field(description="Filter by type (e.g. תקנות, צו)")] = None,
@@ -352,7 +352,7 @@ def secondary_laws(
     authorizing_law_id: Annotated[int | None, Field(description="Filter by authorizing primary law ID")] = None,
     from_date: Annotated[str | None, Field(description="Start of publication date range (YYYY-MM-DD)")] = None,
     to_date: Annotated[str | None, Field(description="End of publication date range (YYYY-MM-DD)")] = None,
-    full_details: Annotated[bool, Field(description="Include regulators, authorizing laws, bindings, documents (auto-True when secondary_law_id is set)")] = False,
+    full_details: Annotated[bool, Field(description="Include regulators, authorizing laws, bindings, documents")] = False,
     top: Annotated[int | None, Field(description="Max results (default 50, max 200). Results are sorted newest-first (date DESC) or by count DESC for count_by — so top=N gives the N most recent or highest.")] = None,
     offset: Annotated[int | None, Field(description="Results to skip for pagination. To get the oldest/smallest N: use offset=total_count-N (total_count is in every response).")] = None,
     count_by: Annotated[Literal["all", "type", "status", "classification", "knesset_num"] | None, Field(description='Group and count results. "all" returns only total_count (no items). Other values group by field (sorted by count DESC).')] = None,
@@ -372,8 +372,6 @@ def secondary_laws(
     full_details = normalized["full_details"]
     top, offset = resolve_pagination(normalized["top"], normalized["offset"])
 
-    if secondary_law_id is not None:
-        full_details = True
 
     conn = connect_readonly()
     cursor = conn.cursor()
@@ -429,8 +427,6 @@ def secondary_laws(
 
     count_by_val = normalized.get("count_by")
     if count_by_val:
-        if secondary_law_id is not None:
-            raise ValueError("count_by cannot be used with single-entity lookup (secondary_law_id)")
         if count_by_val == "all":
             total_count = check_search_count(cursor, count_sql, params, paginated=True)
             conn.close()
@@ -448,12 +444,7 @@ def secondary_laws(
         conn.close()
         return SecondaryLawsResults(total_count=total_count, items=[], counts=counts)
 
-    if secondary_law_id is None:
-        total_count = check_search_count(
-            cursor, count_sql, params, entity_name="secondary_laws", paginated=True,
-        )
-    else:
-        total_count = None
+    total_count = check_search_count(cursor, count_sql, params, entity_name="secondary_laws", paginated=True)
 
     cursor.execute(
         f"""SELECT s.Id, s.Name, s.KnessetNum, s.TypeDesc, s.StatusName,
@@ -524,8 +515,6 @@ def secondary_laws(
             ))
 
     conn.close()
-    if total_count is None:
-        total_count = len(results)
     return SecondaryLawsResults(total_count=total_count, items=results)
 
 
