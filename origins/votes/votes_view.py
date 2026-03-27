@@ -249,9 +249,9 @@ def votes(
     accepted: Annotated[bool | None, Field(description="True=accepted only, False=rejected only, null=both")] = None,
     bill_id: Annotated[int | None, Field(description="Filter to votes linked to a specific bill ID")] = None,
     full_details: Annotated[bool, Field(description="Include per-member breakdown with party and related votes (auto-True when vote_id is set)")] = False,
-    top: Annotated[int | None, Field(description="Max results to return (default 50, max 200)")] = None,
-    offset: Annotated[int | None, Field(description="Number of results to skip for pagination")] = None,
-    count_by: Annotated[Literal["bill", "knesset_num"] | None, Field(description="Group and count results by field. Returns counts instead of items.")] = None,
+    top: Annotated[int | None, Field(description="Max results (default 50, max 200). Results are sorted newest-first (date DESC) or by count DESC for count_by — so top=N gives the N most recent or highest.")] = None,
+    offset: Annotated[int | None, Field(description="Results to skip for pagination. To get the oldest/smallest N: use offset=total_count-N (total_count is in every response).")] = None,
+    count_by: Annotated[Literal["bill", "knesset_num"] | None, Field(description="Group and count matching results by field, sorted by count DESC. Returns counts instead of items. Use top=N to get the top N groups, or offset+top to get the lowest.")] = None,
 ) -> VotesResults:
     """Search for plenum votes or get full detail for a single vote.
 

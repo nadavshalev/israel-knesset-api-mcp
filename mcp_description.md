@@ -63,6 +63,78 @@ Responses that exceed the server size limit are rejected with an error. The more
 - Combine `knesset_num` with name, type, status, or date filters to narrow results further.
 - If you get a "Response too large" error, add more filters — do not retry the same query.
 
+## Pagination and Aggregation
+
+All list tools return a `total_count` field alongside `items`. Use `top` and `offset` to control how many results you get and where to start.
+
+### Pagination (`top` / `offset`)
+
+Results are always sorted **newest-first** (date DESC). The `total_count` in every response reflects the full match count before pagination.
+
+- **`top`** (default 50, max 200): how many results to return.
+- **`offset`**: how many results to skip before returning.
+
+| Goal | How |
+|---|---|
+| N most recent / highest-count | `top=N` (offset defaults to 0) |
+| N oldest / lowest-count | `offset=total_count-N, top=N` |
+| Page through all results | `offset=0`, then `offset=50`, `offset=100`, … |
+
+```
+bills(knesset_num=25, top=5)
+→ 5 most recently published bills
+
+# To get the 5 oldest: first call reveals total_count=3200
+bills(knesset_num=25, offset=3195, top=5)
+→ 5 oldest bills
+```
+
+### Aggregation (`count_by`)
+
+All nine list tools support `count_by`, which answers "how many per X?" in a single call. Instead of returning `items`, it returns a `counts` list sorted by count DESC. All other filters still apply.
+
+**Response shape when count_by is set:**
+```
+{ total_count: <number of distinct groups>, items: [], counts: [{id, value, count}, …] }
+```
+- `id`: the group's entity ID (when applicable, e.g. PersonID for initiator)
+- `value`: display name of the group
+- `count`: number of matching records in this group
+
+**Available options per tool:**
+
+| Tool | `count_by` options |
+|---|---|
+| `queries` | `initiator`, `status`, `type`, `ministry`, `knesset_num` |
+| `bills` | `initiator`, `status`, `type`, `committee`, `knesset_num` |
+| `agendas` | `initiator`, `status`, `type`, `knesset_num` |
+| `votes` | `bill`, `knesset_num` |
+| `laws` | `knesset_num`, `validity` |
+| `secondary_laws` | `type`, `status`, `classification`, `knesset_num` |
+| `committees` | `committee`, `knesset_num`, `type`, `status` |
+| `plenums` | `knesset_num` |
+| `members` | `knesset_num`, `party`, `role_type` |
+
+Since `counts` is sorted by count DESC, `top=N` gives the top N groups. To get the bottom N, use `offset=total_count-N, top=N`.
+
+```
+queries(knesset_num=25, count_by="initiator", top=1)
+→ The member who submitted the most queries in Knesset 25
+  e.g. {id: 965, value: "יאיר לפיד", count: 87}
+
+queries(knesset_num=25, count_by="ministry")
+→ Which ministries received the most queries, ranked
+
+bills(knesset_num=25, count_by="status")
+→ How many bills are in each status
+
+members(knesset_num=25, count_by="party")
+→ How many member-terms per party in the 25th Knesset
+
+queries(knesset_num=25, count_by="initiator", top=1, offset=total_count-1)
+→ The member who submitted the fewest queries
+```
+
 ## Date Filtering
 
 ### Session tools (`plenums`, `committees`)
@@ -392,3 +464,9 @@ metadata(knesset_num=20, include_faction_members=True)
 **"Who are the ministers in the current Knesset?"**
 1. `metadata(knesset_num=25, include_ministry_members=True)` → all ministries with minister/deputy/member lists
 2. Or: `members(knesset_num=25, role_type="שר")` → all ministers with their factions
+
+**"Which MK submitted the most queries in Knesset 25?"**
+1. `queries(knesset_num=25, count_by="initiator", top=1)` → single call, returns `{id, value, count}` for the top submitter
+
+**"How are bills distributed by status in Knesset 25?"**
+1. `bills(knesset_num=25, count_by="status")` → all statuses with counts, ranked highest first
