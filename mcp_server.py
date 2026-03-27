@@ -455,7 +455,7 @@ def resource_committees(knesset_num: int) -> list[dict]:
         conn = connect_readonly()
         cursor = conn.cursor()
         kstart, kend = fetch_knesset_span(cursor, knesset_num)
-        result = fetch_committees(cursor, knesset_num, include_heads=True, knesset_start=kstart, knesset_end=kend)
+        result = fetch_committees(cursor, knesset_num, knesset_start=kstart, knesset_end=kend)
         conn.close()
         _log_resource_done("committees", t0)
         return [r.model_dump(exclude_none=True) for r in result]
@@ -478,7 +478,7 @@ def resource_ministries(knesset_num: int) -> list[dict]:
         conn = connect_readonly()
         cursor = conn.cursor()
         kstart, kend = fetch_knesset_span(cursor, knesset_num)
-        result = fetch_ministries(cursor, knesset_num, include_members=True, knesset_start=kstart, knesset_end=kend)
+        result = fetch_ministries(cursor, knesset_num, knesset_start=kstart, knesset_end=kend)
         conn.close()
         _log_resource_done("ministries", t0)
         return [r.model_dump(exclude_none=True) for r in result]
@@ -501,7 +501,7 @@ def resource_factions(knesset_num: int) -> list[dict]:
         conn = connect_readonly()
         cursor = conn.cursor()
         kstart, kend = fetch_knesset_span(cursor, knesset_num)
-        result = fetch_factions(cursor, knesset_num, include_members=True, knesset_start=kstart, knesset_end=kend)
+        result = fetch_factions(cursor, knesset_num, knesset_start=kstart, knesset_end=kend)
         conn.close()
         _log_resource_done("factions", t0)
         return [r.model_dump(exclude_none=True) for r in result]

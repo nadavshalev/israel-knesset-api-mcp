@@ -16,7 +16,7 @@ from origins.knesset.metadata_view import metadata
 
 
 class TestBasicStructure(unittest.TestCase):
-    """Verify knesset_num=20 returns all sections populated."""
+    """Verify knesset_num=20 returns all sections populated by default."""
 
     def setUp(self):
         self.result = metadata(knesset_num=20)
@@ -25,16 +25,24 @@ class TestBasicStructure(unittest.TestCase):
         self.assertEqual(self.result.knesset_num, 20)
 
     def test_assemblies_populated(self):
+        self.assertIsNotNone(self.result.knesset_assemblies)
         self.assertGreater(len(self.result.knesset_assemblies), 0)
 
     def test_committees_populated(self):
+        self.assertIsNotNone(self.result.committees)
         self.assertGreater(len(self.result.committees), 0)
 
     def test_gov_ministries_populated(self):
+        self.assertIsNotNone(self.result.gov_ministries)
         self.assertGreater(len(self.result.gov_ministries), 0)
 
     def test_factions_populated(self):
+        self.assertIsNotNone(self.result.factions)
         self.assertGreater(len(self.result.factions), 0)
+
+    def test_general_roles_populated(self):
+        self.assertIsNotNone(self.result.general_roles)
+        self.assertGreater(len(self.result.general_roles), 0)
 
 
 class TestKnessetAssemblies(unittest.TestCase):
@@ -53,7 +61,7 @@ class TestKnessetAssemblies(unittest.TestCase):
 
 
 class TestCommittees(unittest.TestCase):
-    """Verify committee list non-empty with names."""
+    """Verify committee list non-empty with names and heads."""
 
     def setUp(self):
         self.result = metadata(knesset_num=20)
@@ -66,13 +74,6 @@ class TestCommittees(unittest.TestCase):
     def test_committees_have_ids(self):
         for c in self.result.committees:
             self.assertIsInstance(c.committee_id, int)
-
-
-class TestCommitteeHeads(unittest.TestCase):
-    """Verify at least some committees have heads when include_committee_heads=True."""
-
-    def setUp(self):
-        self.result = metadata(knesset_num=20, include_committee_heads=True)
 
     def test_some_committees_have_heads(self):
         committees_with_heads = [c for c in self.result.committees if c.heads]
@@ -90,13 +91,12 @@ class TestCommitteeHeads(unittest.TestCase):
             if c.heads:
                 for h in c.heads:
                     self.assertIn(":", h)
-                    # Should have content after the colon
                     parts = h.split(":", 1)
                     self.assertGreater(len(parts[1].strip()), 0)
 
 
 class TestGovMinistries(unittest.TestCase):
-    """Verify ministries list populated."""
+    """Verify ministries list populated with members."""
 
     def setUp(self):
         self.result = metadata(knesset_num=20)
@@ -108,113 +108,6 @@ class TestGovMinistries(unittest.TestCase):
     def test_ministries_have_ids(self):
         for m in self.result.gov_ministries:
             self.assertIsInstance(m.ministry_id, int)
-
-
-class TestFactions(unittest.TestCase):
-    """Verify known factions exist."""
-
-    def setUp(self):
-        self.result = metadata(knesset_num=20)
-
-    def test_factions_known(self):
-        faction_names = [f.name for f in self.result.factions]
-        self.assertTrue(
-            any("הליכוד" in name for name in faction_names),
-            f"Expected to find הליכוד in factions: {faction_names}",
-        )
-
-    def test_factions_have_ids(self):
-        for f in self.result.factions:
-            self.assertIsInstance(f.faction_id, int)
-
-
-class TestNoMembersByDefault(unittest.TestCase):
-    """Members should be None when no include_* flags are set."""
-
-    def setUp(self):
-        self.result = metadata(knesset_num=20)
-
-    def test_faction_members_none(self):
-        for f in self.result.factions:
-            self.assertIsNone(f.members)
-
-    def test_ministry_members_none(self):
-        for m in self.result.gov_ministries:
-            self.assertIsNone(m.minister)
-            self.assertIsNone(m.deputy_ministers)
-            self.assertIsNone(m.members)
-
-    def test_committee_heads_none(self):
-        for c in self.result.committees:
-            self.assertIsNone(c.heads)
-
-
-class TestGranularFlags(unittest.TestCase):
-    """Each include_* flag independently populates only its section."""
-
-    def test_only_committee_heads(self):
-        result = metadata(knesset_num=20, include_committee_heads=True)
-        self.assertTrue(any(c.heads for c in result.committees))
-        for m in result.gov_ministries:
-            self.assertIsNone(m.members)
-        for f in result.factions:
-            self.assertIsNone(f.members)
-
-    def test_only_ministry_members(self):
-        result = metadata(knesset_num=20, include_ministry_members=True)
-        self.assertTrue(any(m.minister for m in result.gov_ministries))
-        for c in result.committees:
-            self.assertIsNone(c.heads)
-        for f in result.factions:
-            self.assertIsNone(f.members)
-
-    def test_only_faction_members(self):
-        result = metadata(knesset_num=20, include_faction_members=True)
-        self.assertTrue(any(f.members for f in result.factions))
-        for c in result.committees:
-            self.assertIsNone(c.heads)
-        for m in result.gov_ministries:
-            self.assertIsNone(m.members)
-
-
-class TestFactionMembersCompactFormat(unittest.TestCase):
-    """Faction member lists are list[str] in compact format."""
-
-    def setUp(self):
-        self.result = metadata(knesset_num=20, include_faction_members=True)
-
-    def test_members_are_strings(self):
-        for f in self.result.factions:
-            if f.members:
-                for m in f.members:
-                    self.assertIsInstance(m, str)
-
-    def test_members_compact_format(self):
-        """Each member string should contain ':' separator."""
-        for f in self.result.factions:
-            if f.members:
-                for m in f.members:
-                    self.assertIn(":", m)
-
-    def test_date_elision(self):
-        """Members whose tenure spans the full faction lifetime should have no dates."""
-        # Find a faction with dates and members
-        for f in self.result.factions:
-            if f.members and f.start_date and f.end_date:
-                # Any member without "from" or "to" in their string had dates elided
-                elided = [m for m in f.members if "from" not in m and "to" not in m]
-                if elided:
-                    # Found at least one member with elided dates — test passes
-                    return
-        # It's acceptable if all factions are ongoing (no end date) — skip
-        self.skipTest("No faction with full-span members found to test date elision")
-
-
-class TestMinistryMembersCompactFormat(unittest.TestCase):
-    """Ministry member lists are list[str] in compact format, split by role."""
-
-    def setUp(self):
-        self.result = metadata(knesset_num=20, include_ministry_members=True)
 
     def test_some_ministries_have_ministers(self):
         self.assertTrue(any(m.minister for m in self.result.gov_ministries))
@@ -243,6 +136,93 @@ class TestMinistryMembersCompactFormat(unittest.TestCase):
             self.assertNotEqual(m.minister, [])
             self.assertNotEqual(m.deputy_ministers, [])
             self.assertNotEqual(m.members, [])
+
+
+class TestFactions(unittest.TestCase):
+    """Verify known factions exist and members are populated."""
+
+    def setUp(self):
+        self.result = metadata(knesset_num=20)
+
+    def test_factions_known(self):
+        faction_names = [f.name for f in self.result.factions]
+        self.assertTrue(
+            any("הליכוד" in name for name in faction_names),
+            f"Expected to find הליכוד in factions: {faction_names}",
+        )
+
+    def test_factions_have_ids(self):
+        for f in self.result.factions:
+            self.assertIsInstance(f.faction_id, int)
+
+    def test_some_factions_have_members(self):
+        self.assertTrue(any(f.members for f in self.result.factions))
+
+    def test_members_are_strings(self):
+        for f in self.result.factions:
+            if f.members:
+                for m in f.members:
+                    self.assertIsInstance(m, str)
+
+    def test_members_compact_format(self):
+        """Each member string should contain ':' separator."""
+        for f in self.result.factions:
+            if f.members:
+                for m in f.members:
+                    self.assertIn(":", m)
+
+    def test_date_elision(self):
+        """Members whose tenure spans the full faction lifetime should have no dates."""
+        for f in self.result.factions:
+            if f.members and f.start_date and f.end_date:
+                elided = [m for m in f.members if "from" not in m and "to" not in m]
+                if elided:
+                    return
+        self.skipTest("No faction with full-span members found to test date elision")
+
+
+class TestSectionExclusion(unittest.TestCase):
+    """Setting include_X=False omits the section entirely (None in result)."""
+
+    def test_exclude_assemblies(self):
+        result = metadata(knesset_num=20, include_assemblies=False)
+        self.assertIsNone(result.knesset_assemblies)
+        self.assertIsNotNone(result.committees)
+
+    def test_exclude_committees(self):
+        result = metadata(knesset_num=20, include_committees=False)
+        self.assertIsNone(result.committees)
+        self.assertIsNotNone(result.factions)
+
+    def test_exclude_ministries(self):
+        result = metadata(knesset_num=20, include_ministries=False)
+        self.assertIsNone(result.gov_ministries)
+        self.assertIsNotNone(result.committees)
+
+    def test_exclude_factions(self):
+        result = metadata(knesset_num=20, include_factions=False)
+        self.assertIsNone(result.factions)
+        self.assertIsNotNone(result.gov_ministries)
+
+    def test_exclude_roles(self):
+        result = metadata(knesset_num=20, include_roles=False)
+        self.assertIsNone(result.general_roles)
+        self.assertIsNotNone(result.committees)
+
+    def test_only_factions(self):
+        result = metadata(
+            knesset_num=20,
+            include_assemblies=False,
+            include_committees=False,
+            include_ministries=False,
+            include_roles=False,
+        )
+        self.assertIsNone(result.knesset_assemblies)
+        self.assertIsNone(result.committees)
+        self.assertIsNone(result.gov_ministries)
+        self.assertIsNone(result.general_roles)
+        self.assertIsNotNone(result.factions)
+        self.assertGreater(len(result.factions), 0)
 
 
 class TestGeneralRoles(unittest.TestCase):
