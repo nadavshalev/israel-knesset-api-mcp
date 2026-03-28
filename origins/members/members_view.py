@@ -134,13 +134,13 @@ def _build_members_where(*, knesset_num=None, first_name=None, last_name=None,
         params.extend(fuzzy_params(last_name))
 
     if role:
-        conditions.append("""(
-            pos.Description LIKE %s OR
-            ptp.DutyDesc LIKE %s OR
-            ptp.GovMinistryName LIKE %s OR
-            ptp.CommitteeName LIKE %s
+        conditions.append(f"""(
+            {fuzzy_condition("pos.Description")} OR
+            {fuzzy_condition("ptp.DutyDesc")} OR
+            {fuzzy_condition("ptp.GovMinistryName")} OR
+            {fuzzy_condition("ptp.CommitteeName")}
         )""")
-        params.extend([f"%{role}%"] * 4)
+        params.extend(fuzzy_params(role) * 4)
 
     if role_ids:
         placeholders = ", ".join(["%s"] * len(role_ids))
