@@ -214,14 +214,15 @@ _COUNT_BY_OPTIONS: dict[str, CountByConfig] = {
     count_sql="SELECT COUNT(*) FROM committee_session_raw",
     most_recent_date_sql="SELECT MAX(StartDate) FROM committee_session_raw",
     enum_sql={
-        "session_type": "SELECT DISTINCT TypeDesc FROM committee_session_raw WHERE TypeDesc IS NOT NULL ORDER BY TypeDesc"
+        "session_type": "SELECT DISTINCT TypeDesc FROM committee_session_raw WHERE TypeDesc IS NOT NULL ORDER BY TypeDesc",
+        "item_type": "SELECT DISTINCT itemtypedesc FROM plm_session_item_raw WHERE itemtypeid IN (SELECT DISTINCT itemtypeid FROM cmt_session_item_raw);"
     },
     is_list=True,
 )
 def committees(
     session_id: Annotated[int | None, Field(description="Filter by session ID")] = None,
     committee_id: Annotated[int | None, Field(description="Filter by committee ID")] = None,
-    committee_name_query: Annotated[str | None, Field(description="Partial match on committee name")] = None,
+    committee_name: Annotated[str | None, Field(description="Partial match on committee name")] = None,
     knesset_num: Annotated[int | None, Field(description="Filter by Knesset number")] = None,
     from_date: Annotated[str | None, Field(description="Start of date range (YYYY-MM-DD). Required unless session_id is provided. to_date defaults to today if omitted.")] = None,
     to_date: Annotated[str | None, Field(description="End of date range (YYYY-MM-DD). Requires from_date.")] = None,
@@ -241,7 +242,7 @@ def committees(
     normalized = normalize_inputs(locals())
     session_id = normalized["session_id"]
     committee_id = normalized["committee_id"]
-    committee_name_query = normalized["committee_name_query"]
+    committee_name = normalized["committee_name"]
     knesset_num = normalized["knesset_num"]
     from_date = normalized["from_date"]
     to_date = normalized["to_date"]
@@ -255,8 +256,6 @@ def committees(
     # --- Validation ---
     if to_date and not from_date:
         raise ValueError("to_date requires from_date. Provide from_date or use session_id instead.")
-    if not session_id and not from_date:
-        raise ValueError("Provide session_id or from_date to scope the query.")
 
     # Default to_date to today when from_date is provided alone
     if from_date and not to_date:
@@ -276,9 +275,9 @@ def committees(
         conditions.append("cs.CommitteeID = %s")
         params.append(committee_id)
 
-    if committee_name_query:
+    if committee_name:
         conditions.append(fuzzy_condition("c.Name"))
-        params.extend(fuzzy_params(committee_name_query))
+        params.extend(fuzzy_params(committee_name))
 
     if knesset_num is not None:
         conditions.append("cs.KnessetNum = %s")
