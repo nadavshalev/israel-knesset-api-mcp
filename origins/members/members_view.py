@@ -25,7 +25,7 @@ from pydantic import Field
 from core.db import connect_readonly
 from core.helpers import (
     simple_date, format_person_name, normalize_inputs, check_search_count, resolve_pagination,
-    CountByConfig, build_count_by_query,
+    CountByConfig, build_count_by_query, fuzzy_condition, fuzzy_params, fuzzy_condition_or, fuzzy_params_or,
 )
 from core.models import CountItem
 from core.mcp_meta import mcp_tool
@@ -46,8 +46,8 @@ def _build_members_search(*, query, knesset_num, date, date_to, top_n):
     params = []
 
     if query:
-        conditions.append("(p.FirstName LIKE %s OR p.LastName LIKE %s)")
-        params.extend([f"%{query}%", f"%{query}%"])
+        conditions.append(fuzzy_condition_or("p.FirstName", "p.LastName"))
+        params.extend(fuzzy_params_or(query))
 
     if knesset_num is not None:
         conditions.append("""EXISTS (
@@ -126,12 +126,12 @@ def _build_members_where(*, knesset_num=None, first_name=None, last_name=None,
         params.append(member_id)
 
     if first_name:
-        conditions.append("p.FirstName LIKE %s")
-        params.append(f"%{first_name}%")
+        conditions.append(fuzzy_condition("p.FirstName"))
+        params.extend(fuzzy_params(first_name))
 
     if last_name:
-        conditions.append("p.LastName LIKE %s")
-        params.append(f"%{last_name}%")
+        conditions.append(fuzzy_condition("p.LastName"))
+        params.extend(fuzzy_params(last_name))
 
     if role:
         conditions.append("""(

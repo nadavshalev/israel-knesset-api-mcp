@@ -199,7 +199,7 @@ class TestFullDetails(unittest.TestCase):
 # ===================================================================
 
 class TestSessionId(unittest.TestCase):
-    """session_id auto-enables full_details."""
+    """session_id with full_details=True."""
 
     def test_session_id_auto_full_details(self):
         # First find a valid session ID
@@ -211,7 +211,7 @@ class TestSessionId(unittest.TestCase):
         self.assertGreater(len(results.items), 0)
         sid = results.items[0].session_id
 
-        detail = committee_sessions(session_id=sid)
+        detail = committee_sessions(session_id=sid, full_details=True)
         self.assertEqual(len(detail.items), 1)
         r = detail.items[0]
         self.assertEqual(r.session_id, sid)
@@ -242,7 +242,7 @@ class TestBillVotes(unittest.TestCase):
 
         found_votes = False
         for r in sessions_with_items[:20]:
-            detail = committee_sessions(session_id=r.session_id)
+            detail = committee_sessions(session_id=r.session_id, full_details=True)
             s = detail.items[0]
             bill_items = [i for i in s.items if i.bill_id and i.votes]
             if bill_items:

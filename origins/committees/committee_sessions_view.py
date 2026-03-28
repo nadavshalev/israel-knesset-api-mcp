@@ -20,7 +20,7 @@ from pydantic import Field
 from core.db import connect_readonly
 from core.helpers import (
     simple_date, simple_time, normalize_inputs, check_search_count, resolve_pagination,
-    CountByConfig, build_count_by_query,
+    CountByConfig, build_count_by_query, fuzzy_condition, fuzzy_params,
 )
 from core.models import CountItem
 from core.mcp_meta import mcp_tool
@@ -37,12 +37,13 @@ def _build_cmt_sessions_search(*, query, knesset_num, date, date_to, top_n):
     """Build SQL for cross-entity committee session search."""
     conditions = []
     params = []
-    need_item_join = False
 
     if query:
-        conditions.append("(c.Name LIKE %s OR csi.Name LIKE %s)")
-        params.extend([f"%{query}%", f"%{query}%"])
-        need_item_join = True
+        conditions.append(f"""(
+            {fuzzy_condition("c.Name")}
+            OR EXISTS (SELECT 1 FROM cmt_session_item_raw csi
+                       WHERE csi.CommitteeSessionID = cs.Id AND {fuzzy_condition("csi.Name")}))""")
+        params.extend(fuzzy_params(query) + fuzzy_params(query))
 
     if knesset_num is not None:
         conditions.append("cs.KnessetNum = %s")
@@ -58,27 +59,21 @@ def _build_cmt_sessions_search(*, query, knesset_num, date, date_to, top_n):
         params.append(f"{date}%")
 
     where = " AND ".join(conditions) if conditions else "1=1"
-    item_join = """
-        LEFT JOIN cmt_session_item_raw csi
-               ON cs.Id = csi.CommitteeSessionID
-    """ if need_item_join else ""
 
     count_sql = f"""
-        SELECT COUNT(DISTINCT cs.Id)
+        SELECT COUNT(*)
         FROM committee_session_raw cs
         JOIN committee_raw c ON c.Id = cs.CommitteeID
-        {item_join}
         WHERE {where}
     """
     search_sql = f"""
-        SELECT DISTINCT cs.Id AS id,
+        SELECT cs.Id AS id,
                cs.CommitteeID AS committee_id,
                c.Name AS committee_name,
                cs.KnessetNum AS knesset_num,
                cs.StartDate AS date
         FROM committee_session_raw cs
         JOIN committee_raw c ON c.Id = cs.CommitteeID
-        {item_join}
         WHERE {where}
         ORDER BY cs.StartDate DESC, cs.Id DESC
         LIMIT %s
@@ -282,8 +277,8 @@ def committees(
         params.append(committee_id)
 
     if committee_name_query:
-        conditions.append("c.Name LIKE %s")
-        params.append(f"%{committee_name_query}%")
+        conditions.append(fuzzy_condition("c.Name"))
+        params.extend(fuzzy_params(committee_name_query))
 
     if knesset_num is not None:
         conditions.append("cs.KnessetNum = %s")
@@ -294,14 +289,14 @@ def committees(
         params.extend([from_date, to_date + "T99"])
 
     if query_items:
-        conditions.append("""(
-            c.Name LIKE %s
+        conditions.append(f"""(
+            {fuzzy_condition("c.Name")}
             OR EXISTS (
                 SELECT 1 FROM cmt_session_item_raw csi
-                WHERE csi.CommitteeSessionID = cs.Id AND csi.Name LIKE %s
+                WHERE csi.CommitteeSessionID = cs.Id AND {fuzzy_condition("csi.Name")}
             )
         )""")
-        params.extend([f"%{query_items}%", f"%{query_items}%"])
+        params.extend(fuzzy_params(query_items) + fuzzy_params(query_items))
 
     if item_type:
         conditions.append("""EXISTS (

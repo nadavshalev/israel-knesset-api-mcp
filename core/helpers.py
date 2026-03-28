@@ -375,6 +375,47 @@ def check_search_count(cursor, count_sql: str, params: list, entity_name: str = 
 
 
 # ---------------------------------------------------------------------------
+# Inline fuzzy-match SQL builders (for GIN BitmapOr acceleration)
+# ---------------------------------------------------------------------------
+
+from config import FUZZY_TRGM_THRESHOLD as _FUZZY_TRGM_THRESHOLD
+
+def fuzzy_condition(col: str) -> str:
+    """Return a WHERE fragment for fuzzy-matching a single column.
+
+    Uses FTS (GIN tsvector index) OR trigram (GIN trgm index).
+    Both are inlined so PostgreSQL can use BitmapOr on both indexes.
+    FTS column uses normalize_hebrew_fts (strips Hebrew prefixes ה/ב/ל/מ/ו).
+    Trigram column uses normalize_hebrew (basic, no prefix stripping) to match
+    the GIN trgm index expression and to keep "כספים" intact for similarity.
+    Caller adds two ``%s`` params via :func:`fuzzy_params`.
+    """
+    return (
+        f"(to_tsvector('simple', normalize_hebrew_fts({col})) @@ make_and_tsquery(%s)"
+        f" OR strict_word_similarity(normalize_hebrew(%s), normalize_hebrew({col})) > {_FUZZY_TRGM_THRESHOLD})"
+    )
+
+
+def fuzzy_condition_or(col1: str, col2: str) -> str:
+    """Return a WHERE fragment for fuzzy-matching across two columns (OR).
+
+    Caller adds one ``%s`` param (the query text) — expanded to 4 internally.
+    Use :func:`fuzzy_params` / :func:`fuzzy_params_or` to build param lists.
+    """
+    return f"({fuzzy_condition(col1)} OR {fuzzy_condition(col2)})"
+
+
+def fuzzy_params(query: str) -> list:
+    """Return params for :func:`fuzzy_condition` (2 copies of query)."""
+    return [query, query]
+
+
+def fuzzy_params_or(query: str) -> list:
+    """Return params for :func:`fuzzy_condition_or` (4 copies of query)."""
+    return [query, query, query, query]
+
+
+# ---------------------------------------------------------------------------
 # Output cleaning
 # ---------------------------------------------------------------------------
 

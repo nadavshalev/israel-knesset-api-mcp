@@ -11,6 +11,8 @@ ENSURE_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_csi_itemid ON cmt_session_item_raw (ItemID)",
     "CREATE INDEX IF NOT EXISTS idx_csi_session ON cmt_session_item_raw (CommitteeSessionID)",
     "CREATE INDEX IF NOT EXISTS idx_csi_itemtype ON cmt_session_item_raw (ItemTypeID)",
+    "CREATE INDEX IF NOT EXISTS idx_csi_name_fts ON cmt_session_item_raw USING GIN (to_tsvector('simple', normalize_hebrew_fts(name)))",
+    "CREATE INDEX IF NOT EXISTS idx_csi_name_trgm ON cmt_session_item_raw USING GIN (normalize_hebrew(name) gin_trgm_ops)",
 ]
 CSV_URL = "https://production.oknesset.org/pipelines/data/committees/kns_cmtsessionitem/kns_cmtsessionitem.csv"
 

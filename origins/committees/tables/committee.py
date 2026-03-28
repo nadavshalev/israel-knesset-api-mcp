@@ -9,6 +9,8 @@ ODATA_NAME = "KNS_Committee"
 TABLE_NAME = "committee_raw"
 ENSURE_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_committee_knessetnum ON committee_raw (KnessetNum)",
+    "CREATE INDEX IF NOT EXISTS idx_committee_name_fts ON committee_raw USING GIN (to_tsvector('simple', normalize_hebrew_fts(name)))",
+    "CREATE INDEX IF NOT EXISTS idx_committee_name_trgm ON committee_raw USING GIN (normalize_hebrew(name) gin_trgm_ops)",
 ]
 CSV_URL = "https://production.oknesset.org/pipelines/data/committees/kns_committee/kns_committee.csv"
 

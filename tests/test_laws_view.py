@@ -48,8 +48,11 @@ class TestNameFilter(unittest.TestCase):
     def test_name_search(self):
         results = laws(name_query="התקשורת", knesset_num=10)
         self.assertGreater(len(results.items), 0)
-        for law in results.items:
-            self.assertIn("התקשורת", law.name)
+        # Fuzzy search: at least one result should contain the root word
+        self.assertTrue(
+            any("תקשורת" in law.name for law in results.items),
+            "Expected at least one result containing 'תקשורת'",
+        )
 
 
 class TestLawTypeFilter(unittest.TestCase):
@@ -108,11 +111,11 @@ class TestDateFilter(unittest.TestCase):
 
 
 class TestLawIdAutoFullDetails(unittest.TestCase):
-    """law_id auto-enables full_details."""
+    """law_id with full_details=True."""
 
     def test_bekesset_law(self):
         """Law 2000002: חוק התקשורת (Knesset 10)."""
-        results = laws(law_id=2000002)
+        results = laws(law_id=2000002, full_details=True)
         self.assertEqual(len(results.items), 1)
         law = results.items[0]
         self.assertEqual(law.law_id, 2000002)
@@ -126,8 +129,8 @@ class TestLawIdAutoFullDetails(unittest.TestCase):
 
     def test_law_id_with_name_query_still_works(self):
         """law_id + name_query: both ANDed — no crash."""
-        results_by_id = laws(law_id=2001386)
-        results_filtered = laws(law_id=2001386, name_query="ביטחון")
+        results_by_id = laws(law_id=2001386, full_details=True)
+        results_filtered = laws(law_id=2001386, name_query="ביטחון", full_details=True)
         self.assertGreaterEqual(len(results_by_id.items), len(results_filtered.items))
 
     def test_full_details_flag(self):
@@ -142,7 +145,7 @@ class TestFullDetailFields(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        result = laws(law_id=2000002)
+        result = laws(law_id=2000002, full_details=True)
         cls.law = result.items[0]
 
     def test_is_full_result(self):
@@ -171,7 +174,7 @@ class TestChanges(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        result = laws(law_id=2001386)
+        result = laws(law_id=2001386, full_details=True)
         cls.law = result.items[0]
 
     def test_has_changes(self):
@@ -222,7 +225,7 @@ class TestReplacedLaws(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        result = laws(law_id=2001386)
+        result = laws(law_id=2001386, full_details=True)
         cls.law = result.items[0]
 
     def test_has_replaced_laws(self):
@@ -254,7 +257,7 @@ class TestChangesStructure(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        result = laws(law_id=2001386)
+        result = laws(law_id=2001386, full_details=True)
         cls.law = result.items[0]
 
     def test_changes_bill_has_id_and_name(self):
@@ -283,14 +286,14 @@ class TestOriginalBill(unittest.TestCase):
 
     def test_original_law_binding_type_takes_priority(self):
         """Law 2000002 has a 'החוק המקורי' binding — use its LawID."""
-        result = laws(law_id=2000002)
+        result = laws(law_id=2000002, full_details=True)
         law = result.items[0]
         self.assertIsNotNone(law.original_bill)
         self.assertEqual(law.original_bill.bill_id, 147159)  # חוק הבזק
 
     def test_common_parent_fallback(self):
         """Law 2000037 has no 'החוק המקורי' but all bindings share one parent."""
-        result = laws(law_id=2000037)
+        result = laws(law_id=2000037, full_details=True)
         law = result.items[0]
         self.assertIsNotNone(law.original_bill)
         self.assertIsNotNone(law.original_bill.bill_id)
@@ -298,7 +301,7 @@ class TestOriginalBill(unittest.TestCase):
 
     def test_multiple_parents_no_original_bill(self):
         """Law 2001386 has multiple parents and no 'החוק המקורי' — None."""
-        result = laws(law_id=2001386)
+        result = laws(law_id=2001386, full_details=True)
         law = result.items[0]
         self.assertIsNone(law.original_bill)
 
@@ -308,7 +311,7 @@ class TestBasicLawDetail(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        result = laws(law_id=2000037)
+        result = laws(law_id=2000037, full_details=True)
         cls.law = result.items[0]
 
     def test_is_basic_law(self):

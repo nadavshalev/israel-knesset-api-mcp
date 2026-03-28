@@ -10,6 +10,8 @@ TABLE_NAME = "bill_raw"
 ENSURE_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_bill_knessetnum ON bill_raw (KnessetNum)",
     "CREATE INDEX IF NOT EXISTS idx_bill_committeeid ON bill_raw (CommitteeID)",
+    "CREATE INDEX IF NOT EXISTS idx_bill_name_fts ON bill_raw USING GIN (to_tsvector('simple', normalize_hebrew_fts(name)))",
+    "CREATE INDEX IF NOT EXISTS idx_bill_name_trgm ON bill_raw USING GIN (normalize_hebrew(name) gin_trgm_ops)",
 ]
 CSV_URL = "https://production.oknesset.org/pipelines/data/bills/kns_bill/kns_bill.csv"
 

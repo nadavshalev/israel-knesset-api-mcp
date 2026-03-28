@@ -58,10 +58,10 @@ class TestTypeFilter(unittest.TestCase):
 
 
 class TestQueryIdAutoFullDetails(unittest.TestCase):
-    """query_id auto-enables full_details."""
+    """query_id with full_details=True."""
 
     def test_single_query(self):
-        results = queries(query_id=563908)
+        results = queries(query_id=563908, full_details=True)
         self.assertEqual(len(results.items), 1)
         q = results.items[0]
         self.assertEqual(q.query_id, 563908)
@@ -75,7 +75,7 @@ class TestQueryIdAutoFullDetails(unittest.TestCase):
 
     def test_stages_present(self):
         """Full detail should include session stages."""
-        results = queries(query_id=563908)
+        results = queries(query_id=563908, full_details=True)
         q = results.items[0]
         if q.stages:
             for s in q.stages:

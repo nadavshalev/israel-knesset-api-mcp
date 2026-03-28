@@ -131,7 +131,7 @@ class TestSortOrder(unittest.TestCase):
 class TestVoteIdFullDetail(unittest.TestCase):
 
     def test_vote_exists(self):
-        results = votes(vote_id=21825)
+        results = votes(vote_id=21825, full_details=True)
         self.assertEqual(len(results.items), 1)
         v = results.items[0]
         self.assertEqual(v.vote_id, 21825)
@@ -148,11 +148,11 @@ class TestVoteIdFullDetail(unittest.TestCase):
         self.assertEqual(len(results.items), 0)
 
     def test_bill_id_for_bill_vote(self):
-        results = votes(vote_id=26916)
+        results = votes(vote_id=26916, full_details=True)
         self.assertEqual(results.items[0].bill_id, 565913)
 
     def test_bill_id_null_for_non_bill_vote(self):
-        results = votes(vote_id=21825)
+        results = votes(vote_id=21825, full_details=True)
         self.assertIsNone(results.items[0].bill_id)
 
 
@@ -164,17 +164,17 @@ class TestVoteIdFullDetail(unittest.TestCase):
 class TestMembers(unittest.TestCase):
 
     def test_members_present_in_full_detail(self):
-        results = votes(vote_id=21825)
+        results = votes(vote_id=21825, full_details=True)
         v = results.items[0]
         self.assertIsNotNone(v.members)
         self.assertIsInstance(v.members, list)
 
     def test_members_count(self):
-        results = votes(vote_id=21825)
+        results = votes(vote_id=21825, full_details=True)
         self.assertEqual(len(results.items[0].members), 111)
 
     def test_member_structure(self):
-        results = votes(vote_id=21825)
+        results = votes(vote_id=21825, full_details=True)
         m = results.items[0].members[0]
         self.assertTrue(hasattr(m, "member_id"))
         self.assertTrue(hasattr(m, "name"))
@@ -183,12 +183,12 @@ class TestMembers(unittest.TestCase):
 
     def test_member_has_party(self):
         """Members in a vote should have party populated."""
-        results = votes(vote_id=26916)
+        results = votes(vote_id=26916, full_details=True)
         members_with_party = [m for m in results.items[0].members if m.party]
         self.assertGreater(len(members_with_party), 0)
 
     def test_member_results_are_hebrew(self):
-        results = votes(vote_id=21825)
+        results = votes(vote_id=21825, full_details=True)
         valid_results = {"בעד", "נגד", "נמנע", "נוכח", "לא נכח/ אינו נוכח", "הצביע"}
         for m in results.items[0].members:
             self.assertIn(m.result, valid_results)
@@ -209,30 +209,30 @@ class TestMembers(unittest.TestCase):
 class TestRelatedVotes(unittest.TestCase):
 
     def test_related_votes_present(self):
-        results = votes(vote_id=21825)
+        results = votes(vote_id=21825, full_details=True)
         self.assertIsNotNone(results.items[0].related_votes)
         self.assertIsInstance(results.items[0].related_votes, list)
 
     def test_standalone_has_no_related(self):
-        results = votes(vote_id=21825)
+        results = votes(vote_id=21825, full_details=True)
         self.assertEqual(len(results.items[0].related_votes), 0)
 
     def test_terror_law_has_related(self):
-        results = votes(vote_id=29054)
+        results = votes(vote_id=29054, full_details=True)
         self.assertEqual(len(results.items[0].related_votes), 2)
 
     def test_related_exclude_self(self):
-        results = votes(vote_id=29054)
+        results = votes(vote_id=29054, full_details=True)
         ids = {rv.vote_id for rv in results.items[0].related_votes}
         self.assertNotIn(29054, ids)
 
     def test_related_sorted_by_ordinal(self):
-        results = votes(vote_id=29054)
+        results = votes(vote_id=29054, full_details=True)
         ids = [rv.vote_id for rv in results.items[0].related_votes]
         self.assertEqual(ids, [29036, 29053])
 
     def test_odata_vote_related(self):
-        results = votes(vote_id=45274)
+        results = votes(vote_id=45274, full_details=True)
         self.assertEqual(len(results.items[0].related_votes), 9)
 
 

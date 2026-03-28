@@ -58,10 +58,10 @@ class TestTypeFilter(unittest.TestCase):
 
 
 class TestAgendaIdAutoFullDetails(unittest.TestCase):
-    """agenda_id auto-enables full_details."""
+    """agenda_id with full_details=True."""
 
     def test_single_agenda(self):
-        results = agendas(agenda_id=570660)
+        results = agendas(agenda_id=570660, full_details=True)
         self.assertEqual(len(results.items), 1)
         a = results.items[0]
         self.assertEqual(a.agenda_id, 570660)
@@ -73,7 +73,7 @@ class TestAgendaIdAutoFullDetails(unittest.TestCase):
 
     def test_stages_present(self):
         """Full detail should include session stages."""
-        results = agendas(agenda_id=570660)
+        results = agendas(agenda_id=570660, full_details=True)
         a = results.items[0]
         # Agenda 570660 should have at least one session appearance
         if a.stages:

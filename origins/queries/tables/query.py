@@ -12,6 +12,8 @@ ENSURE_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_query_statusid ON query_raw (StatusID)",
     "CREATE INDEX IF NOT EXISTS idx_query_personid ON query_raw (PersonID)",
     "CREATE INDEX IF NOT EXISTS idx_query_govministryid ON query_raw (GovMinistryID)",
+    "CREATE INDEX IF NOT EXISTS idx_query_name_fts ON query_raw USING GIN (to_tsvector('simple', normalize_hebrew_fts(name)))",
+    "CREATE INDEX IF NOT EXISTS idx_query_name_trgm ON query_raw USING GIN (normalize_hebrew(name) gin_trgm_ops)",
 ]
 CSV_URL = "https://production.oknesset.org/pipelines/data/knesset/kns_query/kns_query.csv"
 

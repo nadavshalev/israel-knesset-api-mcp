@@ -83,14 +83,14 @@ def fetch_assemblies(cursor, knesset_num: int) -> list[KnessetAssembly]:
         """
         SELECT Id, Assembly, Plenum, PlenumStart, PlenumFinish, IsCurrent
         FROM knesset_dates_raw WHERE KnessetNum = %s
-        ORDER BY Assembly, Plenum
+        ORDER BY Plenum DESC, Assembly DESC
         """,
         [knesset_num],
     )
     return [
         KnessetAssembly(
-            assembly_year=row["assembly"],
-            plenum_number=row["plenum"],
+            assembly_number=row["assembly"],
+            plenum_year=row["plenum"],
             start_date=simple_date(row["plenumstart"]),
             end_date=simple_date(row["plenumfinish"]),
         )
@@ -399,11 +399,11 @@ def fetch_general_roles(
 )
 def metadata(
     knesset_num: int,
-    include_assemblies: bool = True,
-    include_committees: bool = True,
-    include_ministries: bool = True,
-    include_factions: bool = True,
-    include_roles: bool = True,
+    include_assemblies: bool = False,
+    include_committees: bool = False,
+    include_ministries: bool = False,
+    include_factions: bool = False,
+    include_roles: bool = False,
 ) -> MetadataResult:
     normalized = normalize_inputs(locals())
     knesset_num = normalized["knesset_num"]

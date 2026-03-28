@@ -9,6 +9,10 @@ ODATA_NAME = "KNS_Person"
 TABLE_NAME = "person_raw"
 ENSURE_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_person_lastname ON person_raw (LastName)",
+    "CREATE INDEX IF NOT EXISTS idx_person_firstname_fts ON person_raw USING GIN (to_tsvector('simple', normalize_hebrew_fts(firstname)))",
+    "CREATE INDEX IF NOT EXISTS idx_person_firstname_trgm ON person_raw USING GIN (normalize_hebrew(firstname) gin_trgm_ops)",
+    "CREATE INDEX IF NOT EXISTS idx_person_lastname_fts ON person_raw USING GIN (to_tsvector('simple', normalize_hebrew_fts(lastname)))",
+    "CREATE INDEX IF NOT EXISTS idx_person_lastname_trgm ON person_raw USING GIN (normalize_hebrew(lastname) gin_trgm_ops)",
 ]
 CSV_URL = "https://production.oknesset.org/pipelines/data/members/kns_person/kns_person.csv"
 

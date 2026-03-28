@@ -9,6 +9,10 @@ ODATA_NAME = "KNS_PlenumVote"
 TABLE_NAME = "plenum_vote_raw"
 ENSURE_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_vote_title ON plenum_vote_raw (VoteTitle)",
+    "CREATE INDEX IF NOT EXISTS idx_vote_title_fts ON plenum_vote_raw USING GIN (to_tsvector('simple', normalize_hebrew_fts(votetitle)))",
+    "CREATE INDEX IF NOT EXISTS idx_vote_title_trgm ON plenum_vote_raw USING GIN (normalize_hebrew(votetitle) gin_trgm_ops)",
+    "CREATE INDEX IF NOT EXISTS idx_vote_subject_fts ON plenum_vote_raw USING GIN (to_tsvector('simple', normalize_hebrew_fts(votesubject)))",
+    "CREATE INDEX IF NOT EXISTS idx_vote_subject_trgm ON plenum_vote_raw USING GIN (normalize_hebrew(votesubject) gin_trgm_ops)",
 ]
 CSV_URL = "https://production.oknesset.org/pipelines/data/votes/view_vote_rslts_hdr_approved/view_vote_rslts_hdr_approved.csv"
 

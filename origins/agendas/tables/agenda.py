@@ -12,6 +12,8 @@ ENSURE_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_agenda_statusid ON agenda_raw (StatusID)",
     "CREATE INDEX IF NOT EXISTS idx_agenda_initiatorpersonid ON agenda_raw (InitiatorPersonID)",
     "CREATE INDEX IF NOT EXISTS idx_agenda_committeeid ON agenda_raw (CommitteeID)",
+    "CREATE INDEX IF NOT EXISTS idx_agenda_name_fts ON agenda_raw USING GIN (to_tsvector('simple', normalize_hebrew_fts(name)))",
+    "CREATE INDEX IF NOT EXISTS idx_agenda_name_trgm ON agenda_raw USING GIN (normalize_hebrew(name) gin_trgm_ops)",
 ]
 CSV_URL = "https://production.oknesset.org/pipelines/data/knesset/kns_agenda/kns_agenda.csv"
 

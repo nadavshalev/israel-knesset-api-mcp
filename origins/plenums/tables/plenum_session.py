@@ -10,6 +10,8 @@ TABLE_NAME = "plenum_session_raw"
 ENSURE_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_ps_startdate ON plenum_session_raw (StartDate)",
     "CREATE INDEX IF NOT EXISTS idx_ps_knessetnum ON plenum_session_raw (KnessetNum)",
+    "CREATE INDEX IF NOT EXISTS idx_ps_name_fts ON plenum_session_raw USING GIN (to_tsvector('simple', normalize_hebrew_fts(name)))",
+    "CREATE INDEX IF NOT EXISTS idx_ps_name_trgm ON plenum_session_raw USING GIN (normalize_hebrew(name) gin_trgm_ops)",
 ]
 CSV_URL = "https://production.oknesset.org/pipelines/data/plenum/kns_plenumsession/kns_plenumsession.csv"
 

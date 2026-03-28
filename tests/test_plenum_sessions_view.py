@@ -170,10 +170,10 @@ class TestFullDetails(unittest.TestCase):
 # ===================================================================
 
 class TestSessionId(unittest.TestCase):
-    """session_id auto-enables full_details."""
+    """session_id with full_details=True."""
 
     def test_session_id_returns_full_details(self):
-        result = plenum_sessions(session_id=568294)
+        result = plenum_sessions(session_id=568294, full_details=True)
         self.assertGreater(len(result.items), 0)
         s = result.items[0]
         self.assertEqual(s.session_id, 568294)

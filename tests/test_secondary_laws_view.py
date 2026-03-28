@@ -100,11 +100,11 @@ class TestDateFilter(unittest.TestCase):
 
 
 class TestLawIdAutoFullDetails(unittest.TestCase):
-    """secondary_law_id auto-enables full_details."""
+    """secondary_law_id with full_details=True."""
 
     def test_detail_by_id(self):
         """Law 2067535 (תקנות הנכים, Knesset 20) — has regulators, auth laws, docs."""
-        results = secondary_laws(secondary_law_id=2067535)
+        results = secondary_laws(secondary_law_id=2067535, full_details=True)
         self.assertEqual(len(results.items), 1)
         law = results.items[0]
         self.assertEqual(law.secondary_law_id, 2067535)
@@ -128,7 +128,7 @@ class TestFullDetailFields(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        result = secondary_laws(secondary_law_id=2067535)
+        result = secondary_laws(secondary_law_id=2067535, full_details=True)
         cls.law = result.items[0]
 
     def test_is_full_result(self):
@@ -180,7 +180,7 @@ class TestBindings(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        result = secondary_laws(secondary_law_id=2088561)
+        result = secondary_laws(secondary_law_id=2088561, full_details=True)
         cls.law = result.items[0] if result.items else None
 
     def test_law_found(self):

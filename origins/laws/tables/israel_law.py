@@ -10,6 +10,8 @@ TABLE_NAME = "israel_law_raw"
 ENSURE_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_israellaw_knessetnum ON israel_law_raw (KnessetNum)",
     "CREATE INDEX IF NOT EXISTS idx_israellaw_name ON israel_law_raw (Name text_pattern_ops)",
+    "CREATE INDEX IF NOT EXISTS idx_israellaw_name_fts ON israel_law_raw USING GIN (to_tsvector('simple', normalize_hebrew_fts(name)))",
+    "CREATE INDEX IF NOT EXISTS idx_israellaw_name_trgm ON israel_law_raw USING GIN (normalize_hebrew(name) gin_trgm_ops)",
 ]
 
 

@@ -6,11 +6,10 @@ from pydantic import Field
 
 from core.models import KNSBaseModel
 
-
 class KnessetAssembly(KNSBaseModel):
     """Assembly/plenum period within a Knesset term."""
-    assembly_year: int | None = Field(default=None, description="Assembly number")
-    plenum_number: int | None = Field(default=None, description="Plenum number within that assembly")
+    assembly_number: int | None = Field(default=None, description="Assembly number")
+    plenum_year: int | None = Field(default=None, description="Plenum year within that assembly")
     start_date: str | None = Field(default=None, description="Period start (YYYY-MM-DD)")
     end_date: str | None = Field(default=None, description="Period end (YYYY-MM-DD)")
 

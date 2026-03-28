@@ -106,7 +106,7 @@ class TestMemberSingleKnesset(unittest.TestCase):
 
     def test_netanyahu_knesset_20(self):
         """Netanyahu (965) in Knesset 20: known PM with many portfolios."""
-        result = members(member_id=965, knesset_num=20)
+        result = members(member_id=965, knesset_num=20, full_details=True)
         self.assertIsInstance(result, MembersResults)
         self.assertEqual(len(result.items), 1)
 
@@ -123,7 +123,7 @@ class TestMemberSingleKnesset(unittest.TestCase):
 
     def test_lapid_knesset_20_output_structure(self):
         """Lapid (23594) in Knesset 20: opposition MK with committees."""
-        result = members(member_id=23594, knesset_num=20)
+        result = members(member_id=23594, knesset_num=20, full_details=True)
         self.assertIsInstance(result, MembersResults)
         self.assertEqual(len(result.items), 1)
 
@@ -168,7 +168,7 @@ class TestMemberAllKnessets(unittest.TestCase):
 class TestTransitionGovernment(unittest.TestCase):
     def test_netanyahu_knesset_20_transition_flags(self):
         """Gov 33 roles should be marked as transition; gov 34 should not."""
-        result = members(member_id=965, knesset_num=20)
+        result = members(member_id=965, knesset_num=20, full_details=True)
         gov_roles = result.items[0].roles.government
         self.assertGreater(len(gov_roles), 0)
 
@@ -181,7 +181,7 @@ class TestTransitionGovernment(unittest.TestCase):
 class TestDateFormatting(unittest.TestCase):
     def test_dates_have_no_time_component(self):
         """Dates in output should be YYYY-MM-DD, not datetime strings."""
-        result = members(member_id=23594, knesset_num=20)
+        result = members(member_id=23594, knesset_num=20, full_details=True)
         parl = result.items[0].roles.parliamentary[0]
         self.assertEqual(parl.start, "2015-03-31")
         self.assertEqual(parl.end, "2019-04-30")
@@ -193,14 +193,14 @@ class TestCommitteesAlwaysIncluded(unittest.TestCase):
     """In the detail view, committees are always included."""
 
     def test_committees_always_present(self):
-        result = members(member_id=23594, knesset_num=20)
+        result = members(member_id=23594, knesset_num=20, full_details=True)
         m = result.items[0]
         self.assertTrue(hasattr(m.roles, "committees"))
         self.assertEqual(len(m.roles.committees), 3)
 
     def test_committees_empty_when_member_has_none(self):
         """Netanyahu (965) has no committee roles."""
-        result = members(member_id=965, knesset_num=20)
+        result = members(member_id=965, knesset_num=20, full_details=True)
         m = result.items[0]
         self.assertTrue(hasattr(m.roles, "committees"))
         self.assertEqual(len(m.roles.committees), 0)

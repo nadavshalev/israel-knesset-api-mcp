@@ -20,7 +20,7 @@ from pydantic import Field
 from core.db import connect_readonly
 from core.helpers import (
     simple_date, normalize_inputs, check_search_count, resolve_pagination,
-    CountByConfig, build_count_by_query,
+    CountByConfig, build_count_by_query, fuzzy_condition, fuzzy_params,
 )
 from core.models import CountItem
 from core.mcp_meta import mcp_tool
@@ -37,12 +37,14 @@ def _build_plenums_search(*, query, knesset_num, date, date_to, top_n):
     """Build SQL for cross-entity plenum session search."""
     conditions = []
     params = []
-    need_item_join = False
 
     if query:
-        conditions.append("(ps.Name LIKE %s OR psi.Name LIKE %s)")
-        params.extend([f"%{query}%", f"%{query}%"])
-        need_item_join = True
+        conditions.append(f"""(
+            {fuzzy_condition("ps.Name")}
+            OR EXISTS (SELECT 1 FROM plm_session_item_raw psi
+                       WHERE psi.PlenumSessionID = ps.Id AND {fuzzy_condition("psi.Name")})
+        )""")
+        params.extend(fuzzy_params(query) + fuzzy_params(query))
 
     if knesset_num is not None:
         conditions.append("ps.KnessetNum = %s")
@@ -58,24 +60,18 @@ def _build_plenums_search(*, query, knesset_num, date, date_to, top_n):
         params.append(f"{date}%")
 
     where = " AND ".join(conditions) if conditions else "1=1"
-    item_join = """
-        LEFT JOIN plm_session_item_raw psi
-               ON ps.Id = psi.PlenumSessionID
-    """ if need_item_join else ""
 
     count_sql = f"""
-        SELECT COUNT(DISTINCT ps.Id)
+        SELECT COUNT(*)
         FROM plenum_session_raw ps
-        {item_join}
         WHERE {where}
     """
     search_sql = f"""
-        SELECT DISTINCT ps.Id AS id,
+        SELECT ps.Id AS id,
                ps.Name AS name,
                ps.KnessetNum AS knesset_num,
                ps.StartDate AS date
         FROM plenum_session_raw ps
-        {item_join}
         WHERE {where}
         ORDER BY ps.Id DESC
         LIMIT %s
@@ -246,14 +242,14 @@ def plenums(
         params.append(to_date + "T99")
 
     if query_items:
-        conditions.append("""(
-            s.Name LIKE %s
+        conditions.append(f"""(
+            {fuzzy_condition("s.Name")}
             OR EXISTS (
                 SELECT 1 FROM plm_session_item_raw i
-                WHERE i.PlenumSessionID = s.Id AND i.Name LIKE %s
+                WHERE i.PlenumSessionID = s.Id AND {fuzzy_condition("i.Name")}
             )
         )""")
-        params.extend([f"%{query_items}%", f"%{query_items}%"])
+        params.extend(fuzzy_params(query_items) + fuzzy_params(query_items))
 
     if item_type:
         conditions.append("""EXISTS (

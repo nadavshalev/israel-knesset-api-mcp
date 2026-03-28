@@ -36,6 +36,10 @@ MAX_PAGE_SIZE = int(os.getenv("MAX_PAGE_SIZE", "200"))
 # Connection pool
 POOL_MAX_CONN = int(os.getenv("POOL_MAX_CONN", "10"))
 
+# Fuzzy search — trigram similarity threshold.
+# Must stay in sync with pg_trgm.strict_word_similarity_threshold GUC (set on each connection).
+FUZZY_TRGM_THRESHOLD = float(os.getenv("FUZZY_TRGM_THRESHOLD", "0.5"))
+
 # Logging
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 LOG_FILE = os.getenv("LOG_FILE", "")  # optional path; when set, logs also go to this file

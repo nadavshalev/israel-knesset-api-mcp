@@ -1,4 +1,5 @@
 import atexit
+from pathlib import Path
 from typing import Optional
 
 import psycopg2
@@ -111,15 +112,14 @@ def connect_readonly():
     The settings are automatically reset when the connection is returned
     to the pool via ``conn.close()``.
     """
+    from config import FUZZY_TRGM_THRESHOLD
     conn = connect_db()
     conn.set_session(readonly=True)
     conn.cursor_factory = psycopg2.extras.RealDictCursor
+    cur = conn.cursor()
+    cur.execute("SET pg_trgm.strict_word_similarity_threshold = %s", (FUZZY_TRGM_THRESHOLD,))
+    cur.close()
     return conn
-
-
-def return_conn(conn) -> None:
-    """Return a connection to the pool (alternative to conn.close())."""
-    conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -127,8 +127,22 @@ def return_conn(conn) -> None:
 # ---------------------------------------------------------------------------
 
 
+def ensure_fuzzy_infra(conn) -> None:
+    """Create pg_trgm extension and fuzzy search SQL functions. Idempotent."""
+    sql_path = Path(__file__).resolve().parent.parent / "sql" / "fuzzy_search.sql"
+    if not sql_path.exists():
+        return
+    cur = conn.cursor()
+    cur.execute(sql_path.read_text())
+    cur.close()
+    conn.commit()
+
+
 def ensure_indexes(conn) -> None:
     """Create indexes declared by table modules. Idempotent (IF NOT EXISTS)."""
+    # Fuzzy search functions must exist before GIN expression indexes.
+    ensure_fuzzy_infra(conn)
+
     # Import lazily to avoid circular imports with table modules.
     from origins import get_table_specs
 

@@ -20,7 +20,7 @@ from pydantic import Field
 from core.db import connect_readonly
 from core.helpers import (
     simple_date, normalize_inputs, check_search_count, resolve_pagination,
-    CountByConfig, build_count_by_query,
+    CountByConfig, build_count_by_query, fuzzy_condition, fuzzy_params,
 )
 from core.models import CountItem
 from core.mcp_meta import mcp_tool
@@ -44,8 +44,8 @@ def _build_queries_search(*, query, knesset_num, date, date_to, top_n):
     params = []
 
     if query:
-        conditions.append("q.Name LIKE %s")
-        params.append(f"%{query}%")
+        conditions.append(fuzzy_condition("q.Name"))
+        params.extend(fuzzy_params(query))
 
     if knesset_num is not None:
         conditions.append("q.KnessetNum = %s")
@@ -297,8 +297,8 @@ def queries(
         params.append(knesset_num)
 
     if name_query:
-        conditions.append("q.Name LIKE %s")
-        params.append(f"%{name_query}%")
+        conditions.append(fuzzy_condition("q.Name"))
+        params.extend(fuzzy_params(name_query))
 
     if type_:
         conditions.append("q.TypeDesc LIKE %s")

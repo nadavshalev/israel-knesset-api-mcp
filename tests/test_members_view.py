@@ -22,11 +22,11 @@ from origins.members.members_models import MemberResultPartial, MemberResultFull
 
 
 class TestSearchByMemberId(unittest.TestCase):
-    """Query by member_id — auto-enables full_details."""
+    """Query by member_id with full_details=True."""
 
     def test_netanyahu_knesset_20_full_detail(self):
         """Netanyahu (965) in Knesset 20: full detail includes roles."""
-        results = members(member_id=965, knesset_num=20)
+        results = members(member_id=965, knesset_num=20, full_details=True)
         self.assertEqual(len(results.items), 1)
 
         m = results.items[0]
@@ -42,7 +42,7 @@ class TestSearchByMemberId(unittest.TestCase):
 
     def test_member_id_all_terms(self):
         """member_id without knesset_num returns all terms."""
-        results = members(member_id=965)
+        results = members(member_id=965, full_details=True)
         self.assertGreater(len(results.items), 1)
         knesset_nums = [m.knesset_num for m in results.items]
         self.assertIn(20, knesset_nums)
@@ -51,7 +51,7 @@ class TestSearchByMemberId(unittest.TestCase):
 
     def test_lapid_knesset_20_structure(self):
         """Lapid (23594) in Knesset 20: verify keys."""
-        results = members(member_id=23594, knesset_num=20)
+        results = members(member_id=23594, knesset_num=20, full_details=True)
         self.assertEqual(len(results.items), 1)
         m = results.items[0]
         for attr in ("member_id", "name", "gender", "knesset_num", "faction", "role_types", "roles"):
@@ -113,19 +113,21 @@ class TestPartyFilter(unittest.TestCase):
 class TestNameFilters(unittest.TestCase):
     def test_first_name(self):
         results = members(first_name="אביגדור", knesset_num=20)
-        self.assertEqual(len(results.items), 1)
-        self.assertEqual(results.items[0].member_id, 427)
-        self.assertIn("ליברמן", results.items[0].name)
+        self.assertGreater(len(results.items), 0)
+        ids = [m.member_id for m in results.items]
+        self.assertIn(427, ids)  # Lieberman
 
     def test_last_name(self):
         results = members(last_name="לפיד", knesset_num=20)
-        self.assertEqual(len(results.items), 1)
-        self.assertEqual(results.items[0].member_id, 23594)
+        self.assertGreater(len(results.items), 0)
+        ids = [m.member_id for m in results.items]
+        self.assertIn(23594, ids)
 
     def test_combined_first_and_last(self):
         results = members(first_name="יאיר", last_name="לפיד", knesset_num=20)
-        self.assertEqual(len(results.items), 1)
-        self.assertEqual(results.items[0].member_id, 23594)
+        self.assertGreater(len(results.items), 0)
+        ids = [m.member_id for m in results.items]
+        self.assertIn(23594, ids)
 
 
 class TestRoleQuery(unittest.TestCase):
@@ -162,14 +164,14 @@ class TestRoleTypesField(unittest.TestCase):
 
     def test_netanyahu_has_minister_role_type(self):
         """Netanyahu should have שר in his role_types."""
-        results = members(member_id=965, knesset_num=20)
+        results = members(member_id=965, knesset_num=20, full_details=True)
         role_types = results.items[0].role_types
         has_minister = any("שר" in rt for rt in role_types)
         self.assertTrue(has_minister, f"Expected שר in role_types: {role_types}")
 
     def test_lapid_has_member_role_type(self):
         """Lapid should have חבר כנסת in his role_types."""
-        results = members(member_id=23594, knesset_num=20)
+        results = members(member_id=23594, knesset_num=20, full_details=True)
         role_types = results.items[0].role_types
         has_mk = any("חבר" in rt for rt in role_types)
         self.assertTrue(has_mk, f"Expected חבר in role_types: {role_types}")
@@ -180,14 +182,14 @@ class TestFullDetailRoles(unittest.TestCase):
 
     def test_netanyahu_has_government_roles(self):
         """Netanyahu in Knesset 20 was PM — should have government roles."""
-        results = members(member_id=965, knesset_num=20)
+        results = members(member_id=965, knesset_num=20, full_details=True)
         m = results.items[0]
         self.assertIsNotNone(m.roles)
         self.assertGreater(len(m.roles.government), 0)
 
     def test_lapid_has_parliamentary_roles(self):
         """Lapid in Knesset 20 was MK — should have parliamentary roles."""
-        results = members(member_id=23594, knesset_num=20)
+        results = members(member_id=23594, knesset_num=20, full_details=True)
         m = results.items[0]
         self.assertIsNotNone(m.roles)
         self.assertGreater(len(m.roles.parliamentary), 0)

@@ -23,7 +23,7 @@ from pydantic import Field
 from core.db import connect_readonly
 from core.helpers import (
     simple_date, simple_time, normalize_inputs, check_search_count, resolve_pagination,
-    CountByConfig, build_count_by_query,
+    CountByConfig, build_count_by_query, fuzzy_condition_or, fuzzy_params_or,
 )
 from core.models import CountItem
 from core.mcp_meta import mcp_tool
@@ -41,8 +41,8 @@ def _build_votes_search(*, query, knesset_num, date, date_to, top_n):
     params = []
 
     if query:
-        conditions.append("(v.VoteTitle LIKE %s OR v.VoteSubject LIKE %s)")
-        params.extend([f"%{query}%", f"%{query}%"])
+        conditions.append(fuzzy_condition_or("v.VoteTitle", "v.VoteSubject"))
+        params.extend(fuzzy_params_or(query))
 
     if knesset_num is not None:
         conditions.append("s.KnessetNum = %s")
@@ -290,8 +290,8 @@ def votes(
         count_conditions.append("s.KnessetNum = %s")
         count_params.append(knesset_num)
     if name:
-        count_conditions.append("(v.VoteTitle LIKE %s OR v.VoteSubject LIKE %s)")
-        count_params.extend([f"%{name}%", f"%{name}%"])
+        count_conditions.append(fuzzy_condition_or("v.VoteTitle", "v.VoteSubject"))
+        count_params.extend(fuzzy_params_or(name))
     if from_date and to_date:
         count_conditions.append("v.VoteDateTime >= %s AND v.VoteDateTime <= %s")
         count_params.extend([from_date, to_date + "T99"])
@@ -361,8 +361,8 @@ def votes(
         params.append(knesset_num)
 
     if name:
-        sql += " AND (v.VoteTitle LIKE %s OR v.VoteSubject LIKE %s)"
-        params.extend([f"%{name}%", f"%{name}%"])
+        sql += f" AND {fuzzy_condition_or('v.VoteTitle', 'v.VoteSubject')}"
+        params.extend(fuzzy_params_or(name))
 
     if accepted is not None:
         if accepted:

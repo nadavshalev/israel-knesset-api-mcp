@@ -14,6 +14,8 @@ ENSURE_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_seclaw_committee ON secondary_law_raw (CommitteeID)",
     "CREATE INDEX IF NOT EXISTS idx_seclaw_status ON secondary_law_raw (StatusID)",
     "CREATE INDEX IF NOT EXISTS idx_seclaw_type ON secondary_law_raw (TypeID)",
+    "CREATE INDEX IF NOT EXISTS idx_seclaw_name_fts ON secondary_law_raw USING GIN (to_tsvector('simple', normalize_hebrew_fts(name)))",
+    "CREATE INDEX IF NOT EXISTS idx_seclaw_name_trgm ON secondary_law_raw USING GIN (normalize_hebrew(name) gin_trgm_ops)",
 ]
 
 _COLS = [

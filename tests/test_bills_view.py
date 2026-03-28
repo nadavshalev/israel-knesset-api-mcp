@@ -50,8 +50,11 @@ class TestNameFilter(unittest.TestCase):
     def test_name_search(self):
         results = bills(name_query="מדינת הלאום", knesset_num=20)
         self.assertGreater(len(results.items), 0)
-        for b in results.items:
-            self.assertIn("לאום", b.name)
+        # Fuzzy search: at least one result should contain a query term
+        self.assertTrue(
+            any("לאום" in b.name or "מדינת" in b.name for b in results.items),
+            "Expected at least one result containing 'לאום' or 'מדינת'",
+        )
 
 
 class TestTypeFilter(unittest.TestCase):
@@ -84,11 +87,11 @@ class TestInitiatorFilter(unittest.TestCase):
 
 
 class TestBillIdAutoFullDetails(unittest.TestCase):
-    """bill_id auto-enables full_details."""
+    """bill_id with full_details=True."""
 
     def test_nation_state_bill(self):
         """Bill 565913: Basic Law: Nation State (Knesset 20)."""
-        results = bills(bill_id=565913)
+        results = bills(bill_id=565913, full_details=True)
         self.assertEqual(len(results.items), 1)
         b = results.items[0]
         self.assertEqual(b.bill_id, 565913)
@@ -108,13 +111,13 @@ class TestFullDetailStages(unittest.TestCase):
     """Verify unified stages (plenum + committee) in full detail mode."""
 
     def test_nation_state_has_stages(self):
-        results = bills(bill_id=565913)
+        results = bills(bill_id=565913, full_details=True)
         b = results.items[0]
         self.assertIsNotNone(b.stages)
         self.assertGreater(len(b.stages), 0)
 
     def test_stages_have_session_info(self):
-        results = bills(bill_id=565913)
+        results = bills(bill_id=565913, full_details=True)
         b = results.items[0]
         for s in b.stages:
             # Each stage has either a plenum or committee session
@@ -122,7 +125,7 @@ class TestFullDetailStages(unittest.TestCase):
             self.assertTrue(has_session, f"Stage {s} has no session info")
 
     def test_stages_sorted_by_date(self):
-        results = bills(bill_id=565913)
+        results = bills(bill_id=565913, full_details=True)
         b = results.items[0]
         dates = []
         for s in b.stages:
@@ -137,7 +140,7 @@ class TestFullDetailStagesWithVotes(unittest.TestCase):
 
     def test_no_duplicate_sessions(self):
         """Each session should appear at most once in stages (DISTINCT ON deduplication)."""
-        results = bills(bill_id=565913)
+        results = bills(bill_id=565913, full_details=True)
         b = results.items[0]
         session_ids = [
             s.plenum_session.session_id
@@ -148,7 +151,7 @@ class TestFullDetailStagesWithVotes(unittest.TestCase):
 
     def test_stage_with_vote(self):
         """Session 2016214 should have vote 26916 attached."""
-        results = bills(bill_id=565913)
+        results = bills(bill_id=565913, full_details=True)
         b = results.items[0]
         match = [s for s in b.stages if s.plenum_session and s.plenum_session.session_id == 2016214]
         self.assertEqual(len(match), 1)
@@ -157,7 +160,7 @@ class TestFullDetailStagesWithVotes(unittest.TestCase):
 
     def test_stage_without_vote(self):
         """Tabling session 568294 has no associated vote."""
-        results = bills(bill_id=565913)
+        results = bills(bill_id=565913, full_details=True)
         b = results.items[0]
         match = [s for s in b.stages if s.plenum_session and s.plenum_session.session_id == 568294]
         self.assertEqual(len(match), 1)
@@ -165,7 +168,7 @@ class TestFullDetailStagesWithVotes(unittest.TestCase):
 
     def test_deduplication_for_bill_2234071(self):
         """Bill 2234071 should have exactly 3 unique session stages, not duplicates."""
-        results = bills(bill_id=2234071)
+        results = bills(bill_id=2234071, full_details=True)
         if not results.items:
             self.skipTest("Bill 2234071 not in DB")
         b = results.items[0]
@@ -179,7 +182,7 @@ class TestFullDetailStagesWithVotes(unittest.TestCase):
 
 class TestFullDetailInitiators(unittest.TestCase):
     def test_initiators_present(self):
-        results = bills(bill_id=565913)
+        results = bills(bill_id=565913, full_details=True)
         b = results.items[0]
         self.assertIsNotNone(b.initiators)
         self.assertIsNotNone(b.initiators.primary)
