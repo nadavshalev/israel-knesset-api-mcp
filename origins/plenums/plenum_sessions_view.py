@@ -20,7 +20,7 @@ from pydantic import Field
 from core.db import connect_readonly
 from core.helpers import (
     simple_date, normalize_inputs, check_search_count, resolve_pagination,
-    CountByConfig, build_count_by_query, fuzzy_condition, fuzzy_params,
+    CountByConfig, build_count_by_query, fuzzy_condition, fuzzy_params, fts_condition, fts_params,
 )
 from core.models import CountItem
 from core.mcp_meta import mcp_tool
@@ -42,9 +42,9 @@ def _build_plenums_search(*, query, knesset_num, date, date_to, top_n):
         conditions.append(f"""(
             {fuzzy_condition("ps.Name")}
             OR EXISTS (SELECT 1 FROM plm_session_item_raw psi
-                       WHERE psi.PlenumSessionID = ps.Id AND {fuzzy_condition("psi.Name")})
+                       WHERE psi.PlenumSessionID = ps.Id AND {fts_condition("psi.Name")})
         )""")
-        params.extend(fuzzy_params(query) + fuzzy_params(query))
+        params.extend(fuzzy_params(query) + fts_params(query))
 
     if knesset_num is not None:
         conditions.append("ps.KnessetNum = %s")
@@ -246,10 +246,10 @@ def plenums(
             {fuzzy_condition("s.Name")}
             OR EXISTS (
                 SELECT 1 FROM plm_session_item_raw i
-                WHERE i.PlenumSessionID = s.Id AND {fuzzy_condition("i.Name")}
+                WHERE i.PlenumSessionID = s.Id AND {fts_condition("i.Name")}
             )
         )""")
-        params.extend(fuzzy_params(query_items) + fuzzy_params(query_items))
+        params.extend(fuzzy_params(query_items) + fts_params(query_items))
 
     if item_type:
         conditions.append("""EXISTS (

@@ -20,7 +20,7 @@ from pydantic import Field
 from core.db import connect_readonly
 from core.helpers import (
     simple_date, simple_time, normalize_inputs, check_search_count, resolve_pagination,
-    CountByConfig, build_count_by_query, fuzzy_condition, fuzzy_params,
+    CountByConfig, build_count_by_query, fuzzy_condition, fuzzy_params, fts_condition, fts_params,
 )
 from core.models import CountItem
 from core.mcp_meta import mcp_tool
@@ -42,8 +42,8 @@ def _build_cmt_sessions_search(*, query, knesset_num, date, date_to, top_n):
         conditions.append(f"""(
             {fuzzy_condition("c.Name")}
             OR EXISTS (SELECT 1 FROM cmt_session_item_raw csi
-                       WHERE csi.CommitteeSessionID = cs.Id AND {fuzzy_condition("csi.Name")}))""")
-        params.extend(fuzzy_params(query) + fuzzy_params(query))
+                       WHERE csi.CommitteeSessionID = cs.Id AND {fts_condition("csi.Name")}))""")
+        params.extend(fuzzy_params(query) + fts_params(query))
 
     if knesset_num is not None:
         conditions.append("cs.KnessetNum = %s")
@@ -292,10 +292,10 @@ def committees(
             {fuzzy_condition("c.Name")}
             OR EXISTS (
                 SELECT 1 FROM cmt_session_item_raw csi
-                WHERE csi.CommitteeSessionID = cs.Id AND {fuzzy_condition("csi.Name")}
+                WHERE csi.CommitteeSessionID = cs.Id AND {fts_condition("csi.Name")}
             )
         )""")
-        params.extend(fuzzy_params(query_items) + fuzzy_params(query_items))
+        params.extend(fuzzy_params(query_items) + fts_params(query_items))
 
     if item_type:
         conditions.append("""EXISTS (

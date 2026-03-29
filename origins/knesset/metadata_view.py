@@ -11,6 +11,8 @@ Section fetchers are public so they can be reused by MCP resource handlers.
 import sys
 from collections import defaultdict
 from pathlib import Path
+from typing import Annotated
+from pydantic import Field
 
 ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
@@ -390,7 +392,7 @@ def fetch_general_roles(
     name="metadata",
     description=(
         "Get Knesset term metadata. Use the include_* flags to select which sections to fetch — "
-        "only requested sections are returned (all default to True). "
+        "only requested sections are returned (all default False). "
         "Each section includes full data: committees include heads, "
         "ministries include minister/deputy/members, factions include member lists. "
         "For clients with MCP resources support, prefer the individual resources instead."
@@ -398,12 +400,12 @@ def fetch_general_roles(
     entity="Knesset Metadata",
 )
 def metadata(
-    knesset_num: int,
-    include_assemblies: bool = False,
-    include_committees: bool = False,
-    include_ministries: bool = False,
-    include_factions: bool = False,
-    include_roles: bool = False,
+    knesset_num: Annotated[int, Field(description="Knesset term number (e.g. 25 for current term)")],
+    include_assemblies: Annotated[bool, Field(description="Include assembly/session date ranges for the term")] = False,
+    include_committees: Annotated[bool, Field(description="Include all committees with their chairs")] = False,
+    include_ministries: Annotated[bool, Field(description="Include government ministries with ministers and members")] = False,
+    include_factions: Annotated[bool, Field(description="Include political factions/parties with member lists")] = False,
+    include_roles: Annotated[bool, Field(description="Include general parliamentary roles (speaker, deputy speakers, etc.)")] = False,
 ) -> MetadataResult:
     normalized = normalize_inputs(locals())
     knesset_num = normalized["knesset_num"]

@@ -415,6 +415,23 @@ def fuzzy_params_or(query: str) -> list:
     return [query, query, query, query]
 
 
+def fts_condition(col: str) -> str:
+    """Return a WHERE fragment for FTS-only matching on a single column.
+
+    Uses only the GIN tsvector index (no trigram fallback).
+    Prefer this over :func:`fuzzy_condition` inside EXISTS subqueries on large
+    tables — the single GIN index is reliably chosen by the planner, whereas
+    the FTS OR trigram combination causes it to fall back to a seq scan.
+    Caller adds one ``%s`` param via :func:`fts_params`.
+    """
+    return f"to_tsvector('simple', normalize_hebrew_fts({col})) @@ make_and_tsquery(%s)"
+
+
+def fts_params(query: str) -> list:
+    """Return params for :func:`fts_condition` (1 copy of query)."""
+    return [query]
+
+
 # ---------------------------------------------------------------------------
 # Output cleaning
 # ---------------------------------------------------------------------------

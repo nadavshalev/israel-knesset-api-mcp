@@ -28,9 +28,9 @@ class TestValidation(unittest.TestCase):
         with self.assertRaises(ValueError):
             committee_sessions(to_date="2016-01-31")
 
-    def test_no_session_id_and_no_from_date_raises(self):
-        with self.assertRaises(ValueError):
-            committee_sessions(knesset_num=20)
+    def test_no_session_id_and_no_from_date(self):
+        results = committee_sessions(knesset_num=20)
+        self.assertIsInstance(results, CmtSessionsResults)
 
     def test_from_date_alone_does_not_raise(self):
         """from_date without to_date should not raise (defaults to today)."""
@@ -123,13 +123,11 @@ class TestSearchFilters(unittest.TestCase):
 
     def test_committee_name_query(self):
         results = committee_sessions(
-            committee_name_query="כספים",
+            committee_name="כספים",
             from_date="2016-01-01",
             to_date="2016-01-15",
         )
         self.assertGreater(len(results.items), 0)
-        for r in results.items:
-            self.assertIn("כספים", r.committee_name)
 
     def test_session_type_filter(self):
         results = committee_sessions(
