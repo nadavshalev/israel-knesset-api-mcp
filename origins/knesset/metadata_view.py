@@ -391,8 +391,11 @@ def fetch_general_roles(
 @mcp_tool(
     name="metadata",
     description=(
-        "Get Knesset term metadata. Use the include_* flags to select which sections to fetch — "
-        "only requested sections are returned (all default False). "
+        "Get structural metadata about a Knesset term. Use this as the first tool for any question "
+        "about a term's structure — assembly date ranges (כינוסים), committee list, factions, "
+        "ministries, or parliamentary roles. "
+        "Use the include_* flags to select which sections to fetch — only requested sections are "
+        "returned (all default False). "
         "Each section includes full data: committees include heads, "
         "ministries include minister/deputy/members, factions include member lists. "
         "For clients with MCP resources support, prefer the individual resources instead."
@@ -401,7 +404,7 @@ def fetch_general_roles(
 )
 def metadata(
     knesset_num: Annotated[int, Field(description="Knesset term number (e.g. 25 for current term)")],
-    include_assemblies: Annotated[bool, Field(description="Include assembly/session date ranges for the term")] = False,
+    include_assemblies: Annotated[bool, Field(description="Include the list of כינוסים (parliamentary assemblies) with their start and end dates. Use this to answer questions like 'what were the dates of the last כינוס of Knesset 24?' or 'when did the third assembly of Knesset 25 begin?'")] = False,
     include_committees: Annotated[bool, Field(description="Include all committees with their chairs")] = False,
     include_ministries: Annotated[bool, Field(description="Include government ministries with ministers and members")] = False,
     include_factions: Annotated[bool, Field(description="Include political factions/parties with member lists")] = False,

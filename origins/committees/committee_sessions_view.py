@@ -230,7 +230,7 @@ def committees(
     item_type: Annotated[str | None, Field(description="Filter to sessions with items of this type")] = None,
     member_id: Annotated[int | None, Field(description="Filter to sessions where this member served on the committee")] = None,
     session_type: Annotated[str | None, Field(description="Session type (e.g. פתוחה, חסויה)")] = None,
-    full_details: Annotated[bool, Field(description="Include agenda items and documents")] = False,
+    full_details: Annotated[bool, Field(description="Include agenda items and documents. Adds significant data per result — use conservatively. Preferred pattern: search first (full_details=False), then re-call with session_id for only the specific sessions you need detail on.")] = False,
     top: Annotated[int | None, Field(description="Max results (default 50, max 200). Results are sorted newest-first (date DESC) or by count DESC for count_by — so top=N gives the N most recent or highest.")] = None,
     offset: Annotated[int | None, Field(description="Results to skip for pagination. To get the oldest/smallest N: use offset=total_count-N (total_count is in every response).")] = None,
     count_by: Annotated[Literal["all", "committee", "knesset_num", "type", "status"] | None, Field(description='Group and count results. "all" returns only total_count (no items). Other values group by field (sorted by count DESC).')] = None,

@@ -352,7 +352,7 @@ def secondary_laws(
     authorizing_law_id: Annotated[int | None, Field(description="Filter by authorizing primary law ID")] = None,
     from_date: Annotated[str | None, Field(description="Start of publication date range (YYYY-MM-DD)")] = None,
     to_date: Annotated[str | None, Field(description="End of publication date range (YYYY-MM-DD)")] = None,
-    full_details: Annotated[bool, Field(description="Include regulators, authorizing laws, bindings, documents")] = False,
+    full_details: Annotated[bool, Field(description="Include regulators, authorizing laws, bindings, documents. Adds significant data per result — use conservatively. Preferred pattern: search first (full_details=False), then re-call with the specific ID for only the items you need detail on.")] = False,
     top: Annotated[int | None, Field(description="Max results (default 50, max 200). Results are sorted newest-first (date DESC) or by count DESC for count_by — so top=N gives the N most recent or highest.")] = None,
     offset: Annotated[int | None, Field(description="Results to skip for pagination. To get the oldest/smallest N: use offset=total_count-N (total_count is in every response).")] = None,
     count_by: Annotated[Literal["all", "type", "status", "classification", "knesset_num"] | None, Field(description='Group and count results. "all" returns only total_count (no items). Other values group by field (sorted by count DESC).')] = None,

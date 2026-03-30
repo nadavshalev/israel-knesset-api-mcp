@@ -247,7 +247,7 @@ def votes(
     to_date: Annotated[str | None, Field(description="End of date range (YYYY-MM-DD). Requires from_date.")] = None,
     accepted: Annotated[bool | None, Field(description="True=accepted only, False=rejected only, null=both")] = None,
     bill_id: Annotated[int | None, Field(description="Filter to votes linked to a specific bill ID")] = None,
-    full_details: Annotated[bool, Field(description="Include per-member breakdown with party and related votes")] = False,
+    full_details: Annotated[bool, Field(description="Include per-member breakdown with party and related votes. Adds significant data per result — use conservatively. Preferred pattern: search first (full_details=False), then re-call with vote_id for only the specific votes you need detail on.")] = False,
     top: Annotated[int | None, Field(description="Max results (default 50, max 200). Results are sorted newest-first (date DESC) or by count DESC for count_by — so top=N gives the N most recent or highest.")] = None,
     offset: Annotated[int | None, Field(description="Results to skip for pagination. To get the oldest/smallest N: use offset=total_count-N (total_count is in every response).")] = None,
     count_by: Annotated[Literal["all", "bill", "knesset_num"] | None, Field(description='Group and count results. "all" returns only total_count (no items). Other values group by field (sorted by count DESC).')] = None,

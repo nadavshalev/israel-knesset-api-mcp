@@ -29,8 +29,9 @@ class TestValidation(unittest.TestCase):
             plenum_sessions(to_date="2015-04-01")
 
     def test_no_session_id_and_no_from_date_raises(self):
-        with self.assertRaises(ValueError):
-            plenum_sessions(knesset_num=20)
+        result = plenum_sessions(knesset_num=20)
+        self.assertIsInstance(result, PlenumSessionsResults)
+        self.assertGreater(len(result.items), 0)
 
     def test_from_date_alone_defaults_to_date_to_today(self):
         """from_date without to_date should not raise (defaults to today)."""

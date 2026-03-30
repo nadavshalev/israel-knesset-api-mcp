@@ -54,7 +54,9 @@ def _get_entity_queries() -> list[dict]:
         "plenums). Returns match counts and top results per entity type. "
         "Use this as a triage tool to find which entity type has relevant "
         "data, then drill down with specific search tools.\n\n"
-        "At least one filter must be provided (query, knesset_num, or date)."
+        "At least one filter must be provided (query, knesset_num, or date).\n\n"
+        "Tip: For structural questions about a Knesset term (committees, factions, assembly date ranges), "
+        "use the metadata tool directly rather than searching across entities."
     ),
     entity="Cross-Entity Search",
 )
