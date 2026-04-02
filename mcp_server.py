@@ -11,6 +11,8 @@ Usage::
     uvicorn mcp_server:app --host 0.0.0.0 --port 8000
 """
 
+import asyncio
+import functools
 import inspect
 import json
 import logging
@@ -34,6 +36,7 @@ from config import (
     MCP_ENDPOINT,
     MCP_HOST,
     MCP_PORT,
+    MCP_TOOL_TIMEOUT,
     RATE_LIMIT_PER_MINUTE,
 )
 from core.db import connect_db, connect_readonly, ensure_indexes
@@ -285,7 +288,8 @@ def _make_handler(view_fn, enum_map: dict[str, list[str]]):
             # List/search tools always return a model (never None)
             async def handler(**kwargs):
                 view_kwargs = {k: v for k, v in kwargs.items() if v is not None}
-                result = view_fn(**view_kwargs)
+                loop = asyncio.get_running_loop()
+                result = await loop.run_in_executor(None, functools.partial(view_fn, **view_kwargs))
                 result_dict = result.model_dump()
                 _check_size_dict(result_dict)
                 return result_dict
@@ -299,7 +303,8 @@ def _make_handler(view_fn, enum_map: dict[str, list[str]]):
             # Single-entity views may return None when the ID is not found
             async def handler(**kwargs):
                 view_kwargs = {k: v for k, v in kwargs.items() if v is not None}
-                result = view_fn(**view_kwargs)
+                loop = asyncio.get_running_loop()
+                result = await loop.run_in_executor(None, functools.partial(view_fn, **view_kwargs))
                 if result is None:
                     return {"error": "not_found", "message": "No record found for the given ID."}
                 result_dict = result.model_dump()
@@ -315,7 +320,8 @@ def _make_handler(view_fn, enum_map: dict[str, list[str]]):
         # Legacy: view returns a plain dict/list — serialize to JSON string
         async def handler(**kwargs) -> str:
             view_kwargs = {k: v for k, v in kwargs.items() if v is not None}
-            result = view_fn(**view_kwargs)
+            loop = asyncio.get_running_loop()
+            result = await loop.run_in_executor(None, functools.partial(view_fn, **view_kwargs))
             return _validate_size(clean(result))
 
         handler.__signature__ = inspect.Signature(
@@ -332,10 +338,20 @@ def _make_handler(view_fn, enum_map: dict[str, list[str]]):
         logger.info("tool_call: %s  params=%s", tool_name, view_kwargs or "{}")
         t0 = time.perf_counter()
         try:
-            result = await original_handler(**kwargs)
+            timeout = MCP_TOOL_TIMEOUT if MCP_TOOL_TIMEOUT > 0 else None
+            result = await asyncio.wait_for(original_handler(**kwargs), timeout=timeout)
             elapsed = time.perf_counter() - t0
             logger.info("tool_done: %s  %.3fs", tool_name, elapsed)
             return result
+        except asyncio.TimeoutError:
+            elapsed = time.perf_counter() - t0
+            logger.error(
+                "tool_timeout: %s  %.3fs (limit %.1fs)",
+                tool_name, elapsed, MCP_TOOL_TIMEOUT,
+            )
+            raise ValueError(
+                f"Tool call timed out after {MCP_TOOL_TIMEOUT}s. Try narrowing your query."
+            )
         except Exception:
             elapsed = time.perf_counter() - t0
             logger.error("tool_error: %s  %.3fs", tool_name, elapsed, exc_info=True)

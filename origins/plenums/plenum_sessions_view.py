@@ -175,7 +175,8 @@ _COUNT_BY_OPTIONS: dict[str, CountByConfig] = {
     description=(
         "Search for Knesset plenum sessions. Returns summary info by default; "
         "set full_details=True for agenda items and documents. "
-        "Use session_id to filter to a specific session, or from_date to search by date range. "
+        "Use session_id to filter to a specific session, from_date to search by date range, "
+        "or bill_id to find all sessions where a specific bill was discussed. "
         "Note: This tool returns individual plenum sessions (ישיבות בודדות). "
         "For assembly/term date ranges (כינוסים), use the metadata tool with include_assemblies=True instead."
     ),
@@ -194,6 +195,7 @@ def plenums(
     to_date: Annotated[str | None, Field(description="End of date range (YYYY-MM-DD). Requires from_date.")] = None,
     query_items: Annotated[str | None, Field(description="Session name or agenda item name contains text")] = None,
     item_type: Annotated[str | None, Field(description="Filter to sessions with items of this type")] = None,
+    bill_id: Annotated[int | None, Field(description="Filter to sessions where this bill was on the agenda")] = None,
     full_details: Annotated[bool, Field(description="Include agenda items and documents. Adds significant data per result — use conservatively. Preferred pattern: search first (full_details=False), then re-call with session_id for only the specific sessions you need detail on.")] = False,
     top: Annotated[int | None, Field(description="Max results (default 50, max 200). Results are sorted newest-first (date DESC) or by count DESC for count_by — so top=N gives the N most recent or highest.")] = None,
     offset: Annotated[int | None, Field(description="Results to skip for pagination. To get the oldest/smallest N: use offset=total_count-N (total_count is in every response).")] = None,
@@ -201,7 +203,7 @@ def plenums(
 ) -> PlenumSessionsResults:
     """Search for plenum sessions with optional full detail.
 
-    Required scoping: either ``session_id`` or ``from_date`` must be provided.
+    Required scoping: either ``session_id``, ``from_date``, or ``bill_id`` must be provided.
     """
     normalized = normalize_inputs(locals())
     session_id = normalized["session_id"]
@@ -210,6 +212,7 @@ def plenums(
     to_date = normalized["to_date"]
     query_items = normalized["query_items"]
     item_type = normalized["item_type"]
+    bill_id = normalized["bill_id"]
     full_details = normalized["full_details"]
     top, offset = resolve_pagination(normalized["top"], normalized["offset"])
 
@@ -257,6 +260,13 @@ def plenums(
             WHERE i.PlenumSessionID = s.Id AND i.ItemTypeDesc LIKE %s
         )""")
         params.append(f"%{item_type}%")
+
+    if bill_id is not None:
+        conditions.append("""EXISTS (
+            SELECT 1 FROM plm_session_item_raw i
+            WHERE i.PlenumSessionID = s.Id AND i.ItemTypeID = 2 AND i.ItemID = %s
+        )""")
+        params.append(bill_id)
 
     where = " AND ".join(conditions) if conditions else "1=1"
     count_sql = f"SELECT COUNT(*) FROM {_CB_BASE_FROM} {_CB_BASE_JOINS} WHERE {where}"

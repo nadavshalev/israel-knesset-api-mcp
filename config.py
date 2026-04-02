@@ -43,3 +43,7 @@ FUZZY_TRGM_THRESHOLD = float(os.getenv("FUZZY_TRGM_THRESHOLD", "0.5"))
 # Logging
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 LOG_FILE = os.getenv("LOG_FILE", "")  # optional path; when set, logs also go to this file
+
+# Tool timeout — max seconds a single MCP tool call may run before returning an error.
+# Set to 0 to disable.
+MCP_TOOL_TIMEOUT = float(os.getenv("MCP_TOOL_TIMEOUT", "2.0"))

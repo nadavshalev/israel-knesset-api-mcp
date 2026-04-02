@@ -208,7 +208,8 @@ _COUNT_BY_OPTIONS: dict[str, CountByConfig] = {
     description=(
         "Search for Knesset committee sessions. Returns summary info by default; "
         "set full_details=True for agenda items and documents. "
-        "Use session_id to filter to a specific session, or from_date to search by date range."
+        "Use session_id to filter to a specific session, from_date to search by date range, "
+        "or bill_id to find all sessions where a specific bill was discussed."
     ),
     entity="Committee Sessions",
     count_sql="SELECT COUNT(*) FROM committee_session_raw",
@@ -228,6 +229,7 @@ def committees(
     to_date: Annotated[str | None, Field(description="End of date range (YYYY-MM-DD). Requires from_date.")] = None,
     query_items: Annotated[str | None, Field(description="Committee name or agenda item name contains text")] = None,
     item_type: Annotated[str | None, Field(description="Filter to sessions with items of this type")] = None,
+    bill_id: Annotated[int | None, Field(description="Filter to sessions where this bill was on the agenda")] = None,
     member_id: Annotated[int | None, Field(description="Filter to sessions where this member served on the committee")] = None,
     session_type: Annotated[str | None, Field(description="Session type (e.g. פתוחה, חסויה)")] = None,
     full_details: Annotated[bool, Field(description="Include agenda items and documents. Adds significant data per result — use conservatively. Preferred pattern: search first (full_details=False), then re-call with session_id for only the specific sessions you need detail on.")] = False,
@@ -237,7 +239,7 @@ def committees(
 ) -> CmtSessionsResults:
     """Search for committee sessions with optional full detail.
 
-    Required scoping: either ``session_id`` or ``from_date`` must be provided.
+    Required scoping: either ``session_id``, ``from_date``, or ``bill_id`` must be provided.
     """
     normalized = normalize_inputs(locals())
     session_id = normalized["session_id"]
@@ -248,6 +250,7 @@ def committees(
     to_date = normalized["to_date"]
     query_items = normalized["query_items"]
     item_type = normalized["item_type"]
+    bill_id = normalized["bill_id"]
     member_id = normalized["member_id"]
     session_type = normalized["session_type"]
     full_details = normalized["full_details"]
@@ -307,6 +310,13 @@ def committees(
               )
         )""")
         params.append(f"%{item_type}%")
+
+    if bill_id is not None:
+        conditions.append("""EXISTS (
+            SELECT 1 FROM cmt_session_item_raw csi
+            WHERE csi.CommitteeSessionID = cs.Id AND csi.ItemTypeID = 2 AND csi.ItemID = %s
+        )""")
+        params.append(bill_id)
 
     if member_id is not None:
         conditions.append("""EXISTS (

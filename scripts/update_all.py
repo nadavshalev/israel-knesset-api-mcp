@@ -2,7 +2,8 @@
 """Incremental update script — fetches only new/changed data from OData.
 
 Usage:
-    python3 update_all.py            # update all tables (incremental)
+    python3 update_all.py            # update all tables (parallel, incremental)
+    python3 update_all.py --sync     # update all tables (sequential, incremental)
     python3 update_all.py --table persons --table bill   # update specific tables
     python3 update_all.py --full     # force full re-fetch (ignore metadata)
     python3 update_all.py --dry-run  # show what would be fetched, don't fetch
@@ -13,21 +14,35 @@ On each run, only rows updated since that timestamp are fetched from OData.
 
 The ``plenum_vote_result`` table uses Id-based cursors internally, so it
 always resumes from the highest Id already in the database.
+
+By default tables are fetched in parallel (one thread per table, up to
+POOL_MAX_CONN workers). Pass --sync to revert to sequential behaviour.
 """
 
 import argparse
 import sys
 import time
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from config import POOL_MAX_CONN
 from core.db import connect_db, ensure_indexes
 from core.vpn import vpn_connection
 
 from origins import TableSpec, get_table_spec, get_table_specs
+
+_print_lock = threading.Lock()
+
+
+def _tprint(*args, **kwargs):
+    """Thread-safe print."""
+    with _print_lock:
+        print(*args, **kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -151,41 +166,121 @@ def repair_metadata(conn):
     print(f"Deleted {len(stale)} stale row(s) from metadata.")
 
 
-def update_tables(conn, table_filter=None, full=False, dry_run=False):
-    """Run incremental (or full) updates on selected tables."""
-    # Determine which tables to update
-    if table_filter:
-        selected: list[TableSpec] = []
-        for name in table_filter:
-            try:
-                spec = get_table_spec(name)
-            except KeyError as exc:
-                print(f"ERROR: {exc.args[0]}")
-                sys.exit(1)
-            selected.append(spec)
-    else:
-        selected = list(TABLES)
+def _resolve_selected(table_filter) -> list[TableSpec]:
+    """Return the list of TableSpec objects to process."""
+    if not table_filter:
+        return list(TABLES)
+    selected: list[TableSpec] = []
+    for name in table_filter:
+        try:
+            selected.append(get_table_spec(name))
+        except KeyError as exc:
+            print(f"ERROR: {exc.args[0]}")
+            sys.exit(1)
+    return selected
 
+
+def _since_and_mode(conn, spec: TableSpec, full: bool) -> tuple[str | None, str]:
+    """Return (since, mode_description) for a given spec."""
+    if full:
+        return None, "full"
+    if spec.cursor_mode == "id":
+        return None, "incremental (Id-based)"
+    since = _get_cutoff(conn, spec.table_name)
+    if since:
+        return since, f"incremental (since {since[:19]})"
+    return None, "initial load (no prior sync)"
+
+
+def _print_summary(results: list[tuple[str, int, float]], total_elapsed: float) -> None:
+    print(f"\n{'='*60}")
+    print(f"Update complete in {_format_duration(total_elapsed)}")
+    print(f"\n{'Table':<35} {'New Rows':>10}   {'Time':>10}")
+    print("-" * 60)
+    for label, delta, elapsed in results:
+        print(f"{label:<35} {delta:>+10,}   {_format_duration(elapsed):>10}")
+    print()
+
+
+# ---------------------------------------------------------------------------
+# Parallel worker
+# ---------------------------------------------------------------------------
+
+def _fetch_one(spec: TableSpec, full: bool, dry_run: bool) -> tuple[str, int, float, str | None]:
+    """Fetch a single table in its own DB connection. Returns (label, delta, elapsed, error)."""
+    conn = None
+    try:
+        conn = connect_db()
+        since, mode = _since_and_mode(conn, spec, full)
+        row_count_before = _get_row_count(conn, spec.table_name)
+
+        _tprint(f"\n--- {spec.label} ({spec.table_name}) ---")
+        _tprint(f"  Mode: {mode}")
+        _tprint(f"  Rows before: {row_count_before:,}")
+
+        if dry_run:
+            _tprint("  [dry-run] Skipping fetch")
+            return spec.label, 0, 0.0, None
+
+        t0 = time.time()
+        spec.module.fetch_rows(conn, since=since)
+        elapsed = time.time() - t0
+
+        row_count_after = _get_row_count(conn, spec.table_name)
+        delta = row_count_after - row_count_before
+        _tprint(f"  Rows after:  {row_count_after:,}  (delta: {delta:+,})")
+        _tprint(f"  Time: {_format_duration(elapsed)}")
+        return spec.label, delta, elapsed, None
+    except Exception as e:
+        _tprint(f"  ERROR in {spec.label}: {e}")
+        return spec.label, 0, 0.0, str(e)
+    finally:
+        if conn is not None:
+            conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Update entry points
+# ---------------------------------------------------------------------------
+
+def update_tables_parallel(conn, table_filter=None, full=False, dry_run=False):
+    """Run updates on all selected tables in parallel (one thread per table)."""
+    selected = _resolve_selected(table_filter)
+    # Main conn holds 1 pool slot; workers get the rest.
+    max_workers = min(max(POOL_MAX_CONN - 1, 1), len(selected))
+    print(f"Running {len(selected)} table(s) in parallel (workers={max_workers})")
+
+    total_start = time.time()
+    # Preserve original table order in summary
+    label_order = [spec.label for spec in selected]
+    results_by_label: dict[str, tuple[int, float]] = {}
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(_fetch_one, spec, full, dry_run): spec
+            for spec in selected
+        }
+        for future in as_completed(futures):
+            label, delta, elapsed, _err = future.result()
+            results_by_label[label] = (delta, elapsed)
+
+    if not dry_run:
+        print("\n--- Ensuring indexes ---")
+        ensure_indexes(conn)
+        print("  Done")
+
+    results = [(lbl, *results_by_label[lbl]) for lbl in label_order]
+    _print_summary(results, time.time() - total_start)
+
+
+def update_tables_sync(conn, table_filter=None, full=False, dry_run=False):
+    """Run incremental (or full) updates on selected tables sequentially."""
+    selected = _resolve_selected(table_filter)
     total_start = time.time()
     results = []
 
     for spec in selected:
-        # Determine the since value
-        if full:
-            since = None
-            mode = "full"
-        elif spec.cursor_mode == "id":
-            # This table uses Id-based cursor internally;
-            # passing since=None makes it resume from MAX(Id) in the DB.
-            since = None
-            mode = "incremental (Id-based)"
-        else:
-            since = _get_cutoff(conn, spec.table_name)
-            if since:
-                mode = f"incremental (since {since[:19]})"
-            else:
-                mode = "initial load (no prior sync)"
-
+        since, mode = _since_and_mode(conn, spec, full)
         row_count_before = _get_row_count(conn, spec.table_name)
 
         print(f"\n--- {spec.label} ({spec.table_name}) ---")
@@ -212,21 +307,19 @@ def update_tables(conn, table_filter=None, full=False, dry_run=False):
         print(f"  Time: {_format_duration(elapsed)}")
         results.append((spec.label, delta, elapsed))
 
-    # Rebuild indexes after all fetches
     if not dry_run:
         print("\n--- Ensuring indexes ---")
         ensure_indexes(conn)
         print("  Done")
 
-    # Summary
-    total_elapsed = time.time() - total_start
-    print(f"\n{'='*60}")
-    print(f"Update complete in {_format_duration(total_elapsed)}")
-    print(f"\n{'Table':<35} {'New Rows':>10}   {'Time':>10}")
-    print("-" * 60)
-    for label, delta, elapsed in results:
-        print(f"{label:<35} {delta:>+10,}   {_format_duration(elapsed):>10}")
-    print()
+    _print_summary(results, time.time() - total_start)
+
+
+def update_tables(conn, table_filter=None, full=False, dry_run=False, sync=False):
+    if sync:
+        update_tables_sync(conn, table_filter=table_filter, full=full, dry_run=dry_run)
+    else:
+        update_tables_parallel(conn, table_filter=table_filter, full=full, dry_run=dry_run)
 
 
 # ---------------------------------------------------------------------------
@@ -259,6 +352,10 @@ def parse_args():
         help="Remove stale metadata rows for tables that no longer exist",
     )
     parser.add_argument(
+        "--sync", action="store_true", dest="sync", default=False,
+        help="Fetch tables sequentially instead of in parallel",
+    )
+    parser.add_argument(
         "--vpn", action="store_true", dest="use_vpn", default=False,
         help="Use VPN connection for OData fetches",
     )
@@ -284,13 +381,13 @@ def main():
     ensure_tables(conn)
 
     # All OData fetches require the Knesset VPN
+    kwargs = dict(table_filter=args.tables, full=args.full,
+                  dry_run=args.dry_run, sync=args.sync)
     if args.use_vpn:
         with vpn_connection():
-            update_tables(conn, table_filter=args.tables, full=args.full,
-                        dry_run=args.dry_run)
+            update_tables(conn, **kwargs)
     else:
-        update_tables(conn, table_filter=args.tables, full=args.full,
-                    dry_run=args.dry_run)
+        update_tables(conn, **kwargs)
     conn.close()
 
 
