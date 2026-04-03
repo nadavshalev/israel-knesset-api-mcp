@@ -37,9 +37,10 @@ from config import (
     MCP_HOST,
     MCP_PORT,
     MCP_TOOL_TIMEOUT,
+    POOL_HEALTH_INTERVAL,
     RATE_LIMIT_PER_MINUTE,
 )
-from core.db import connect_db, connect_readonly, ensure_indexes
+from core.db import check_pool_health, connect_db, connect_readonly, ensure_indexes
 from core.helpers import clean
 from core.rate_limit import RateLimitMiddleware
 
@@ -572,6 +573,74 @@ def resource_roles(knesset_num: int) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# Connection pool health monitoring
+# ---------------------------------------------------------------------------
+
+async def _pool_health_loop() -> None:
+    """Background task: check pool liveness every POOL_HEALTH_INTERVAL seconds."""
+    if POOL_HEALTH_INTERVAL <= 0:
+        return
+    loop = asyncio.get_running_loop()
+    while True:
+        await asyncio.sleep(POOL_HEALTH_INTERVAL)
+        await loop.run_in_executor(None, check_pool_health)
+
+
+class _LifespanMiddleware:
+    """ASGI middleware that starts/stops the pool health background task."""
+
+    def __init__(self, app):
+        self.app = app
+        self._health_task: asyncio.Task | None = None
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "lifespan":
+            await self.app(scope, receive, send)
+            return
+        await self._handle_lifespan(scope, receive, send)
+
+    async def _handle_lifespan(self, scope, receive, send):
+        # Forward lifespan events to the inner app via queues so both sides
+        # can participate in startup/shutdown sequencing.
+        inner_receive_q: asyncio.Queue[dict] = asyncio.Queue()
+        inner_send_q: asyncio.Queue[dict] = asyncio.Queue()
+
+        async def inner_receive() -> dict:
+            return await inner_receive_q.get()
+
+        async def inner_send(event: dict) -> None:
+            await inner_send_q.put(event)
+
+        inner_task = asyncio.create_task(self.app(scope, inner_receive, inner_send))
+
+        while True:
+            event = await receive()
+            await inner_receive_q.put(event)
+
+            if event["type"] == "lifespan.startup":
+                inner_event = await inner_send_q.get()
+                if POOL_HEALTH_INTERVAL > 0:
+                    self._health_task = asyncio.create_task(_pool_health_loop())
+                    logger.info(
+                        "pool_health: monitoring started (interval=%ds)", POOL_HEALTH_INTERVAL
+                    )
+                await send(inner_event)
+
+            elif event["type"] == "lifespan.shutdown":
+                inner_event = await inner_send_q.get()
+                if self._health_task is not None:
+                    self._health_task.cancel()
+                    try:
+                        await self._health_task
+                    except asyncio.CancelledError:
+                        pass
+                await send(inner_event)
+                break
+
+        await inner_task
+
+
+# ---------------------------------------------------------------------------
 # Health check endpoint
 # ---------------------------------------------------------------------------
 
@@ -610,9 +679,11 @@ class _HealthCheckMiddleware:
 # Get the Starlette ASGI app from MCP
 _mcp_app = mcp.streamable_http_app()
 
-# Wrap with rate limiting middleware, then health check (outermost)
-app = _HealthCheckMiddleware(
-    RateLimitMiddleware(_mcp_app, max_per_minute=RATE_LIMIT_PER_MINUTE)
+# Wrap with rate limiting, health check endpoint, then lifespan (outermost)
+app = _LifespanMiddleware(
+    _HealthCheckMiddleware(
+        RateLimitMiddleware(_mcp_app, max_per_minute=RATE_LIMIT_PER_MINUTE)
+    )
 )
 
 

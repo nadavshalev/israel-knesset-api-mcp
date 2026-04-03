@@ -1,10 +1,13 @@
 import atexit
+import logging
 from pathlib import Path
 from typing import Optional
 
 import psycopg2
 import psycopg2.extras
 import psycopg2.pool
+
+logger = logging.getLogger(__name__)
 
 from config import (
     POSTGRES_HOST, POSTGRES_PORT, 
@@ -120,6 +123,45 @@ def connect_readonly():
     cur.execute("SET pg_trgm.strict_word_similarity_threshold = %s", (FUZZY_TRGM_THRESHOLD,))
     cur.close()
     return conn
+
+
+# ---------------------------------------------------------------------------
+# Pool health check
+# ---------------------------------------------------------------------------
+
+
+def check_pool_health() -> bool:
+    """Run SELECT 1 to verify the pool is alive. Resets and reconnects on failure.
+
+    Returns True if healthy, False if the check failed (reconnect was attempted).
+    Intended to be called periodically from a background task.
+    """
+    global _pool
+    try:
+        pool = _get_pool()
+        conn = pool.getconn()
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT 1")
+            cur.close()
+        finally:
+            pool.putconn(conn)
+        logger.debug("pool_health: ok")
+        return True
+    except Exception:
+        logger.error("pool_health: liveness check failed — resetting pool", exc_info=True)
+        if _pool is not None and not _pool.closed:
+            try:
+                _pool.closeall()
+            except Exception:
+                pass
+        _pool = None
+        try:
+            _get_pool()
+            logger.info("pool_health: reconnected successfully")
+        except Exception:
+            logger.error("pool_health: reconnect failed — will retry next interval", exc_info=True)
+        return False
 
 
 # ---------------------------------------------------------------------------

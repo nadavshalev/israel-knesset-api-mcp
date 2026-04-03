@@ -77,6 +77,8 @@ MAX_DETAIL_ITEMS = int(os.getenv("MAX_DETAIL_ITEMS", "200"))
 # ---------------------------------------------------------------------------
 
 POOL_MAX_CONN = int(os.getenv("POOL_MAX_CONN", "10"))
+# Seconds between pool liveness checks (0 = disabled)
+POOL_HEALTH_INTERVAL = int(os.getenv("POOL_HEALTH_INTERVAL", "30"))
 
 # ---------------------------------------------------------------------------
 # Fuzzy search
