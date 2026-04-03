@@ -42,7 +42,7 @@ class RateLimitMiddleware:
         return "unknown"
 
     def _cleanup(self, ip: str, now: float) -> None:
-        """Remove timestamps older than 60 seconds."""
+        """Remove timestamps older than 60 seconds and prune empty entries."""
         cutoff = now - 60.0
         timestamps = self._requests[ip]
         # Find first index that is within the window
@@ -51,6 +51,9 @@ class RateLimitMiddleware:
             i += 1
         if i > 0:
             self._requests[ip] = timestamps[i:]
+        # Remove the IP entry entirely if no timestamps remain
+        if not self._requests[ip]:
+            del self._requests[ip]
 
     async def __call__(self, scope, receive, send):
         if scope["type"] not in ("http", "websocket"):

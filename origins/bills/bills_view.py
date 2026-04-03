@@ -21,6 +21,7 @@ from typing import Annotated, Literal
 from pydantic import Field
 
 from core.db import connect_readonly
+from config import MAX_DETAIL_ITEMS
 from core.helpers import (
     simple_date, normalize_inputs, check_search_count, resolve_pagination,
     CountByConfig, build_count_by_query, fuzzy_condition, fuzzy_params,
@@ -191,8 +192,9 @@ def _fetch_full_detail(cursor, bill, bill_id):
         ) ptp ON true
         WHERE bi.BillID = %s
         ORDER BY bi.Ordinal ASC
+        LIMIT %s
         """,
-        (knesset_num, bill_id),
+        (knesset_num, bill_id, MAX_DETAIL_ITEMS),
     )
     init_rows = cursor.fetchall()
     primary_initiators = []
@@ -228,8 +230,9 @@ def _fetch_full_detail(cursor, bill, bill_id):
         ) ptp ON true
         WHERE bhi.BillID = %s
         ORDER BY bhi.Id ASC
+        LIMIT %s
         """,
-        (knesset_num, bill_id),
+        (knesset_num, bill_id, MAX_DETAIL_ITEMS),
     )
     removed_initiators = [
         RemovedInitiator(
@@ -256,8 +259,9 @@ def _fetch_full_detail(cursor, bill, bill_id):
         FROM bill_name_raw
         WHERE BillID = %s
         ORDER BY Id ASC
+        LIMIT %s
         """,
-        (bill_id,),
+        (bill_id, MAX_DETAIL_ITEMS),
     )
     name_history = [
         BillNameHistory(name=nr["name"], stage_type=nr["namehistorytypedesc"])
@@ -271,8 +275,9 @@ def _fetch_full_detail(cursor, bill, bill_id):
         FROM document_bill_raw
         WHERE BillID = %s
         ORDER BY Id ASC
+        LIMIT %s
         """,
-        (bill_id,),
+        (bill_id, MAX_DETAIL_ITEMS),
     )
     documents = [
         SessionDocument(
@@ -298,8 +303,9 @@ def _fetch_full_detail(cursor, bill, bill_id):
         LEFT JOIN bill_raw b2 ON bs.MainBillID = b2.Id
         WHERE bs.SplitBillID = %s
         ORDER BY related_bill_id
+        LIMIT %s
         """,
-        (bill_id, bill_id),
+        (bill_id, bill_id, MAX_DETAIL_ITEMS),
     )
     split_bills = [
         SplitBill(
@@ -323,8 +329,9 @@ def _fetch_full_detail(cursor, bill, bill_id):
         LEFT JOIN bill_raw b2 ON bu.MainBillID = b2.Id
         WHERE bu.UnionBillID = %s
         ORDER BY related_bill_id
+        LIMIT %s
         """,
-        (bill_id, bill_id),
+        (bill_id, bill_id, MAX_DETAIL_ITEMS),
     )
     merged_bills = [
         MergedBill(bill_id=ur["related_bill_id"], name=ur["bill_name"])
@@ -342,8 +349,9 @@ def _fetch_full_detail(cursor, bill, bill_id):
         FROM law_binding_raw lb
         JOIN israel_law_raw il ON lb.IsraelLawID = il.Id
         WHERE lb.LawID = %s
-        ORDER BY il.PublicationDate DESC, il.Id DESC""",
-        (bill_id,),
+        ORDER BY il.PublicationDate DESC, il.Id DESC
+        LIMIT %s""",
+        (bill_id, MAX_DETAIL_ITEMS),
     )
     related_laws = [_law_build_partial(r) for r in cursor.fetchall()] or None
 

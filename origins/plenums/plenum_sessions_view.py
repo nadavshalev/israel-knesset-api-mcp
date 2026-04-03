@@ -18,6 +18,7 @@ from typing import Annotated, Literal
 from pydantic import Field
 
 from core.db import connect_readonly
+from config import MAX_DETAIL_ITEMS
 from core.helpers import (
     simple_date, normalize_inputs, check_search_count, resolve_pagination,
     CountByConfig, build_count_by_query, fuzzy_condition, fuzzy_params, fts_condition, fts_params,
@@ -105,8 +106,9 @@ def _fetch_items(cursor, session_id):
         LEFT JOIN status_raw st ON i.StatusID = st.Id
         WHERE i.PlenumSessionID = %s
         ORDER BY i.Ordinal ASC
+        LIMIT %s
         """,
-        (session_id,),
+        (session_id, MAX_DETAIL_ITEMS),
     )
     item_rows = cursor.fetchall()
 
@@ -136,8 +138,9 @@ def _fetch_documents(cursor, session_id):
         FROM document_plenum_session_raw
         WHERE PlenumSessionID = %s
         ORDER BY GroupTypeDesc, ApplicationDesc
+        LIMIT %s
         """,
-        (session_id,),
+        (session_id, MAX_DETAIL_ITEMS),
     )
     return [
         SessionDocument(

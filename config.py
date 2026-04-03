@@ -32,6 +32,7 @@ SEARCH_ACROSS_TOP_N = int(os.getenv("SEARCH_ACROSS_TOP_N", "5"))
 MAX_SEARCH_RESULTS = int(os.getenv("MAX_SEARCH_RESULTS", "300"))
 DEFAULT_PAGE_SIZE = int(os.getenv("DEFAULT_PAGE_SIZE", "50"))
 MAX_PAGE_SIZE = int(os.getenv("MAX_PAGE_SIZE", "200"))
+MAX_DETAIL_ITEMS = int(os.getenv("MAX_DETAIL_ITEMS", "500"))
 
 # Connection pool
 POOL_MAX_CONN = int(os.getenv("POOL_MAX_CONN", "10"))

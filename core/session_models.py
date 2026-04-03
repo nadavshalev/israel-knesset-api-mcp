@@ -9,6 +9,7 @@ from pydantic import Field
 
 from core.models import KNSBaseModel
 from core.helpers import simple_date
+from config import MAX_DETAIL_ITEMS
 
 
 class ItemVote(KNSBaseModel):
@@ -90,8 +91,9 @@ def get_item_votes(cursor, bill_id):
         FROM plenum_vote_raw v
         WHERE v.ItemID = %s
         ORDER BY v.VoteDateTime DESC, v.Id DESC
+        LIMIT %s
         """,
-        (bill_id,),
+        (bill_id, MAX_DETAIL_ITEMS),
     )
     rows = cursor.fetchall()
     votes = []
@@ -192,8 +194,9 @@ def fetch_item_stages(cursor, item_id, item_type_ids):
         LEFT JOIN status_raw st ON i.StatusID = st.Id
         WHERE i.ItemID = %s AND i.ItemTypeID IN ({type_placeholders})
         ORDER BY s.Id, i.Id DESC
+        LIMIT %s
         """,
-        [item_id] + list(item_type_ids),
+        [item_id] + list(item_type_ids) + [MAX_DETAIL_ITEMS],
     )
     plm_rows = cursor.fetchall()
 
@@ -211,8 +214,9 @@ def fetch_item_stages(cursor, item_id, item_type_ids):
         LEFT JOIN status_raw st ON ci.StatusID = st.Id
         WHERE ci.ItemID = %s AND ci.ItemTypeID IN ({type_placeholders})
         ORDER BY cs.Id, ci.Id DESC
+        LIMIT %s
         """,
-        [item_id] + list(item_type_ids),
+        [item_id] + list(item_type_ids) + [MAX_DETAIL_ITEMS],
     )
     cmt_rows = cursor.fetchall()
 

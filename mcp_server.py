@@ -85,6 +85,7 @@ def _query_startup_metadata() -> dict:
     enum_values: dict[str, dict[str, list[str]]] = {}
     counts: dict[str, int] = {}
     recent_dates: dict[str, str | None] = {}
+    failures: list[str] = []
 
     for fn in get_all_tools():
         meta = fn._mcp_tool
@@ -102,6 +103,7 @@ def _query_startup_metadata() -> dict:
                 vals = [list(r.values())[0] for r in rows if list(r.values())[0]]
                 enum_values[tool_name][param_name] = vals
             except Exception:
+                failures.append(f"enum_sql:{tool_name}.{param_name}")
                 logger.warning("enum_sql failed for %s.%s", tool_name, param_name, exc_info=True)
 
         # --- count_sql ---
@@ -112,6 +114,7 @@ def _query_startup_metadata() -> dict:
                 row = cursor.fetchone()
                 counts[tool_name] = list(row.values())[0] if row else 0
             except Exception:
+                failures.append(f"count_sql:{tool_name}")
                 logger.warning("count_sql failed for %s", tool_name, exc_info=True)
 
         # --- most_recent_date_sql ---
@@ -125,6 +128,7 @@ def _query_startup_metadata() -> dict:
                     val = val[:10]
                 recent_dates[tool_name] = val
             except Exception:
+                failures.append(f"most_recent_date_sql:{tool_name}")
                 logger.warning("most_recent_date_sql failed for %s", tool_name, exc_info=True)
 
     # --- last_sync ---
@@ -135,6 +139,7 @@ def _query_startup_metadata() -> dict:
         if row:
             last_sync = list(row.values())[0]
     except Exception:
+        failures.append("last_sync")
         logger.warning("last_sync query failed", exc_info=True)
 
     # --- current_knesset_num ---
@@ -147,9 +152,26 @@ def _query_startup_metadata() -> dict:
         if row:
             current_knesset_num = list(row.values())[0]
     except Exception:
+        failures.append("current_knesset_num")
         logger.warning("current_knesset_num query failed", exc_info=True)
 
     conn.close()
+
+    # --- Startup summary ---
+    total_tools = len(list(get_all_tools()))
+    total_enums = sum(len(v) for v in enum_values.values())
+    total_counts = len(counts)
+    if failures:
+        logger.error(
+            "startup_metadata: %d failure(s) out of %d tools — %s",
+            len(failures), total_tools, ", ".join(failures),
+        )
+    else:
+        logger.info(
+            "startup_metadata: OK — %d tools, %d enum params, %d counts loaded",
+            total_tools, total_enums, total_counts,
+        )
+
     return {
         "enum_values": enum_values,
         "counts": counts,

@@ -17,6 +17,7 @@ if str(ROOT.parent) not in sys.path:
     sys.path.insert(0, str(ROOT.parent))
 
 from core.db import connect_readonly
+from config import MAX_DETAIL_ITEMS
 from core.helpers import (
     simple_date, normalize_inputs, check_search_count, resolve_pagination,
     CountByConfig, build_count_by_query, fuzzy_condition, fuzzy_params,
@@ -73,8 +74,9 @@ def _fetch_regulators(cursor, law_id: int) -> list[SecLawRegulator] | None:
         """SELECT RegulatorTypeDesc, RegulatorDesc
         FROM sec_law_regulator_raw
         WHERE SecondaryLawID = %s
-        ORDER BY Id""",
-        [law_id],
+        ORDER BY Id
+        LIMIT %s""",
+        [law_id, MAX_DETAIL_ITEMS],
     )
     rows = cursor.fetchall()
     if not rows:
@@ -97,8 +99,9 @@ def _fetch_authorizing_laws(cursor, law_id: int) -> list[LawResultPartial] | Non
         FROM sec_law_authorizing_law_raw sla
         JOIN israel_law_raw il ON sla.AuthorizingLawID = il.Id
         WHERE sla.SecondaryLawID = %s
-        ORDER BY il.Id""",
-        [law_id],
+        ORDER BY il.Id
+        LIMIT %s""",
+        [law_id, MAX_DETAIL_ITEMS],
     )
     rows = cursor.fetchall()
     if not rows:
@@ -147,8 +150,9 @@ def _fetch_bindings(cursor, law_id: int) -> list[SecLawBinding] | None:
         LEFT JOIN secondary_law_raw sc ON b.SecChildID = sc.Id
         LEFT JOIN secondary_law_raw sp ON b.SecParentID = sp.Id
         LEFT JOIN secondary_law_raw sm ON b.SecMainID = sm.Id
-        WHERE b.SecChildID = %s OR b.SecParentID = %s OR b.SecMainID = %s""",
-        [law_id, law_id, law_id],
+        WHERE b.SecChildID = %s OR b.SecParentID = %s OR b.SecMainID = %s
+        LIMIT %s""",
+        [law_id, law_id, law_id, MAX_DETAIL_ITEMS],
     )
     rows = cursor.fetchall()
     if not rows:
@@ -193,8 +197,9 @@ def _fetch_documents(cursor, law_id: int) -> list[SessionDocument] | None:
     cursor.execute(
         """SELECT GroupTypeDesc, ApplicationDesc, FilePath
         FROM document_secondary_law_raw
-        WHERE SecondaryLawId = %s""",
-        [law_id],
+        WHERE SecondaryLawId = %s
+        LIMIT %s""",
+        [law_id, MAX_DETAIL_ITEMS],
     )
     rows = cursor.fetchall()
     if not rows:

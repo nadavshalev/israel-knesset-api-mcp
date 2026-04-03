@@ -18,6 +18,7 @@ if str(ROOT.parent) not in sys.path:
     sys.path.insert(0, str(ROOT.parent))
 
 from core.db import connect_readonly
+from config import MAX_DETAIL_ITEMS
 from core.helpers import (
     simple_date, normalize_inputs, check_search_count, resolve_pagination,
     CountByConfig, build_count_by_query, fuzzy_condition, fuzzy_params,
@@ -124,8 +125,9 @@ def _fetch_alternative_names(cursor, law_id: int, current_name: str | None) -> l
     cursor.execute(
         """SELECT Name FROM israel_law_name_raw
         WHERE IsraelLawID = %s AND Name IS NOT NULL AND Name != %s
-        ORDER BY Id""",
-        [law_id, current_name or ""],
+        ORDER BY Id
+        LIMIT %s""",
+        [law_id, current_name or "", MAX_DETAIL_ITEMS],
     )
     result = [r["name"] for r in cursor.fetchall()]
     return result or None
@@ -148,8 +150,9 @@ def _fetch_replaced_laws(cursor, law_id: int) -> list[ReplacedLaw] | None:
         LEFT JOIN israel_law_raw rl ON ilb.IsraelLawReplacedID = rl.Id
         LEFT JOIN bill_raw b ON ilb.LawID = b.Id
         LEFT JOIN status_raw st ON b.StatusID = st.Id
-        WHERE ilb.IsraelLawID = %s""",
-        [law_id],
+        WHERE ilb.IsraelLawID = %s
+        LIMIT %s""",
+        [law_id, MAX_DETAIL_ITEMS],
     )
     rows = cursor.fetchall()
     if not rows:
@@ -194,8 +197,9 @@ def _fetch_changes_and_original(cursor, law_id: int):
         FROM law_binding_raw lb
         LEFT JOIN bill_raw b ON lb.LawID = b.Id
         LEFT JOIN status_raw st ON b.StatusID = st.Id
-        WHERE lb.IsraelLawID = %s""",
-        [law_id],
+        WHERE lb.IsraelLawID = %s
+        LIMIT %s""",
+        [law_id, MAX_DETAIL_ITEMS],
     )
     binding_rows = cursor.fetchall()
 
@@ -213,8 +217,9 @@ def _fetch_changes_and_original(cursor, law_id: int):
         LEFT JOIN bill_raw b ON lc.BillID = b.Id
         LEFT JOIN status_raw st ON b.StatusID = st.Id
         WHERE illc.IsraelLawID = %s
-        ORDER BY lc.PublicationDate DESC""",
-        [law_id],
+        ORDER BY lc.PublicationDate DESC
+        LIMIT %s""",
+        [law_id, MAX_DETAIL_ITEMS],
     )
     correction_rows = cursor.fetchall()
 
@@ -313,8 +318,9 @@ def _fetch_secondary_laws(cursor, law_id: int):
         ) maj ON TRUE
         LEFT JOIN israel_law_raw il ON maj.AuthorizingLawID = il.Id
         WHERE sla.AuthorizingLawID = %s
-        ORDER BY s.PublicationDate DESC, s.Id DESC""",
-        [law_id],
+        ORDER BY s.PublicationDate DESC, s.Id DESC
+        LIMIT %s""",
+        [law_id, MAX_DETAIL_ITEMS],
     )
     rows = cursor.fetchall()
     if not rows:
@@ -326,8 +332,9 @@ def _fetch_documents(cursor, law_id: int) -> list[SessionDocument] | None:
     cursor.execute(
         """SELECT GroupTypeDesc, ApplicationDesc, FilePath
         FROM document_israel_law_raw
-        WHERE IsraelLawID = %s""",
-        [law_id],
+        WHERE IsraelLawID = %s
+        LIMIT %s""",
+        [law_id, MAX_DETAIL_ITEMS],
     )
     rows = cursor.fetchall()
     if not rows:

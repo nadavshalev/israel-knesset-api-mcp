@@ -18,6 +18,7 @@ from typing import Annotated, Literal
 from pydantic import Field
 
 from core.db import connect_readonly
+from config import MAX_DETAIL_ITEMS
 from core.helpers import (
     simple_date, simple_time, normalize_inputs, check_search_count, resolve_pagination,
     CountByConfig, build_count_by_query, fuzzy_condition, fuzzy_params, fts_condition, fts_params,
@@ -114,8 +115,9 @@ def _fetch_items(cursor, session_id):
         FROM cmt_session_item_raw csi
         WHERE csi.CommitteeSessionID = %s
         ORDER BY csi.Ordinal ASC
+        LIMIT %s
         """,
-        (session_id,),
+        (session_id, MAX_DETAIL_ITEMS),
     )
     item_rows = cursor.fetchall()
 
@@ -151,8 +153,9 @@ def _fetch_documents(cursor, session_id):
         FROM document_committee_session_raw
         WHERE CommitteeSessionID = %s
         ORDER BY GroupTypeDesc, Id
+        LIMIT %s
         """,
-        (session_id,),
+        (session_id, MAX_DETAIL_ITEMS),
     )
     return [
         SessionDocument(

@@ -16,10 +16,17 @@ from origins.knesset.metadata_view import metadata
 
 
 class TestBasicStructure(unittest.TestCase):
-    """Verify knesset_num=20 returns all sections populated by default."""
+    """Verify knesset_num=20 returns all sections when all flags are True."""
 
     def setUp(self):
-        self.result = metadata(knesset_num=20)
+        self.result = metadata(
+            knesset_num=20,
+            include_assemblies=True,
+            include_committees=True,
+            include_ministries=True,
+            include_factions=True,
+            include_roles=True,
+        )
 
     def test_knesset_num(self):
         self.assertEqual(self.result.knesset_num, 20)
@@ -49,7 +56,7 @@ class TestKnessetAssemblies(unittest.TestCase):
     """Verify assembly periods present with dates."""
 
     def setUp(self):
-        self.result = metadata(knesset_num=20)
+        self.result = metadata(knesset_num=20, include_assemblies=True)
 
     def test_assemblies_have_dates(self):
         for a in self.result.knesset_assemblies:
@@ -57,14 +64,14 @@ class TestKnessetAssemblies(unittest.TestCase):
 
     def test_assemblies_have_assembly_year(self):
         for a in self.result.knesset_assemblies:
-            self.assertIsNotNone(a.assembly_year)
+            self.assertIsNotNone(a.plenum_year)
 
 
 class TestCommittees(unittest.TestCase):
     """Verify committee list non-empty with names and heads."""
 
     def setUp(self):
-        self.result = metadata(knesset_num=20)
+        self.result = metadata(knesset_num=20, include_committees=True)
 
     def test_committees_have_names(self):
         for c in self.result.committees:
@@ -99,7 +106,7 @@ class TestGovMinistries(unittest.TestCase):
     """Verify ministries list populated with members."""
 
     def setUp(self):
-        self.result = metadata(knesset_num=20)
+        self.result = metadata(knesset_num=20, include_ministries=True)
 
     def test_ministries_have_names(self):
         for m in self.result.gov_ministries:
@@ -142,7 +149,7 @@ class TestFactions(unittest.TestCase):
     """Verify known factions exist and members are populated."""
 
     def setUp(self):
-        self.result = metadata(knesset_num=20)
+        self.result = metadata(knesset_num=20, include_factions=True)
 
     def test_factions_known(self):
         faction_names = [f.name for f in self.result.factions]
@@ -185,27 +192,27 @@ class TestSectionExclusion(unittest.TestCase):
     """Setting include_X=False omits the section entirely (None in result)."""
 
     def test_exclude_assemblies(self):
-        result = metadata(knesset_num=20, include_assemblies=False)
+        result = metadata(knesset_num=20, include_assemblies=False, include_committees=True)
         self.assertIsNone(result.knesset_assemblies)
         self.assertIsNotNone(result.committees)
 
     def test_exclude_committees(self):
-        result = metadata(knesset_num=20, include_committees=False)
+        result = metadata(knesset_num=20, include_committees=False, include_factions=True)
         self.assertIsNone(result.committees)
         self.assertIsNotNone(result.factions)
 
     def test_exclude_ministries(self):
-        result = metadata(knesset_num=20, include_ministries=False)
+        result = metadata(knesset_num=20, include_ministries=False, include_committees=True)
         self.assertIsNone(result.gov_ministries)
         self.assertIsNotNone(result.committees)
 
     def test_exclude_factions(self):
-        result = metadata(knesset_num=20, include_factions=False)
+        result = metadata(knesset_num=20, include_factions=False, include_ministries=True)
         self.assertIsNone(result.factions)
         self.assertIsNotNone(result.gov_ministries)
 
     def test_exclude_roles(self):
-        result = metadata(knesset_num=20, include_roles=False)
+        result = metadata(knesset_num=20, include_roles=False, include_committees=True)
         self.assertIsNone(result.general_roles)
         self.assertIsNotNone(result.committees)
 
@@ -215,6 +222,7 @@ class TestSectionExclusion(unittest.TestCase):
             include_assemblies=False,
             include_committees=False,
             include_ministries=False,
+            include_factions=True,
             include_roles=False,
         )
         self.assertIsNone(result.knesset_assemblies)
@@ -227,7 +235,7 @@ class TestSectionExclusion(unittest.TestCase):
 
 class TestGeneralRoles(unittest.TestCase):
     def setUp(self):
-        self.result = metadata(knesset_num=20)
+        self.result = metadata(knesset_num=20, include_roles=True)
 
     def test_general_roles_present(self):
         self.assertIsNotNone(self.result.general_roles)

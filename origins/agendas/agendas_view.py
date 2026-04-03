@@ -19,6 +19,7 @@ from typing import Annotated, Literal
 from pydantic import Field
 
 from core.db import connect_readonly
+from config import MAX_DETAIL_ITEMS
 from core.helpers import (
     simple_date, normalize_inputs, check_search_count, resolve_pagination,
     CountByConfig, build_count_by_query, fuzzy_condition, fuzzy_params,
@@ -403,8 +404,9 @@ def agendas(
                 FROM document_agenda_raw
                 WHERE AgendaID = %s
                 ORDER BY Id ASC
+                LIMIT %s
                 """,
-                (row["id"],),
+                (row["id"], MAX_DETAIL_ITEMS),
             )
             documents = [
                 SessionDocument(
