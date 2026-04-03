@@ -277,7 +277,7 @@ def plenums(
     count_by_val = normalized.get("count_by")
     if count_by_val:
         if count_by_val == "all":
-            total_count = check_search_count(cursor, count_sql, params, paginated=True)
+            total_count = check_search_count(cursor, count_sql, params)
             conn.close()
             return PlenumSessionsResults(total_count=total_count, items=[], counts=[])
         config = _COUNT_BY_OPTIONS.get(count_by_val)
@@ -286,14 +286,14 @@ def plenums(
         groups_count_sql, group_sql = build_count_by_query(
             base_from=_CB_BASE_FROM, base_joins=_CB_BASE_JOINS, where=where, config=config,
         )
-        total_count = check_search_count(cursor, groups_count_sql, params, paginated=True)
+        total_count = check_search_count(cursor, groups_count_sql, params)
         cursor.execute(group_sql, params + [top, offset])
         counts = [CountItem(id=row.get("id"), value=row.get("value"), count=row["count"])
                   for row in cursor.fetchall()]
         conn.close()
         return PlenumSessionsResults(total_count=total_count, items=[], counts=counts)
 
-    total_count = check_search_count(cursor, count_sql, params, entity_name="plenum sessions", paginated=True)
+    total_count = check_search_count(cursor, count_sql, params, entity_name="plenum sessions")
 
     cursor.execute(
         f"""SELECT DISTINCT s.Id, s.KnessetNum, s.Name, s.StartDate,

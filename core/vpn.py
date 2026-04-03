@@ -13,26 +13,22 @@ Usage::
 """
 
 import io
-import os
 import socket as stdlib_socket
 import threading
 import time
 from contextlib import contextmanager
-from pathlib import Path
 
-from dotenv import load_dotenv
 from wireguard_requests import Peer, WireGuardConfig, wireguard_context
 
-# Ensure .env is loaded (idempotent if already loaded elsewhere)
-load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+from config import WG_PRIVATE_KEY, WG_PUBLIC_KEY, WG_ENDPOINT, WG_ADDRESS
 
 
 def _build_config() -> WireGuardConfig:
-    """Build a WireGuardConfig from environment variables."""
-    private_key = os.getenv("WG_PRIVATE_KEY")
-    public_key = os.getenv("WG_PUBLIC_KEY")
-    endpoint = os.getenv("WG_ENDPOINT")
-    address = os.getenv("WG_ADDRESS", "10.2.0.2/32")
+    """Build a WireGuardConfig from config settings."""
+    private_key = WG_PRIVATE_KEY
+    public_key = WG_PUBLIC_KEY
+    endpoint = WG_ENDPOINT
+    address = WG_ADDRESS
 
     missing = []
     if not private_key:
@@ -282,8 +278,7 @@ def vpn_connection():
     """
     config = _build_config()
     restore_patches = _patch_wireguard_bugs()
-    endpoint = os.getenv("WG_ENDPOINT", "?")
-    print(f"Connecting to VPN (endpoint={endpoint})...")
+    print(f"Connecting to VPN (endpoint={WG_ENDPOINT})...")
     t0 = time.monotonic()
     try:
         with wireguard_context(config) as tunnel:

@@ -1,28 +1,27 @@
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 import psycopg2
-from dotenv import load_dotenv
-import os
-load_dotenv()
-host = os.getenv('POSTGRES_PATH')
-port = os.getenv('POSTGRES_PORT', '5432')
-db   = os.getenv('POSTGRES_DB')
-user = os.getenv('POSTGRES_USER')
-pw   = os.getenv('POSTGRES_PASSWORD')
-print(f'Connecting to {host}:{port}, db={db}, user={user} ...')
+from config import POSTGRES_HOST, POSTGRES_PORT, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD
+
+print(f"Connecting to {POSTGRES_HOST}:{POSTGRES_PORT}, db={POSTGRES_DB}, user={POSTGRES_USER} ...")
 try:
     conn = psycopg2.connect(
-        host=host,
-        port=int(port),
-        dbname=db,
-        user=user,
-        password=pw,
-        connect_timeout=10
+        host=POSTGRES_HOST,
+        port=POSTGRES_PORT,
+        dbname=POSTGRES_DB,
+        user=POSTGRES_USER,
+        password=POSTGRES_PASSWORD,
+        connect_timeout=10,
     )
     cur = conn.cursor()
-    cur.execute('SELECT version();')
+    cur.execute("SELECT version();")
     version = cur.fetchone()[0]
-    print(f'Connection successful!')
-    print(f'PostgreSQL version: {version}')
+    print("Connection successful!")
+    print(f"PostgreSQL version: {version}")
     cur.close()
     conn.close()
 except Exception as e:
-    print(f'Connection failed: {e}')
+    print(f"Connection failed: {e}")

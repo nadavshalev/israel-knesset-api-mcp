@@ -353,25 +353,11 @@ def resolve_pagination(top: int | None, offset: int | None) -> tuple[int, int]:
 # Search count guard
 # ---------------------------------------------------------------------------
 
-def check_search_count(cursor, count_sql: str, params: list, entity_name: str = "results",
-                       paginated: bool = False) -> int:
-    """Run count_sql and return the total count.
-
-    When *paginated* is False (legacy behaviour), raises ``ValueError``
-    if the count exceeds ``MAX_SEARCH_RESULTS``.  When *paginated* is
-    True the count is returned unconditionally so the caller can include
-    it in the paginated response.
-    """
-    from config import MAX_SEARCH_RESULTS
+def check_search_count(cursor, count_sql: str, params: list, entity_name: str = "results") -> int:
+    """Run count_sql and return the total count."""
     cursor.execute(count_sql, params)
     count = cursor.fetchone()
-    count = list(count.values())[0] if count else 0
-    if not paginated and count > MAX_SEARCH_RESULTS:
-        raise ValueError(
-            f"Too many {entity_name} ({count:,} matches). "
-            "Add more filters (e.g. date, knesset_num, or a search query) to narrow results."
-        )
-    return count
+    return list(count.values())[0] if count else 0
 
 
 # ---------------------------------------------------------------------------

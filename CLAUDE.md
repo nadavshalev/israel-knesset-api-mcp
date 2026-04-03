@@ -81,6 +81,6 @@ Each entity lives in `origins/{entity}/`:
 - `normalize_inputs(locals())` must be called at the top of every view to coerce string-typed agent inputs (e.g. `"25"` → `25`, `"true"` → `True`, `"none"` → `None`)
 - `simple_date()`, `simple_time()`, `format_person_name()` return `None` (not `""`) so `clean()` strips them automatically
 - Fuzzy search uses PostgreSQL trigrams + FTS via `fuzzy_condition(col)` / `fuzzy_params(query)` — never use `LIKE %s` directly for user-facing text search
-- `check_search_count()` enforces `MAX_SEARCH_RESULTS` — call it before executing paginated queries
+- `check_search_count()` runs the count query and returns the total — call it before executing paginated queries to populate `total_count` in the response
 - LSP warnings about `_mcp_tool`, `__signature__`, `OUTPUT_MODEL` on function objects are false positives — Python allows arbitrary attributes on functions
 - `full_details=False` is the default; detail mode fetches significantly more data and should only be triggered when the caller has a specific ID

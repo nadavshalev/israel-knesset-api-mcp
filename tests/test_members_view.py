@@ -61,7 +61,7 @@ class TestSearchByMemberId(unittest.TestCase):
 
 class TestKnessetFilter(unittest.TestCase):
     def test_knesset_20_narrowed_count(self):
-        """Ministers in Knesset 20 (role_type narrows below MAX_SEARCH_RESULTS)."""
+        """Ministers in Knesset 20 filtered by role_type."""
         results = members(knesset_num=20, role_type="שר")
         self.assertGreater(len(results.items), 0)
         for m in results.items:
