@@ -112,10 +112,8 @@ UPDATE_HOUR_IN_DAY = int(os.getenv("UPDATE_HOUR_IN_DAY", "3"))
 UPDATE_RUN_ON_START = os.getenv("UPDATE_RUN_ON_START", "true").lower() in ("true", "1", "yes")
 
 # ---------------------------------------------------------------------------
-# WireGuard VPN (required only in the updater container; empty = no VPN)
+# Israel proxy (optional — HTTP proxy URL with an Israeli exit IP;
+# used by the updater when --proxy is passed; empty = direct connection)
 # ---------------------------------------------------------------------------
 
-WG_PRIVATE_KEY = os.getenv("WG_PRIVATE_KEY", "")
-WG_PUBLIC_KEY = os.getenv("WG_PUBLIC_KEY", "")
-WG_ENDPOINT = os.getenv("WG_ENDPOINT", "")
-WG_ADDRESS = os.getenv("WG_ADDRESS", "10.2.0.2/32")
+ISRAEL_PROXY_URL = os.getenv("ISRAEL_PROXY_URL", "")

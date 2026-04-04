@@ -8,6 +8,7 @@ Usage:
     python3 update_all.py --full     # force full re-fetch (ignore metadata)
     python3 update_all.py --dry-run  # show what would be fetched, don't fetch
     python3 update_all.py --status   # show current sync status for all tables
+    python3 update_all.py --proxy    # route OData fetches through ISRAEL_PROXY_URL
 
 Each table's last sync timestamp is stored in the ``metadata`` table.
 On each run, only rows updated since that timestamp are fetched from OData.
@@ -30,9 +31,9 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from config import POOL_MAX_CONN
+from config import POOL_MAX_CONN, ISRAEL_PROXY_URL
 from core.db import connect_db, ensure_indexes
-from core.vpn import vpn_connection
+import core.odata_client as _odata_client
 
 from origins import TableSpec, get_table_spec, get_table_specs
 
@@ -356,8 +357,8 @@ def parse_args():
         help="Fetch tables sequentially instead of in parallel",
     )
     parser.add_argument(
-        "--vpn", action="store_true", dest="use_vpn", default=False,
-        help="Use VPN connection for OData fetches",
+        "--proxy", action="store_true", dest="use_proxy", default=False,
+        help="Route OData fetches through the Israel proxy (ISRAEL_PROXY_URL)",
     )
     return parser.parse_args()
 
@@ -380,14 +381,16 @@ def main():
     from core.db_cli import ensure_tables
     ensure_tables(conn)
 
-    # All OData fetches require the Knesset VPN
+    if args.use_proxy:
+        if not ISRAEL_PROXY_URL:
+            print("ERROR: --proxy requires ISRAEL_PROXY_URL to be set")
+            sys.exit(1)
+        _odata_client.enable_proxy(ISRAEL_PROXY_URL)
+        print(f"Proxy enabled: {ISRAEL_PROXY_URL}")
+
     kwargs = dict(table_filter=args.tables, full=args.full,
                   dry_run=args.dry_run, sync=args.sync)
-    if args.use_vpn:
-        with vpn_connection():
-            update_tables(conn, **kwargs)
-    else:
-        update_tables(conn, **kwargs)
+    update_tables(conn, **kwargs)
     conn.close()
 
 

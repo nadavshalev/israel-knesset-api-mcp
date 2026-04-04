@@ -7,4 +7,3 @@ python-dotenv
 uvicorn
 psycopg2-binary
 rich
-wireguard-requests

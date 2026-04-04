@@ -8,6 +8,14 @@ import requests
 
 from config import BASE_URL, ODATA_PAGE_SIZE
 
+_PROXIES = None
+
+
+def enable_proxy(url: str) -> None:
+    """Route all OData/CSV requests through the given HTTP proxy URL."""
+    global _PROXIES
+    _PROXIES = {"http": url, "https": url}
+
 # ---------------------------------------------------------------------------
 # Retry configuration
 # ---------------------------------------------------------------------------
@@ -33,7 +41,7 @@ def _request_with_retry(
     for attempt in range(1 + max_retries):
         try:
             t0 = time.monotonic()
-            resp = requests.get(url, params=params, timeout=timeout)
+            resp = requests.get(url, params=params, timeout=timeout, proxies=_PROXIES)
             elapsed = time.monotonic() - t0
             # Log response details for diagnostics
             body_len = len(resp.content) if resp.content else 0

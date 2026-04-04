@@ -84,23 +84,15 @@ def tool_from_str(call_str: str):
 
 
 if __name__ == "__main__":
-    # print("Paste a log row and press Enter. Ctrl+C to exit.")
-    # while True:
-    #     try:
-    #         line = input("> ").strip()
-    #         if not line:
-    #             continue
-    #         tool_from_str(line)
-    #     except KeyboardInterrupt:
-    #         print("\nBye.")
-    #         break
-    #     except Exception as e:
-    #         print(f"Error: {e}")
-    params =   {
-        "from_date": "2026-01-01",
-        "to_date": "2026-01-31",
-        "status": "התקבלה בקריאה שלישית",
-        "top": 200
-    }
-
-    print(tool_call("bills", params))
+    print("Paste a log row and press Enter. Ctrl+C to exit.")
+    while True:
+        try:
+            line = input("> ").strip()
+            if not line:
+                continue
+            tool_from_str(line)
+        except KeyboardInterrupt:
+            print("\nBye.")
+            break
+        except Exception as e:
+            print(f"Error: {e}")
