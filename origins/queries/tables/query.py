@@ -64,7 +64,11 @@ def _insert_to_db(conn, rows: Iterable[Dict[str, Any]]) -> Tuple[int, Optional[s
     )
     payload = []
     max_updated: Optional[str] = None
+    skipped = 0
     for row in rows:
+        if not row.get("QueryID"):
+            skipped += 1
+            continue
         last_updated = row.get("LastUpdatedDate")
         if last_updated and (max_updated is None or last_updated > max_updated):
             max_updated = last_updated
@@ -86,6 +90,8 @@ def _insert_to_db(conn, rows: Iterable[Dict[str, Any]]) -> Tuple[int, Optional[s
                 "fetched_at": now,
             }
         )
+    if skipped:
+        print(f"  WARNING: skipped {skipped} query row(s) with null QueryID")
     if payload:
         psycopg2.extras.execute_batch(cur, sql, payload)
     conn.commit()
