@@ -24,6 +24,7 @@ import argparse
 import sys
 import time
 import threading
+from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -193,13 +194,55 @@ def _since_and_mode(conn, spec: TableSpec, full: bool) -> tuple[str | None, str]
     return None, "initial load (no prior sync)"
 
 
-def _print_summary(results: list[tuple[str, int, float]], total_elapsed: float) -> None:
-    print(f"\n{'='*60}")
-    print(f"Update complete in {_format_duration(total_elapsed)}")
-    print(f"\n{'Table':<35} {'New Rows':>10}   {'Time':>10}")
-    print("-" * 60)
-    for label, delta, elapsed in results:
-        print(f"{label:<35} {delta:>+10,}   {_format_duration(elapsed):>10}")
+@dataclass
+class FetchResult:
+    label: str
+    delta: int | None
+    elapsed: float
+    latest_row: str = "n/a"
+    error: str | None = None
+    skipped: bool = False
+
+
+def _get_latest_row_timestamp(conn, table_name: str) -> str:
+    """Read the newest source update in UTC, including pre-existing rows.
+
+    Legacy timestamps without an offset are treated as UTC, as in the
+    incremental OData cursor. Cast before MAX so different offsets sort
+    chronologically rather than lexicographically.
+    """
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SET LOCAL TIME ZONE 'UTC'")
+            cur.execute(
+                f"SELECT MAX(NULLIF(LastUpdatedDate, '')::timestamp with time zone "
+                f"AT TIME ZONE 'UTC') FROM {table_name}"
+            )
+            latest = cur.fetchone()[0]
+        return latest.isoformat(timespec="seconds") + "Z" if latest else "n/a"
+    except Exception as exc:
+        conn.rollback()
+        _tprint(f"  WARNING: Could not read latest row timestamp for {table_name}: {exc}")
+        return "unavailable"
+
+
+def _print_summary(results: list[FetchResult], total_elapsed: float) -> None:
+    failed = sum(result.error is not None for result in results)
+    print(f"\n{'='*110}")
+    outcome = f"Update finished with {failed} failed table(s)" if failed else "Update complete"
+    print(f"{outcome} in {_format_duration(total_elapsed)}")
+    print(f"\n{'Table':<35} {'New Rows':>10}   {'Time':>10}   {'Latest Row (UTC)':<20}   Status")
+    print("-" * 110)
+    for result in results:
+        delta = f"{result.delta:+,}" if result.delta is not None else "n/a"
+        if result.error is not None:
+            status = "FAILED: " + " ".join(result.error.split())
+        elif result.skipped:
+            status = "SKIPPED: dry-run"
+        else:
+            status = "OK"
+        print(f"{result.label:<35} {delta:>10}   {_format_duration(result.elapsed):>10}   "
+              f"{result.latest_row:<20}   {status}")
     print()
 
 
@@ -207,11 +250,26 @@ def _print_summary(results: list[tuple[str, int, float]], total_elapsed: float) 
 # Parallel worker
 # ---------------------------------------------------------------------------
 
-def _fetch_one(spec: TableSpec, full: bool, dry_run: bool) -> tuple[str, int, float, str | None]:
-    """Fetch a single table in its own DB connection. Returns (label, delta, elapsed, error)."""
+def _fetch_one(spec: TableSpec, full: bool, dry_run: bool) -> FetchResult:
+    """Fetch a single table in its own DB connection."""
     conn = None
+    t0 = time.time()
     try:
         conn = connect_db()
+        return _fetch_table(conn, spec, full, dry_run)
+    except Exception as exc:
+        error = f"{type(exc).__name__}: {exc}"
+        _tprint(f"  ERROR in {spec.label}: {error}")
+        return FetchResult(spec.label, None, time.time() - t0, "unavailable", error)
+    finally:
+        if conn is not None:
+            conn.close()
+
+
+def _fetch_table(conn, spec: TableSpec, full: bool, dry_run: bool) -> FetchResult:
+    """Collect the same fetch outcome for parallel and sequential runs."""
+    t0 = time.time()
+    try:
         since, mode = _since_and_mode(conn, spec, full)
         row_count_before = _get_row_count(conn, spec.table_name)
 
@@ -221,7 +279,8 @@ def _fetch_one(spec: TableSpec, full: bool, dry_run: bool) -> tuple[str, int, fl
 
         if dry_run:
             _tprint("  [dry-run] Skipping fetch")
-            return spec.label, 0, 0.0, None
+            return FetchResult(spec.label, 0, 0.0,
+                               _get_latest_row_timestamp(conn, spec.table_name), skipped=True)
 
         t0 = time.time()
         spec.module.fetch_rows(conn, since=since)
@@ -231,13 +290,15 @@ def _fetch_one(spec: TableSpec, full: bool, dry_run: bool) -> tuple[str, int, fl
         delta = row_count_after - row_count_before
         _tprint(f"  Rows after:  {row_count_after:,}  (delta: {delta:+,})")
         _tprint(f"  Time: {_format_duration(elapsed)}")
-        return spec.label, delta, elapsed, None
+        return FetchResult(spec.label, delta, elapsed,
+                           _get_latest_row_timestamp(conn, spec.table_name))
     except Exception as e:
-        _tprint(f"  ERROR in {spec.label}: {e}")
-        return spec.label, 0, 0.0, str(e)
-    finally:
-        if conn is not None:
-            conn.close()
+        elapsed = time.time() - t0
+        error = f"{type(e).__name__}: {e}"
+        _tprint(f"  ERROR in {spec.label}: {error}")
+        conn.rollback()
+        return FetchResult(spec.label, None, elapsed,
+                           _get_latest_row_timestamp(conn, spec.table_name), error)
 
 
 # ---------------------------------------------------------------------------
@@ -254,7 +315,7 @@ def update_tables_parallel(conn, table_filter=None, full=False, dry_run=False):
     total_start = time.time()
     # Preserve original table order in summary
     label_order = [spec.label for spec in selected]
-    results_by_label: dict[str, tuple[int, float]] = {}
+    results_by_label: dict[str, FetchResult] = {}
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {
@@ -262,15 +323,15 @@ def update_tables_parallel(conn, table_filter=None, full=False, dry_run=False):
             for spec in selected
         }
         for future in as_completed(futures):
-            label, delta, elapsed, _err = future.result()
-            results_by_label[label] = (delta, elapsed)
+            result = future.result()
+            results_by_label[result.label] = result
 
     if not dry_run:
         print("\n--- Ensuring indexes ---")
         ensure_indexes(conn)
         print("  Done")
 
-    results = [(lbl, *results_by_label[lbl]) for lbl in label_order]
+    results = [results_by_label[lbl] for lbl in label_order]
     _print_summary(results, time.time() - total_start)
 
 
@@ -281,32 +342,7 @@ def update_tables_sync(conn, table_filter=None, full=False, dry_run=False):
     results = []
 
     for spec in selected:
-        since, mode = _since_and_mode(conn, spec, full)
-        row_count_before = _get_row_count(conn, spec.table_name)
-
-        print(f"\n--- {spec.label} ({spec.table_name}) ---")
-        print(f"  Mode: {mode}")
-        print(f"  Rows before: {row_count_before:,}")
-
-        if dry_run:
-            print("  [dry-run] Skipping fetch")
-            results.append((spec.label, 0, 0.0))
-            continue
-
-        t0 = time.time()
-        try:
-            spec.module.fetch_rows(conn, since=since)
-        except Exception as e:
-            print(f"  ERROR: {e}")
-            results.append((spec.label, 0, time.time() - t0))
-            continue
-        elapsed = time.time() - t0
-
-        row_count_after = _get_row_count(conn, spec.table_name)
-        delta = row_count_after - row_count_before
-        print(f"  Rows after:  {row_count_after:,}  (delta: {delta:+,})")
-        print(f"  Time: {_format_duration(elapsed)}")
-        results.append((spec.label, delta, elapsed))
+        results.append(_fetch_table(conn, spec, full, dry_run))
 
     if not dry_run:
         print("\n--- Ensuring indexes ---")
