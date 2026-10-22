@@ -34,6 +34,7 @@ if str(ROOT) not in sys.path:
 
 from config import POOL_MAX_CONN, ISRAEL_PROXY_URL
 from core.db import connect_db, ensure_indexes
+from core.api_compatibility import print_latest_report
 import core.odata_client as _odata_client
 
 from origins import TableSpec, get_table_spec, get_table_specs
@@ -333,6 +334,7 @@ def update_tables_parallel(conn, table_filter=None, full=False, dry_run=False):
 
     results = [results_by_label[lbl] for lbl in label_order]
     _print_summary(results, time.time() - total_start)
+    print_latest_report(conn, cached_only=dry_run)
 
 
 def update_tables_sync(conn, table_filter=None, full=False, dry_run=False):
@@ -350,6 +352,7 @@ def update_tables_sync(conn, table_filter=None, full=False, dry_run=False):
         print("  Done")
 
     _print_summary(results, time.time() - total_start)
+    print_latest_report(conn, cached_only=dry_run)
 
 
 def update_tables(conn, table_filter=None, full=False, dry_run=False, sync=False):

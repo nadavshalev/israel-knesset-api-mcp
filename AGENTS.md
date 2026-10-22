@@ -34,3 +34,31 @@
 - Helper functions `simple_date()`, `simple_time()`, and `format_person_name()` return `None` (not `""`) for empty/missing inputs, so `clean()` will strip them automatically.
 - The `@mcp_tool` decorator (in `core/mcp_meta.py`) attaches `._mcp_tool` metadata and appends to `_ALL_TOOLS`.
 - LSP warnings about `_mcp_tool`, `__signature__`, `RESPONSE_SCHEMA` on function objects are false positives — Python allows arbitrary attributes on functions.
+
+## Knesset API Compatibility Contract
+
+- `docs/knesset-api-contract.json` records the importers' consumed field alternatives,
+  response shapes, implementation fingerprints, and an observed upstream scalar schema.
+  OData `4.0` is a protocol version, not an upstream schema release.
+- When changing an upstream endpoint, fetcher, field mapping, cursor, or response
+  parsing, refresh and review the contract in the same change:
+  ```
+  source .venv/bin/activate
+  python scripts/check_api_compatibility.py --proxy --update-contract
+  .venv/bin/pytest tests/test_api_compatibility.py tests/test_update_all.py -q
+  ```
+- Contract generation reads the implementation (`row.get(...)`, fallback alternatives,
+  and `_COLS`); it does not assume every advertised upstream field is implemented.
+  Review new parsing patterns and update the generator if needed. Response shapes
+  for custom endpoints also require review. Do not edit generated fingerprints by hand.
+- Baseline refresh is explicit, never automatic during updates. Do not refresh just
+  to silence an upstream incompatibility; investigate and fix the mapping first.
+  Review changes to `observed_schema` separately from implemented fields.
+- A regression test verifies that the committed contract matches the current importers.
+  View/model-only changes that do not alter upstream ingestion do not require a refresh.
+- Standalone live check: `python scripts/check_api_compatibility.py --proxy`.
+  It exits nonzero for failed/error checks and persists its report in PostgreSQL.
+- The updater checks once per UTC calendar month and prints the stored report after
+  every update summary. Contract/code changes trigger an earlier check; transient
+  request errors retry next cycle. Reports survive deployments in
+  `api_compatibility_state`. Dry runs only display cached results.

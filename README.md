@@ -219,6 +219,31 @@ python core/db_cli.py fetch-all --since 2025-01-01T00:00:00
 | `fetch-knesset-dates` | KNS_KnessetDates | `knesset_dates_raw` |
 | `fetch-factions` | KNS_Faction | `faction_raw` |
 
+### Monthly Knesset API compatibility check
+
+`scripts/update_all.py` checks upstream compatibility on its first run of each
+UTC calendar month and prints the latest report after every update summary.
+The report is stored in PostgreSQL (`api_compatibility_state`), so it survives
+container restarts and deployments. Transient request errors retry next cycle;
+contract or importer changes also trigger an earlier check. Dry runs only show
+cached results.
+
+```bash
+# Force a live check and persist its report (nonzero exit on FAIL/ERROR)
+python scripts/check_api_compatibility.py --proxy
+
+# After intentional ingestion changes: explicitly regenerate and review the contract
+python scripts/check_api_compatibility.py --proxy --update-contract
+```
+
+`docs/knesset-api-contract.json` distinguishes fields consumed by our implementation
+from the observed upstream scalar schema. Checks use a small sample from each
+implemented endpoint; unused new entities/fields are informational, while missing
+consumed fields, changed types, and invalid response shapes fail. Empty samples
+and working endpoints missing from metadata produce warnings. This checks API
+compatibility, not that every record was imported or every possible response is valid.
+See `AGENTS.md` for the contract maintenance workflow.
+
 ---
 
 ## Architecture

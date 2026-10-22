@@ -25,6 +25,7 @@ def test_summary_retains_fetch_failure_and_success_with_no_new_rows(monkeypatch,
     monkeypatch.setattr(updater, "_get_row_count", lambda *args: 10)
     monkeypatch.setattr(updater, "_get_latest_row_timestamp", lambda *args: "2026-10-20T12:32:51Z")
     monkeypatch.setattr(updater, "ensure_indexes", lambda _: None)
+    monkeypatch.setattr(updater, "print_latest_report", lambda *args, **kwargs: None)
 
     run = updater.update_tables_parallel if parallel else updater.update_tables_sync
     run(conn)
@@ -95,3 +96,23 @@ def test_multiline_failure_reason_stays_on_one_summary_line(capsys):
     ], 2)
     output = capsys.readouterr().out
     assert "FAILED: ValueError: Invalid JSON <html>Blocked</html>" in output
+
+
+@pytest.mark.parametrize("parallel", [False, True])
+def test_compatibility_report_prints_after_each_summary(monkeypatch, capsys, parallel):
+    conn = Mock()
+    spec = SimpleNamespace(label="bills")
+    result = updater.FetchResult("bills", 0, 1)
+    monkeypatch.setattr(updater, "_resolve_selected", lambda _: [spec])
+    monkeypatch.setattr(updater, "_fetch_one", lambda *args: result)
+    monkeypatch.setattr(updater, "_fetch_table", lambda *args: result)
+    monkeypatch.setattr(updater, "ensure_indexes", lambda _: None)
+    report = Mock(side_effect=lambda *args, **kwargs: print("Compatibility report"))
+    monkeypatch.setattr(updater, "print_latest_report", report)
+
+    run = updater.update_tables_parallel if parallel else updater.update_tables_sync
+    run(conn, dry_run=True)
+
+    output = capsys.readouterr().out
+    assert output.index("Update complete") < output.index("Compatibility report")
+    report.assert_called_once_with(conn, cached_only=True)
