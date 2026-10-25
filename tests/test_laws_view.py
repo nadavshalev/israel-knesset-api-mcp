@@ -157,6 +157,10 @@ class TestFullDetailFields(unittest.TestCase):
         for c in self.law.classifications:
             self.assertIsInstance(c, str)
 
+    def test_has_upstream_ministry_description(self):
+        self.assertEqual(self.law.ministries, ["התקשורת"])
+        self.assertEqual(self.law.model_dump()["ministries"], ["התקשורת"])
+
     def test_has_changes(self):
         self.assertIsNotNone(self.law.changes)
         self.assertGreater(len(self.law.changes), 0)

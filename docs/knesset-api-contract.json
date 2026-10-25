@@ -1,7 +1,7 @@
 {
   "format": 1,
   "source": "https://knesset.gov.il/OdataV4/ParliamentInfo/",
-  "recorded_at": "2026-10-22T20:28:33+00:00",
+  "recorded_at": "2026-10-23T13:04:39+00:00",
   "entities": {
     "agenda": {
       "endpoint": "KNS_Agenda",
@@ -864,9 +864,6 @@
       "cursor_mode": "timestamp",
       "fields": [
         [
-          "GovMinistryID"
-        ],
-        [
           "Id"
         ],
         [
@@ -874,10 +871,16 @@
         ],
         [
           "LastUpdatedDate"
+        ],
+        [
+          "MinistryCategoryDesc"
+        ],
+        [
+          "MinistryCategoryID"
         ]
       ],
       "optional_fields": [],
-      "implementation_sha256": "5aaa3322f07ca6950ac99e4a1faa044f0739680fafce571ed7c25176ab20bd54"
+      "implementation_sha256": "1d8a0dd57697af39057c8cef0f736ffdb3a5056b46ddc7713b35ad8de7c91231"
     },
     "israel_law_name": {
       "endpoint": "KNS_IsraelLawName",
@@ -1375,6 +1378,10 @@
           "GovMinistryID"
         ],
         [
+          "Id",
+          "QueryID"
+        ],
+        [
           "KnessetNum"
         ],
         [
@@ -1388,9 +1395,6 @@
         ],
         [
           "PersonID"
-        ],
-        [
-          "QueryID"
         ],
         [
           "ReplyDatePlanned"
@@ -1412,7 +1416,7 @@
         ]
       ],
       "optional_fields": [],
-      "implementation_sha256": "0328b58f718f0109c6037b801119b37b959a65c824f8cba96cf8a900d5869b81"
+      "implementation_sha256": "207017f34f6d50aaef4146692119cd9bdd929c2bb5ea5dae61a65969b697860c"
     },
     "sec_law_authorizing_law": {
       "endpoint": "KNS_SecLawAuthorizingLaw",

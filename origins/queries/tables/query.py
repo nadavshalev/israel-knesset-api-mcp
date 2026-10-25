@@ -23,7 +23,7 @@ def create_table(conn) -> None:
     cur.execute(
         """
         CREATE TABLE IF NOT EXISTS query_raw (
-            QueryID INTEGER PRIMARY KEY,
+            Id INTEGER PRIMARY KEY,
             Number INTEGER,
             KnessetNum INTEGER,
             Name TEXT,
@@ -40,21 +40,34 @@ def create_table(conn) -> None:
         )
         """
     )
+    # Rename in place so existing identifiers, primary keys and references are
+    # preserved, without keeping an obsolete compatibility column.
+    cur.execute(
+        """DO $$ BEGIN
+            IF EXISTS (
+                SELECT 1 FROM pg_attribute
+                WHERE attrelid = 'query_raw'::regclass
+                  AND attname = 'queryid' AND NOT attisdropped
+            ) THEN
+                ALTER TABLE query_raw RENAME COLUMN QueryID TO Id;
+            END IF;
+        END $$"""
+    )
+    cur.close()
     conn.commit()
 
 
 def _insert_to_db(conn, rows: Iterable[Dict[str, Any]]) -> Tuple[int, Optional[str]]:
-    cur = conn.cursor()
     now = _utc_now_iso()
     sql = (
         f"INSERT INTO {TABLE_NAME} "
-        "(QueryID, Number, KnessetNum, Name, TypeID, TypeDesc, "
+        "(Id, Number, KnessetNum, Name, TypeID, TypeDesc, "
         "StatusID, PersonID, GovMinistryID, SubmitDate, "
         "ReplyMinisterDate, ReplyDatePlanned, LastUpdatedDate, fetched_at) "
-        "VALUES (%(QueryID)s, %(Number)s, %(KnessetNum)s, %(Name)s, %(TypeID)s, %(TypeDesc)s, "
+        "VALUES (%(Id)s, %(Number)s, %(KnessetNum)s, %(Name)s, %(TypeID)s, %(TypeDesc)s, "
         "%(StatusID)s, %(PersonID)s, %(GovMinistryID)s, %(SubmitDate)s, "
         "%(ReplyMinisterDate)s, %(ReplyDatePlanned)s, %(LastUpdatedDate)s, %(fetched_at)s) "
-        "ON CONFLICT (QueryID) DO UPDATE SET "
+        "ON CONFLICT (Id) DO UPDATE SET "
         "Number=EXCLUDED.Number, KnessetNum=EXCLUDED.KnessetNum, Name=EXCLUDED.Name, "
         "TypeID=EXCLUDED.TypeID, TypeDesc=EXCLUDED.TypeDesc, "
         "StatusID=EXCLUDED.StatusID, PersonID=EXCLUDED.PersonID, "
@@ -64,17 +77,18 @@ def _insert_to_db(conn, rows: Iterable[Dict[str, Any]]) -> Tuple[int, Optional[s
     )
     payload = []
     max_updated: Optional[str] = None
-    skipped = 0
     for row in rows:
-        if not row.get("QueryID"):
-            skipped += 1
-            continue
+        # The bulk CSV calls the same identifier QueryID; live Knesset OData
+        # calls it Id. Persist only the current upstream column name.
+        row_id = row.get("Id") or row.get("QueryID")
+        if row_id is None:
+            raise ValueError(f"{ODATA_NAME} row is missing its required Id")
         last_updated = row.get("LastUpdatedDate")
         if last_updated and (max_updated is None or last_updated > max_updated):
             max_updated = last_updated
         payload.append(
             {
-                "QueryID": row.get("QueryID"),
+                "Id": row_id,
                 "Number": row.get("Number") or None,
                 "KnessetNum": row.get("KnessetNum"),
                 "Name": row.get("Name"),
@@ -90,10 +104,9 @@ def _insert_to_db(conn, rows: Iterable[Dict[str, Any]]) -> Tuple[int, Optional[s
                 "fetched_at": now,
             }
         )
-    if skipped:
-        print(f"  WARNING: skipped {skipped} query row(s) with null QueryID")
-    if payload:
-        psycopg2.extras.execute_batch(cur, sql, payload)
+    with conn.cursor() as cur:
+        if payload:
+            psycopg2.extras.execute_batch(cur, sql, payload)
     conn.commit()
     return len(payload), max_updated
 

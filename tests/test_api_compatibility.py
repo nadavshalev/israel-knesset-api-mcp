@@ -32,9 +32,12 @@ def test_committed_contract_matches_current_importers():
     assert contract["entities"]["bill"]["fields"].count(["BillID", "Id"]) == 1
     # Dynamic row.get(c) loops must be included, not just literal field reads.
     assert ["Name"] in contract["entities"]["secondary_law"]["fields"]
-    # These actual implementation problems must not disappear into a live-schema snapshot.
-    assert ["QueryID"] in contract["entities"]["query"]["fields"]
-    assert ["GovMinistryID"] in contract["entities"]["israel_law_ministry"]["fields"]
+    # Implementation requirements must not disappear into a live-schema snapshot.
+    assert ["Id", "QueryID"] in contract["entities"]["query"]["fields"]
+    ministry_fields = contract["entities"]["israel_law_ministry"]["fields"]
+    assert ["GovMinistryID"] not in ministry_fields
+    assert ["MinistryCategoryID"] in ministry_fields
+    assert ["MinistryCategoryDesc"] in ministry_fields
     assert contract["entities"]["document_query"]["response_shape"] == "array"
     assert ["Email"] not in contract["entities"]["positions"]["fields"]
     assert ["vote_date"] not in contract["entities"]["plenum_vote"]["fields"]

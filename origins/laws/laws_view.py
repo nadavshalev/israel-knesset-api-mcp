@@ -111,13 +111,13 @@ def _fetch_classifications(cursor, law_id: int) -> list[str] | None:
 
 def _fetch_ministries(cursor, law_id: int) -> list[str] | None:
     cursor.execute(
-        """SELECT gm.Name FROM israel_law_ministry_raw ilm
-        JOIN gov_ministry_raw gm ON ilm.GovMinistryID = gm.Id
-        WHERE ilm.IsraelLawID = %s AND gm.Name IS NOT NULL
-        ORDER BY gm.Name""",
+        """SELECT DISTINCT BTRIM(MinistryCategoryDesc) AS ministrycategorydesc
+        FROM israel_law_ministry_raw
+        WHERE IsraelLawID = %s AND NULLIF(BTRIM(MinistryCategoryDesc), '') IS NOT NULL
+        ORDER BY ministrycategorydesc""",
         [law_id],
     )
-    result = [r["name"] for r in cursor.fetchall()]
+    result = [r["ministrycategorydesc"] for r in cursor.fetchall()]
     return result or None
 
 

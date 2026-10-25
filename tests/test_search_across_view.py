@@ -307,5 +307,19 @@ class TestSearchAcrossFilterEchoFields(unittest.TestCase):
         self.assertEqual(result.date_to, "2015-12-31")
 
 
+def test_query_search_maps_upstream_id_to_mcp_query_id(monkeypatch):
+    """Exercise the registered query builder/mapper without unrelated searches."""
+    from core.search_meta import get_search_entries
+    from origins.search import search_across_view
+
+    entry = next(item for item in get_search_entries() if item["entity_key"] == "queries")
+    monkeypatch.setattr(search_across_view, "_get_entity_queries", lambda: [entry])
+
+    result = search_across_view.search_across(query="תנאי שאיריהם", knesset_num=20, top_n=3)
+
+    assert result.results["queries"].count > 0
+    assert any(item["query_id"] == 563908 for item in result.results["queries"].top)
+
+
 if __name__ == "__main__":
     unittest.main()

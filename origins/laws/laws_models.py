@@ -68,7 +68,7 @@ class LawResultFull(LawResultPartial):
     validity_finish_date: str | None = Field(default=None, description="Validity finish date")
     validity_finish_date_notes: str | None = Field(default=None, description="Validity finish date notes")
     classifications: list[str] | None = Field(default=None, description="Classification categories")
-    ministries: list[str] | None = Field(default=None, description="Associated ministry names")
+    ministries: list[str] | None = Field(default=None, description="Responsible ministry-category descriptions supplied by Knesset (MinistryCategoryDesc)")
     alternative_names: list[str] | None = Field(default=None, description="Alternative/historical names (excluding current name)")
     replaced_laws: list[ReplacedLaw] | None = Field(default=None, description="Laws replaced by this law, with the replacing bill")
     original_bill: "BillResultPartial | None" = Field(default=None, description="Original bill this law is based on. Resolved from a binding with type 'החוק המקורי' if present; otherwise from the common ParentLawID when all bindings share the same one.")

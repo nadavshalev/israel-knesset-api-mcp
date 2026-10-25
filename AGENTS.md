@@ -34,6 +34,10 @@
 - Helper functions `simple_date()`, `simple_time()`, and `format_person_name()` return `None` (not `""`) for empty/missing inputs, so `clean()` will strip them automatically.
 - The `@mcp_tool` decorator (in `core/mcp_meta.py`) attaches `._mcp_tool` metadata and appends to `_ALL_TOOLS`.
 - LSP warnings about `_mcp_tool`, `__signature__`, `RESPONSE_SCHEMA` on function objects are false positives — Python allows arbitrary attributes on functions.
+- Raw DB schemas should follow current upstream field names. Migrate renamed or
+  removed fields rather than retaining compatibility columns. Genuine foreign-key
+  fields and mappings from currently supported CSV sources retain their own meaning.
+- Ask before making optional changes to the public MCP response shape.
 
 ## Knesset API Compatibility Contract
 

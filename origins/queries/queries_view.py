@@ -54,7 +54,7 @@ def _build_queries_search(*, query, knesset_num, date, date_to, top_n):
 
     if date:
         session_sql, session_params = build_session_date_exists(
-            "q", "q.QueryID", _QUERY_TYPE_IDS, date, date_to,
+            "q", "q.Id", _QUERY_TYPE_IDS, date, date_to,
         )
         if date_to:
             date_cond = f"""(
@@ -82,13 +82,13 @@ def _build_queries_search(*, query, knesset_num, date, date_to, top_n):
         WHERE {where}
     """
     search_sql = f"""
-        SELECT q.QueryID AS id, q.Name AS name, q.KnessetNum AS knesset_num,
+        SELECT q.Id AS id, q.Name AS name, q.KnessetNum AS knesset_num,
                q.TypeDesc AS type,
                st."Desc" AS status
         FROM query_raw q
         LEFT JOIN status_raw st ON q.StatusID = st.Id
         WHERE {where}
-        ORDER BY q.QueryID DESC
+        ORDER BY q.Id DESC
         LIMIT %s
     """
     return count_sql, list(params), search_sql, list(params) + [top_n]
@@ -248,7 +248,7 @@ _COUNT_BY_OPTIONS: dict[str, CountByConfig] = {
     is_list=True,
 )
 def queries(
-    query_id: Annotated[int | None, Field(description="Filter by query ID")] = None,
+    query_id: Annotated[int | None, Field(description="Filter by parliamentary query identifier (KNS_Query.Id)")] = None,
     knesset_num: Annotated[int | None, Field(description="Filter by Knesset number")] = None,
     name_query: Annotated[str | None, Field(description="Query name/subject contains text")] = None,
     status: Annotated[str | None, Field(description="Query status")] = None,
@@ -290,7 +290,7 @@ def queries(
     params = []
 
     if query_id is not None:
-        conditions.append("q.QueryID = %s")
+        conditions.append("q.Id = %s")
         params.append(query_id)
 
     if knesset_num is not None:
@@ -316,7 +316,7 @@ def queries(
     # Date filters: OR across submit_date, reply_minister_date, and session date
     if from_date:
         session_sql, session_params = build_session_date_exists(
-            "q", "q.QueryID", _QUERY_TYPE_IDS, from_date, to_date,
+            "q", "q.Id", _QUERY_TYPE_IDS, from_date, to_date,
         )
         if to_date:
             date_cond = f"""(
@@ -363,7 +363,7 @@ def queries(
     total_count = check_search_count(cursor, count_sql, params, entity_name="queries")
 
     cursor.execute(
-        f"""SELECT q.QueryID, q.Name, q.KnessetNum, q.TypeDesc,
+        f"""SELECT q.Id, q.Name, q.KnessetNum, q.TypeDesc,
                st."Desc" AS StatusDesc,
                q.PersonID, q.GovMinistryID,
                gm.Name AS GovMinistryName,
@@ -376,12 +376,12 @@ def queries(
         LEFT JOIN LATERAL (
             SELECT i.PlenumSessionID
             FROM plm_session_item_raw i
-            WHERE i.ItemID = q.QueryID AND i.ItemTypeID IN ({",".join(["%s"] * len(_QUERY_TYPE_IDS))})
+            WHERE i.ItemID = q.Id AND i.ItemTypeID IN ({",".join(["%s"] * len(_QUERY_TYPE_IDS))})
             ORDER BY i.Id DESC
             LIMIT 1
         ) last_session ON true
         WHERE {where}
-        ORDER BY q.QueryID DESC
+        ORDER BY q.Id DESC
         LIMIT %s OFFSET %s""",
         list(_QUERY_TYPE_IDS) + params + [top, offset],
     )
@@ -400,7 +400,7 @@ def queries(
         for row in rows:
             pid = row["personid"]
             results.append(QueryResultPartial(
-                query_id=row["queryid"],
+                query_id=row["id"],
                 name=row["name"],
                 knesset_num=row["knessetnum"],
                 type=row["typedesc"],
@@ -419,7 +419,7 @@ def queries(
             submitter_name = _person_name_with_party(cursor, row["personid"], kn)
 
             # Session stages
-            stages = fetch_item_stages(cursor, row["queryid"], _QUERY_TYPE_IDS)
+            stages = fetch_item_stages(cursor, row["id"], _QUERY_TYPE_IDS)
 
             # Documents
             cursor.execute(
@@ -430,7 +430,7 @@ def queries(
                 ORDER BY Id ASC
                 LIMIT %s
                 """,
-                (row["queryid"], MAX_DETAIL_ITEMS),
+                (row["id"], MAX_DETAIL_ITEMS),
             )
             documents = [
                 SessionDocument(
@@ -442,7 +442,7 @@ def queries(
             ]
 
             results.append(QueryResultFull(
-                query_id=row["queryid"],
+                query_id=row["id"],
                 name=row["name"],
                 knesset_num=kn,
                 type=row["typedesc"],

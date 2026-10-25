@@ -10,7 +10,7 @@ from core.session_models import SessionDocument, ItemStage
 
 class QueryResultPartial(KNSBaseModel):
     """A query search result (summary fields only)."""
-    query_id: int = Field(description="Unique query identifier")
+    query_id: int = Field(description="Unique parliamentary query identifier (KNS_Query.Id; distinct from its parliamentary Number)")
     name: str | None = Field(default=None, description="Query name/subject")
     knesset_num: int | None = Field(default=None, description="Knesset number")
     type: str | None = Field(default=None, description="Query type description")
@@ -29,10 +29,6 @@ class QueryResultFull(QueryResultPartial):
     reply_minister_date: str | None = Field(default=None, description="Minister reply date")
     reply_date_planned: str | None = Field(default=None, description="Planned reply date")
     documents: list[SessionDocument] | None = Field(default=None, description="Query documents")
-
-
-# Backward-compat alias
-QueryResult = QueryResultFull
 
 
 class QueriesResults(KNSBaseModel):
